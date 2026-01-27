@@ -11,7 +11,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [showNewTournament, setShowNewTournament] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState('');
-  const [uploadType, setUploadType] = useState('pitching');
   const [filters, setFilters] = useState({ 
     search: '', position: 'all', sortBy: 'war', sortDir: 'desc',
     gFilter: { enabled: false, operator: '>=', value: 0 },
@@ -198,6 +197,17 @@ export default function App() {
     }
   };
 
+  // Auto-detect CSV type based on headers
+  const detectCSVType = (headers) => {
+    const headerSet = new Set(headers.map(h => h.toUpperCase()));
+    // If IP exists, it's pitching data
+    if (headerSet.has('IP')) return 'pitching';
+    // If AB exists, it's batting data
+    if (headerSet.has('AB')) return 'batting';
+    // Default fallback
+    return null;
+  };
+
   const handleFileUpload = (event) => {
     if (!isAuthenticated) { setShowPasswordModal(true); event.target.value = ''; return; }
     const file = event.target.files[0];
@@ -206,13 +216,26 @@ export default function App() {
       header: true, skipEmptyLines: true,
       complete: async (results) => {
         if (results.data.length === 0) { showNotification('No data found', 'error'); return; }
-        const processedData = results.data.filter(row => row.Name?.trim()).map(row => normalizePlayerData(row, uploadType));
-        const combinedData = combinePlayerStats(selectedTournament[uploadType], processedData, uploadType);
-        const updatedTournament = { ...selectedTournament, [uploadType]: combinedData };
+        
+        // Auto-detect CSV type from headers
+        const headers = results.meta.fields || [];
+        const detectedType = detectCSVType(headers);
+        
+        if (!detectedType) {
+          showNotification('Could not detect CSV type. Missing IP or AB column.', 'error');
+          event.target.value = '';
+          return;
+        }
+        
+        const processedData = results.data.filter(row => row.Name?.trim()).map(row => normalizePlayerData(row, detectedType));
+        const combinedData = combinePlayerStats(selectedTournament[detectedType], processedData, detectedType);
+        const updatedTournament = { ...selectedTournament, [detectedType]: combinedData };
         await saveTournament(updatedTournament);
         setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updatedTournament : t));
         setSelectedTournament(updatedTournament);
-        showNotification(`Processed ${processedData.length} records → ${combinedData.length} players`);
+        
+        const typeLabel = detectedType === 'pitching' ? 'Pitching' : 'Batting';
+        showNotification(`${typeLabel}: ${processedData.length} records → ${combinedData.length} players`);
         event.target.value = '';
       },
       error: (error) => showNotification(`CSV Error: ${error.message}`, 'error')
@@ -376,15 +399,12 @@ export default function App() {
                 )}
               </div>
               <div style={styles.uploadSection}>
-                <select value={uploadType} onChange={(e) => setUploadType(e.target.value)} style={styles.select}>
-                  <option value="pitching">Pitching Stats</option><option value="batting">Batting Stats</option>
-                </select>
                 {isAuthenticated ? (
                   <label style={styles.uploadBtn}>📁 Upload CSV<input type="file" accept=".csv" onChange={handleFileUpload} style={{display:'none'}} /></label>
                 ) : (
                   <button style={styles.uploadBtnLocked} onClick={() => setShowPasswordModal(true)}>🔒 Upload CSV</button>
                 )}
-                <span style={styles.uploadHint}>{isAuthenticated ? 'Players with same name = stats combined' : 'Password required to upload'}</span>
+                <span style={styles.uploadHint}>{isAuthenticated ? 'Auto-detects pitching/batting • Same-name players combined' : 'Password required to upload'}</span>
               </div>
               <div style={styles.tabs}>
                 <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); }}>⚾ Pitching ({selectedTournament.pitching.length})</button>
@@ -444,12 +464,12 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
     <SortHeader field="war">WAR</SortHeader><SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.tdPos}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.tdNum}>{p.throws}</td>
-      <td style={styles.tdNum}>{p.g}</td><td style={styles.tdNum}>{p.gs}</td><td style={styles.tdNum}>{p.winPct}</td><td style={styles.tdNum}>{p.svPct}</td>
-      <td style={styles.tdNum}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.tdNum}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td>
+      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td>
+      <td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.winPct}</td><td style={styles.td}>{p.svPct}</td>
+      <td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td>
       <td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td>
       <td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td>
-      <td style={styles.tdNum}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
+      <td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td><td style={styles.tdStat}>{p.siera}</td>
     </tr>))}
   </tbody></table>);
@@ -468,14 +488,14 @@ function BattingTable({ data, sortBy, sortDir, onSort }) {
     <SortHeader field="sb">SB</SortHeader><SortHeader field="cs">CS</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.tdPos}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.tdNum}>{p.bats}</td>
-      <td style={styles.tdNum}>{p.g}</td><td style={styles.tdNum}>{p.gs}</td><td style={styles.tdNum}>{p.pa}</td><td style={styles.tdNum}>{p.ab}</td>
-      <td style={styles.tdNum}>{p.h}</td><td style={styles.tdNum}>{p.doubles}</td><td style={styles.tdNum}>{p.triples}</td><td style={styles.tdNum}>{p.hr}</td>
-      <td style={styles.tdNum}>{p.rbi}</td><td style={styles.tdNum}>{p.r}</td><td style={styles.tdNum}>{p.bb}</td><td style={styles.tdNum}>{p.so}</td>
+      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td>
+      <td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td>
+      <td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td>
+      <td style={styles.td}>{p.rbi}</td><td style={styles.td}>{p.r}</td><td style={styles.td}>{p.bb}</td><td style={styles.td}>{p.so}</td>
       <td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td><td style={styles.tdStat}>{p.ops}</td>
       <td style={styles.tdStat}>{p.iso}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td>
-      <td style={styles.tdNum}>{p.sb}</td><td style={styles.tdNum}>{p.cs}</td>
+      <td style={styles.td}>{p.sb}</td><td style={styles.td}>{p.cs}</td>
     </tr>))}
   </tbody></table>);
 }
@@ -544,13 +564,12 @@ const styles = {
   valueInput: { padding: '6px 10px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 13, width: 80 },
   resultsCount: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   tableContainer: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'auto', maxHeight: 500 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
-  th: { padding: '10px 5px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'left', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+  th: { padding: '10px 8px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
   tr: { borderBottom: '1px solid #334155' },
-  tdPos: { padding: '8px 5px', color: '#fbbf24', fontWeight: 'bold' },
-  tdName: { padding: '8px 5px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' },
-  tdNum: { padding: '8px 5px', color: '#e2e8f0', textAlign: 'right', fontFamily: "'Courier New', monospace" },
-  tdStat: { padding: '8px 5px', color: '#38bdf8', textAlign: 'right', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
+  td: { padding: '8px 8px', color: '#e2e8f0', textAlign: 'center', fontFamily: "'Courier New', monospace" },
+  tdName: { padding: '8px 8px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' },
+  tdStat: { padding: '8px 8px', color: '#38bdf8', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
   emptyTable: { padding: 40, textAlign: 'center', color: '#94a3b8' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   modal: { background: '#1e293b', padding: 32, borderRadius: 12, border: '2px solid #475569', maxWidth: 400, width: '90%' },
