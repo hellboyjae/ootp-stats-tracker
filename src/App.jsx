@@ -97,7 +97,7 @@ function StatsPage() {
     try {
       const { data, error } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      const parsed = (data || []).map(t => ({ id: t.id, name: t.name, createdAt: t.created_at, category: t.category || 'tournaments', batting: t.batting || [], pitching: t.pitching || [] }));
+      const parsed = (data || []).map(t => ({ id: t.id, name: t.name, createdAt: t.created_at, category: t.category || 'tournaments', batting: t.batting || [], pitching: t.pitching || [], uploadedHashes: t.uploaded_hashes || [] }));
       setTournaments(parsed);
       const lastSelectedId = localStorage.getItem('selectedTournamentId');
       if (lastSelectedId) { const found = parsed.find(t => t.id === lastSelectedId); if (found) { setSelectedTournament(found); setSidebarTab(found.category || 'tournaments'); } }
@@ -106,7 +106,7 @@ function StatsPage() {
   };
 
   const saveTournament = async (tournament) => {
-    try { await supabase.from('tournaments').upsert({ id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching }); }
+    try { await supabase.from('tournaments').upsert({ id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching, uploaded_hashes: tournament.uploadedHashes || [] }); }
     catch (e) { showNotif('Failed to save', 'error'); }
   };
 
@@ -114,7 +114,7 @@ function StatsPage() {
 
   const createTournament = async () => {
     if (!newTournamentName.trim()) return;
-    const newT = { id: crypto.randomUUID(), name: newTournamentName.trim(), createdAt: new Date().toISOString(), category: sidebarTab, batting: [], pitching: [] };
+    const newT = { id: crypto.randomUUID(), name: newTournamentName.trim(), createdAt: new Date().toISOString(), category: sidebarTab, batting: [], pitching: [], uploadedHashes: [] };
     await saveTournament(newT); setTournaments([newT, ...tournaments]); setSelectedTournament(newT);
     localStorage.setItem('selectedTournamentId', newT.id); setNewTournamentName(''); setShowNewTournament(false);
     showNotif(`Created "${newT.name}"!`);
@@ -266,26 +266,155 @@ function StatsPage() {
     }
   };
 
-  const detectCSVType = (headers) => { const h = new Set(headers.map(x => x.toUpperCase())); if (h.has('IP')) return 'pitching'; if (h.has('AB')) return 'batting'; return null; };
+  // Expected headers - EXACT MATCH required
+  const PITCHING_HEADERS = ['POS', 'Name', 'T', 'OVR', 'VAR', 'G', 'GS', 'IP', 'BF', 'ERA', 'AVG', 'OBP', 'BABIP', 'WHIP', 'BRA/9', 'HR/9', 'H/9', 'BB/9', 'K/9', 'LOB%', 'ERA+', 'FIP', 'FIP-', 'WAR', 'SIERA'];
+  const BATTING_HEADERS = ['POS', 'Name', 'B', 'OVR', 'VAR', 'G', 'GS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'BB%', 'SO', 'GIDP', 'AVG', 'OBP', 'SLG', 'wOBA', 'OPS', 'OPS+', 'BABIP', 'wRC+', 'wRAA', 'WAR', 'SB%', 'BsR'];
+  const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+
+  // Generate hash of file content for duplicate detection
+  const hashContent = async (content) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  // Validate CSV headers match exactly
+  const validateHeaders = (headers) => {
+    const normalizedHeaders = headers.map(h => h.trim());
+    
+    // Check for pitching
+    if (normalizedHeaders.length === PITCHING_HEADERS.length) {
+      const isPitching = PITCHING_HEADERS.every((h, i) => h === normalizedHeaders[i]);
+      if (isPitching) return { valid: true, type: 'pitching' };
+    }
+    
+    // Check for batting
+    if (normalizedHeaders.length === BATTING_HEADERS.length) {
+      const isBatting = BATTING_HEADERS.every((h, i) => h === normalizedHeaders[i]);
+      if (isBatting) return { valid: true, type: 'batting' };
+    }
+    
+    // Determine what's wrong for better error message
+    const hasPitchingIndicator = normalizedHeaders.includes('IP') || normalizedHeaders.includes('ERA');
+    const hasBattingIndicator = normalizedHeaders.includes('AB') || normalizedHeaders.includes('PA');
+    
+    if (hasPitchingIndicator) {
+      const missing = PITCHING_HEADERS.filter(h => !normalizedHeaders.includes(h));
+      const extra = normalizedHeaders.filter(h => !PITCHING_HEADERS.includes(h));
+      return { 
+        valid: false, 
+        error: `Pitching CSV header mismatch. ${missing.length > 0 ? `Missing: ${missing.join(', ')}. ` : ''}${extra.length > 0 ? `Unexpected: ${extra.join(', ')}. ` : ''}Expected ${PITCHING_HEADERS.length} columns, got ${normalizedHeaders.length}.`
+      };
+    }
+    
+    if (hasBattingIndicator) {
+      const missing = BATTING_HEADERS.filter(h => !normalizedHeaders.includes(h));
+      const extra = normalizedHeaders.filter(h => !BATTING_HEADERS.includes(h));
+      return { 
+        valid: false, 
+        error: `Batting CSV header mismatch. ${missing.length > 0 ? `Missing: ${missing.join(', ')}. ` : ''}${extra.length > 0 ? `Unexpected: ${extra.join(', ')}. ` : ''}Expected ${BATTING_HEADERS.length} columns, got ${normalizedHeaders.length}.`
+      };
+    }
+    
+    return { valid: false, error: 'Unrecognized CSV format. Must be pitching (with IP column) or batting (with AB column) stats.' };
+  };
 
   const handleFileUpload = (event) => {
-    const file = event.target.files[0]; if (!file || !selectedTournament) return;
-    requestAuth(() => {
-      Papa.parse(file, { header: true, skipEmptyLines: true,
-        complete: async (results) => {
-          if (results.data.length === 0) { showNotif('No data', 'error'); return; }
-          const type = detectCSVType(results.meta.fields || []);
-          if (!type) { showNotif('Could not detect CSV type', 'error'); return; }
-          const processed = results.data.filter(r => r.Name?.trim()).map(r => normalizePlayerData(r, type));
-          const combined = combinePlayerStats(selectedTournament[type], processed, type);
-          const updated = { ...selectedTournament, [type]: combined };
-          await saveTournament(updated);
-          setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updated : t));
-          setSelectedTournament(updated);
-          showNotif(`${type === 'pitching' ? 'Pitching' : 'Batting'}: ${processed.length} → ${combined.length} players`);
-        },
-        error: () => showNotif('CSV Error', 'error')
-      });
+    const file = event.target.files[0]; 
+    if (!file || !selectedTournament) return;
+    
+    // File size check
+    if (file.size > MAX_FILE_SIZE) {
+      showNotif(`File too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Max size is 1MB.`, 'error');
+      event.target.value = '';
+      return;
+    }
+    
+    // File type check
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      showNotif('Invalid file type. Please upload a .csv file.', 'error');
+      event.target.value = '';
+      return;
+    }
+    
+    requestAuth(async () => {
+      try {
+        // Read file content for hashing
+        const fileContent = await file.text();
+        const fileHash = await hashContent(fileContent);
+        
+        // Check for duplicate upload
+        const uploadedHashes = selectedTournament.uploadedHashes || [];
+        if (uploadedHashes.includes(fileHash)) {
+          showNotif('Duplicate file detected. This CSV has already been uploaded to this tournament.', 'error');
+          event.target.value = '';
+          return;
+        }
+        
+        Papa.parse(fileContent, { 
+          header: true, 
+          skipEmptyLines: true,
+          complete: async (results) => {
+            // Check if file has any data
+            if (!results.meta.fields || results.meta.fields.length === 0) {
+              showNotif('CSV has no headers. Please check the file format.', 'error');
+              event.target.value = '';
+              return;
+            }
+            
+            if (results.data.length === 0) {
+              showNotif('CSV has no data rows.', 'error');
+              event.target.value = '';
+              return;
+            }
+            
+            // Validate headers exactly
+            const headerValidation = validateHeaders(results.meta.fields);
+            if (!headerValidation.valid) {
+              showNotif(headerValidation.error, 'error');
+              event.target.value = '';
+              return;
+            }
+            
+            const type = headerValidation.type;
+            
+            // Validate data rows have content
+            const validRows = results.data.filter(r => r.Name?.trim());
+            if (validRows.length === 0) {
+              showNotif('No valid player data found. Ensure Name column has values.', 'error');
+              event.target.value = '';
+              return;
+            }
+            
+            // Process the data
+            const processed = validRows.map(r => normalizePlayerData(r, type));
+            const combined = combinePlayerStats(selectedTournament[type], processed, type);
+            
+            // Save with the file hash to prevent duplicates
+            const newHashes = [...uploadedHashes, fileHash];
+            const updated = { 
+              ...selectedTournament, 
+              [type]: combined,
+              uploadedHashes: newHashes
+            };
+            
+            await saveTournament(updated);
+            setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updated : t));
+            setSelectedTournament(updated);
+            showNotif(`✓ ${type === 'pitching' ? 'Pitching' : 'Batting'}: ${processed.length} records → ${combined.length} total players`);
+            event.target.value = '';
+          },
+          error: (error) => {
+            showNotif(`CSV parsing error: ${error.message}`, 'error');
+            event.target.value = '';
+          }
+        });
+      } catch (error) {
+        showNotif(`File read error: ${error.message}`, 'error');
+        event.target.value = '';
+      }
     });
     event.target.value = '';
   };
