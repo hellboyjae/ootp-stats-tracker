@@ -199,51 +199,54 @@ export default function App() {
   };
 
   // CSV ingestion helpers: trim headers, auto-detect batting vs pitching, and validate required columns
-  const normalizeHeader = (h) => (h ?? '').toString().trim();
+  const normalizeHeader = (h) => (h ?? '').toString().replace(/^\uFEFF/, '').trim();
 
-  const PITCHING_SIGNATURE = ['IP', 'BF', 'ERA', 'WHIP', 'K/9', 'BB/9', 'HR/9', 'ERA+', 'FIP', 'FIP-', 'SIERA', 'LOB%'];
-  const BATTING_SIGNATURE = ['PA', 'AB', 'H', '2B', '3B', 'HR', 'AVG', 'OBP', 'SLG', 'OPS', 'OPS+', 'ISO', 'BABIP', 'RBI'];
+  const EXPECTED_BATTING_HEADERS = [
+    'POS','#','Name','Inf','B','T','G','GS','PA','AB','H','2B','3B','HR','RBI','R','BB','IBB','HP','SO','GIDP','AVG','OBP','SLG','ISO','OPS','OPS+','BABIP','WAR','SB','CS'
+  ];
+
+  const EXPECTED_PITCHING_HEADERS = [
+    'POS','#','Name','T','G','GS','WIN%','SV%','IP','BF','ERA','AVG','OBP','BABIP','WHIP','BRA/9','HR/9','BB/9','K/9','LOB%','ERA+','FIP','FIP-','WAR','SIERA'
+  ];
+
+  const headersEqual = (a = [], b = []) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (normalizeHeader(a[i]) !== normalizeHeader(b[i])) return false;
+    }
+    return true;
+  };
 
   const detectCsvType = (headers = []) => {
-    const set = new Set(headers.map(normalizeHeader));
-    const pitchScore = PITCHING_SIGNATURE.reduce((acc, h) => acc + (set.has(h) ? 1 : 0), 0);
-    const batScore = BATTING_SIGNATURE.reduce((acc, h) => acc + (set.has(h) ? 1 : 0), 0);
+    const normalized = headers.map(normalizeHeader);
 
-    // Require at least a small signal to avoid mis-detecting arbitrary CSVs.
-    const minSignal = 3;
-
-    if (pitchScore >= minSignal && pitchScore > batScore) return 'pitching';
-    if (batScore >= minSignal && batScore > pitchScore) return 'batting';
-
-    // Tie-breakers (common OOTP exports)
-    if (set.has('IP') && (set.has('K/9') || set.has('WHIP') || set.has('ERA'))) return 'pitching';
-    if (set.has('AB') && (set.has('SLG') || set.has('OPS') || set.has('OBP'))) return 'batting';
+    if (headersEqual(normalized, EXPECTED_PITCHING_HEADERS)) return 'pitching';
+    if (headersEqual(normalized, EXPECTED_BATTING_HEADERS)) return 'batting';
 
     return null;
   };
 
   const validateCsvHeaders = (headers = [], type) => {
-    const set = new Set(headers.map(normalizeHeader));
-    const missing = [];
+    const expected = type === 'pitching' ? EXPECTED_PITCHING_HEADERS : EXPECTED_BATTING_HEADERS;
+    const normalized = headers.map(normalizeHeader);
 
-    // Always require a player name column
-    if (!set.has('Name')) missing.push('Name');
+    if (headersEqual(normalized, expected)) {
+      return { ok: true, reason: null };
+    }
 
-    // Minimal requirements for each type (keep intentionally small; the app fills many fields with defaults)
-    const req = type === 'pitching'
-      ? ['IP', 'ERA']   // common to essentially all pitching exports
-      : ['AB', 'H'];    // common to essentially all batting exports
+    const maxLen = Math.max(normalized.length, expected.length);
+    for (let i = 0; i < maxLen; i++) {
+      const got = normalized[i];
+      const exp = expected[i];
+      if (got !== exp) {
+        return {
+          ok: false,
+          reason: `Header mismatch at column ${i + 1}. Expected "${exp ?? '(end)'}" but got "${got ?? '(end)'}".`
+        };
+      }
+    }
 
-    req.forEach((h) => { if (!set.has(h)) missing.push(h); });
-
-    // Helpful (non-fatal) warnings for expected sabermetric columns
-    const recommended = type === 'pitching'
-      ? ['WHIP', 'K/9', 'BB/9', 'HR/9', 'FIP']
-      : ['OBP', 'SLG', 'OPS'];
-
-    const missingRecommended = recommended.filter((h) => !set.has(h));
-
-    return { ok: missing.length === 0, missing, missingRecommended };
+    return { ok: false, reason: 'Header mismatch.' };
   };
 
 
@@ -258,23 +261,29 @@ export default function App() {
       complete: async (results) => {
                 const headers = (results?.meta?.fields || []).map(normalizeHeader);
         const detectedType = detectCsvType(headers);
-        const typeToUse = detectedType || uploadType;
 
-        if (detectedType && detectedType !== uploadType) {
-          setUploadType(detectedType);
-          showNotification(`Auto-detected ${detectedType} CSV — switching upload type`, 'info');
-        } else if (!detectedType) {
-          showNotification(`Could not confidently auto-detect CSV type — using "${uploadType}"`, 'warning');
-        }
-
-        const validation = validateCsvHeaders(headers, typeToUse);
-        if (!validation.ok) {
-          showNotification(`CSV is missing required column(s): ${validation.missing.join(', ')}`, 'error');
+        if (!detectedType) {
+          showNotification(
+            'Unrecognized CSV format. Header row must exactly match the expected OOTP export for batting or pitching.',
+            'error'
+          );
           event.target.value = '';
           return;
         }
-        if (validation.missingRecommended.length > 0) {
-          showNotification(`CSV parsed, but missing recommended column(s): ${validation.missingRecommended.join(', ')}`, 'warning');
+
+        // Always follow detected type (hard requirement)
+        if (detectedType !== uploadType) {
+          setUploadType(detectedType);
+          showNotification(`Detected ${detectedType} CSV — switching upload type`, 'info');
+        }
+
+        const typeToUse = detectedType;
+
+        const validation = validateCsvHeaders(headers, typeToUse);
+        if (!validation.ok) {
+          showNotification(`${validation.reason} (Expected exact ${typeToUse} header set.)`, 'error');
+          event.target.value = '';
+          return;
         }
 
         if (results.data.length === 0) { showNotification('No data found', 'error'); return; }
@@ -502,7 +511,14 @@ function StatFilter({ label, filter, onChange }) {
 }
 
 function PitchingTable({ data, sortBy, sortDir, onSort }) {
-  const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
+  const SortHeader = ({ field, children }) => (
+    <th
+      style={{ ...styles.th, textAlign: field === 'name' ? 'left' : 'center' }}
+      onClick={() => onSort(field)}
+    >
+      {children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}
+    </th>
+  );
   const calcIPperG = (ip, g) => { if (!g || g === 0) return '0.00'; let ipNum = 0; const ipStr = String(ip);
     if (ipStr.includes('.')) { const [w, f] = ipStr.split('.'); ipNum = parseFloat(w) + (parseFloat(f) / 3); } else { ipNum = parseFloat(ip) || 0; } return (ipNum / g).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data matches your filters.</div>;
@@ -528,7 +544,14 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
 }
 
 function BattingTable({ data, sortBy, sortDir, onSort }) {
-  const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
+  const SortHeader = ({ field, children }) => (
+    <th
+      style={{ ...styles.th, textAlign: field === 'name' ? 'left' : 'center' }}
+      onClick={() => onSort(field)}
+    >
+      {children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}
+    </th>
+  );
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data matches your filters.</div>;
   return (<table style={styles.table}><thead><tr>
     <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader>
@@ -583,7 +606,7 @@ const styles = {
   content: { flex: 1, padding: '24px 32px', overflow: 'auto' },
   welcome: { textAlign: 'center', padding: '60px 40px' },
   welcomeTitle: { fontSize: 32, color: '#fbbf24', marginBottom: 12 },
-  features: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginTop: 32, textAlign: 'left' },
+  features: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginTop: 32, textAlign: 'center' },
   feature: { padding: 16, background: '#1e293b', borderRadius: 8, border: '2px solid #334155', fontSize: 13, color: '#e2e8f0' },
   tournamentHeader: { marginBottom: 20, paddingBottom: 12, borderBottom: '2px solid #334155' },
   tournamentTitle: { fontSize: 24, color: '#fbbf24', margin: 0 },
