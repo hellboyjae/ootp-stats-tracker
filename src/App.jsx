@@ -635,8 +635,6 @@ const styles = {
     padding: '10px 5px',
   },
 
-  // existing th definition
-  th: { padding: '10px 5px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'left', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
   tr: { borderBottom: '1px solid #334155' },
   tdPos: { padding: '8px 5px', color: '#fbbf24', fontWeight: 'bold' },
   tdName: { padding: '8px 5px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' },
