@@ -31,6 +31,7 @@ function useTheme() { return useContext(ThemeContext); }
 // Auth Context
 const AuthContext = createContext();
 
+// Auth levels: 'none' | 'upload' | 'master'
 async function hashPassword(password) {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -41,40 +42,94 @@ async function hashPassword(password) {
 
 function AuthProvider({ children }) {
   const { theme } = useTheme();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLevel, setAuthLevel] = useState('none'); // 'none' | 'upload' | 'master'
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
+  const [requiredLevel, setRequiredLevel] = useState('upload');
   const [authError, setAuthError] = useState('');
 
-  useEffect(() => { if (sessionStorage.getItem('uploadAuthenticated') === 'true') setIsAuthenticated(true); }, []);
+  useEffect(() => { 
+    const saved = sessionStorage.getItem('authLevel');
+    if (saved === 'master' || saved === 'upload') setAuthLevel(saved);
+  }, []);
 
-  const requestAuth = (onSuccess) => {
-    if (isAuthenticated) { onSuccess(); } else { setPendingAction(() => onSuccess); setShowPasswordModal(true); setAuthError(''); }
+  // Check if current auth level meets required level
+  const hasAccess = (required) => {
+    if (authLevel === 'master') return true;
+    if (authLevel === 'upload' && required === 'upload') return true;
+    return false;
+  };
+
+  // Request auth for a specific level
+  const requestAuth = (onSuccess, level = 'upload') => {
+    if (hasAccess(level)) { 
+      onSuccess(); 
+    } else { 
+      setPendingAction(() => onSuccess); 
+      setRequiredLevel(level);
+      setShowPasswordModal(true); 
+      setAuthError(''); 
+    }
   };
 
   const handlePasswordSubmit = async () => {
     try {
       const hashedInput = await hashPassword(passwordInput);
       const { data, error } = await supabase.from('site_content').select('content').eq('id', 'auth').single();
-      if (error || !data?.content?.passwordHash) { setAuthError('Auth not configured'); setPasswordInput(''); return; }
-      if (hashedInput === data.content.passwordHash) {
-        setIsAuthenticated(true); sessionStorage.setItem('uploadAuthenticated', 'true');
-        setShowPasswordModal(false); setPasswordInput(''); setAuthError('');
+      if (error || !data?.content) { setAuthError('Auth not configured'); setPasswordInput(''); return; }
+      
+      const { passwordHash, uploadPasswordHash } = data.content;
+      
+      // Check master password first
+      if (passwordHash && hashedInput === passwordHash) {
+        setAuthLevel('master'); 
+        sessionStorage.setItem('authLevel', 'master');
+        setShowPasswordModal(false); 
+        setPasswordInput(''); 
+        setAuthError('');
         if (pendingAction) { pendingAction(); setPendingAction(null); }
-      } else { setAuthError('Incorrect password'); setPasswordInput(''); }
-    } catch (e) { setAuthError('Authentication failed'); setPasswordInput(''); }
+        return;
+      }
+      
+      // Check upload-only password
+      if (uploadPasswordHash && hashedInput === uploadPasswordHash) {
+        // Upload password only works if upload-level access is sufficient
+        if (requiredLevel === 'upload') {
+          setAuthLevel('upload'); 
+          sessionStorage.setItem('authLevel', 'upload');
+          setShowPasswordModal(false); 
+          setPasswordInput(''); 
+          setAuthError('');
+          if (pendingAction) { pendingAction(); setPendingAction(null); }
+        } else {
+          setAuthError('This action requires master password');
+          setPasswordInput('');
+        }
+        return;
+      }
+      
+      setAuthError('Incorrect password'); 
+      setPasswordInput('');
+    } catch (e) { 
+      setAuthError('Authentication failed'); 
+      setPasswordInput(''); 
+    }
   };
 
   const styles = getStyles(theme);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, requestAuth }}>
+    <AuthContext.Provider value={{ authLevel, hasAccess, requestAuth }}>
       {children}
       {showPasswordModal && (
         <div style={styles.modalOverlay}><div style={styles.modal}>
           <h3 style={styles.modalTitle}>🔐 Enter Password</h3>
-          <p style={styles.modalText}>This action requires authentication.</p>
+          <p style={styles.modalText}>
+            {requiredLevel === 'master' 
+              ? 'This action requires master password.' 
+              : 'Enter your password to continue.'}
+          </p>
           {authError && <p style={styles.authError}>{authError}</p>}
           <input type="password" placeholder="Enter password..." value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()} style={styles.input} autoFocus />
           <div style={styles.modalBtns}>
@@ -128,7 +183,7 @@ function Layout({ children, notification }) {
 function StatsPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { isAuthenticated, requestAuth } = useAuth();
+  const { authLevel, hasAccess, requestAuth } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [activeTab, setActiveTab] = useState('pitching');
@@ -390,8 +445,8 @@ function StatsPage() {
               </div>)}
             </div>
             <div style={styles.uploadSection}>
-              <label style={isAuthenticated ? styles.uploadBtn : styles.uploadBtnLocked}>{isAuthenticated ? '📁 Upload CSV' : '🔒 Upload CSV'}<input type="file" accept=".csv" onChange={handleFileUpload} style={{display:'none'}} /></label>
-              <span style={styles.uploadHint}>{isAuthenticated ? 'Auto-detects type • Same-name players combined' : 'Password required'}</span>
+              <label style={hasAccess('upload') ? styles.uploadBtn : styles.uploadBtnLocked}>{hasAccess('upload') ? '📁 Upload CSV' : '🔒 Upload CSV'}<input type="file" accept=".csv" onChange={handleFileUpload} style={{display:'none'}} /></label>
+              <span style={styles.uploadHint}>{hasAccess('upload') ? 'Auto-detects type • Same-name players combined' : 'Password required'}</span>
             </div>
             <div style={styles.tabs}>
               <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); }}>⚾ Pitching ({selectedTournament.pitching.length})</button>
@@ -439,7 +494,7 @@ function parseMarkdown(text) {
 function InfoPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { isAuthenticated, requestAuth } = useAuth();
+  const { authLevel, hasAccess, requestAuth } = useAuth();
   const [content, setContent] = useState({ title: 'Info & FAQ', sections: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -462,7 +517,7 @@ function InfoPage() {
   };
 
   const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
-  const startEditing = () => { requestAuth(() => { setEditContent(JSON.parse(JSON.stringify(content))); setIsEditing(true); }); };
+  const startEditing = () => { requestAuth(() => { setEditContent(JSON.parse(JSON.stringify(content))); setIsEditing(true); }, 'master'); };
   const addSection = () => { setEditContent(c => ({ ...c, sections: [...c.sections, { heading: 'New Section', body: 'Content here...' }] })); };
   const updateSection = (i, field, value) => { setEditContent(c => { const s = [...c.sections]; s[i] = { ...s[i], [field]: value }; return { ...c, sections: s }; }); };
   const removeSection = (i) => { setEditContent(c => ({ ...c, sections: c.sections.filter((_, idx) => idx !== i) })); };
@@ -475,7 +530,7 @@ function InfoPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>{isEditing ? 'Edit Info & FAQ' : content.title}</h2>
-          {!isEditing && <button onClick={startEditing} style={styles.editBtn}>{isAuthenticated ? '✏️ Edit' : '🔒 Edit'}</button>}
+          {!isEditing && <button onClick={startEditing} style={styles.editBtn}>{hasAccess('master') ? '✏️ Edit' : '🔒 Edit'}</button>}
         </div>
         {isEditing ? (<div style={styles.editContainer}>
           <div style={styles.editField}><label style={styles.editLabel}>Page Title</label><input type="text" value={editContent.title} onChange={(e) => setEditContent(c => ({ ...c, title: e.target.value }))} style={styles.input} /></div>
@@ -509,7 +564,7 @@ function InfoPage() {
 function VideosPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { isAuthenticated, requestAuth } = useAuth();
+  const { authLevel, hasAccess, requestAuth } = useAuth();
   const [videos, setVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -553,10 +608,10 @@ function VideosPage() {
       if (!info) { showNotif('Invalid URL. Use YouTube or Twitch.', 'error'); return; }
       const newVideo = { ...info, title: newVideoTitle || 'Untitled', addedAt: new Date().toISOString() };
       saveVideos([newVideo, ...videos]); setNewVideoUrl(''); setNewVideoTitle(''); setShowAddForm(false); showNotif('Video added!');
-    });
+    }, 'master');
   };
 
-  const removeVideo = (i) => { requestAuth(() => { if (!confirm('Remove this video?')) return; saveVideos(videos.filter((_, idx) => idx !== i)); showNotif('Removed'); }); };
+  const removeVideo = (i) => { requestAuth(() => { if (!confirm('Remove this video?')) return; saveVideos(videos.filter((_, idx) => idx !== i)); showNotif('Removed'); }, 'master'); };
 
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
 
@@ -565,7 +620,7 @@ function VideosPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>📺 Videos</h2>
-          <button onClick={() => requestAuth(() => setShowAddForm(true))} style={isAuthenticated ? styles.addBtn : styles.uploadBtnLocked}>{isAuthenticated ? '+ Add Video' : '🔒 Add Video'}</button>
+          <button onClick={() => requestAuth(() => setShowAddForm(true), 'master')} style={hasAccess('master') ? styles.addBtn : styles.uploadBtnLocked}>{hasAccess('master') ? '+ Add Video' : '🔒 Add Video'}</button>
         </div>
         {showAddForm && (<div style={styles.addVideoForm}>
           <h3 style={styles.formTitle}>Add New Video</h3>
@@ -587,7 +642,7 @@ function VideosPage() {
                 <div style={styles.playOverlay}>▶</div>
               </div>
               <div style={styles.videoInfo}><span style={styles.videoTitle}>{v.title}</span><span style={styles.videoPlatform}>{v.platform === 'youtube' ? 'YouTube' : 'Twitch'}</span></div>
-              {isAuthenticated && <button onClick={() => removeVideo(i)} style={styles.removeVideoBtn}>✕</button>}
+              {hasAccess('master') && <button onClick={() => removeVideo(i)} style={styles.removeVideoBtn}>✕</button>}
             </div>))}
           </div>
         )}
