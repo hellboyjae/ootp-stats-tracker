@@ -106,8 +106,40 @@ function StatsPage() {
   };
 
   const saveTournament = async (tournament) => {
-    try { await supabase.from('tournaments').upsert({ id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching, uploaded_hashes: tournament.uploadedHashes || [] }); }
-    catch (e) { showNotif('Failed to save', 'error'); }
+    try { 
+      const payload = { 
+        id: tournament.id, 
+        name: tournament.name, 
+        created_at: tournament.createdAt, 
+        category: tournament.category, 
+        batting: tournament.batting, 
+        pitching: tournament.pitching
+      };
+      // Only include uploaded_hashes if it exists (column may not be added yet)
+      if (tournament.uploadedHashes !== undefined) {
+        payload.uploaded_hashes = tournament.uploadedHashes;
+      }
+      const { error } = await supabase.from('tournaments').upsert(payload);
+      if (error) {
+        console.error('Supabase save error:', error);
+        // If error is about uploaded_hashes column, retry without it
+        if (error.message?.includes('uploaded_hashes')) {
+          const { error: retryError } = await supabase.from('tournaments').upsert({
+            id: tournament.id, name: tournament.name, created_at: tournament.createdAt,
+            category: tournament.category, batting: tournament.batting, pitching: tournament.pitching
+          });
+          if (retryError) {
+            showNotif(`Failed to save: ${retryError.message}`, 'error');
+          }
+        } else {
+          showNotif(`Failed to save: ${error.message}`, 'error');
+        }
+      }
+    }
+    catch (e) { 
+      console.error('Save error:', e);
+      showNotif('Failed to save', 'error'); 
+    }
   };
 
   const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
