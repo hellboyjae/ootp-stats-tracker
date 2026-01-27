@@ -5,7 +5,6 @@ import { supabase } from './supabase.js';
 
 const AuthContext = React.createContext();
 
-// Secure hash function (SHA-256)
 async function hashPassword(password) {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -29,35 +28,15 @@ function AuthProvider({ children }) {
 
   const handlePasswordSubmit = async () => {
     try {
-      // Hash the entered password
       const hashedInput = await hashPassword(passwordInput);
-      
-      // Fetch the stored hash from database
       const { data, error } = await supabase.from('site_content').select('content').eq('id', 'auth').single();
-      
-      if (error || !data?.content?.passwordHash) {
-        setAuthError('Auth not configured');
-        setPasswordInput('');
-        return;
-      }
-      
-      // Compare hashes
+      if (error || !data?.content?.passwordHash) { setAuthError('Auth not configured'); setPasswordInput(''); return; }
       if (hashedInput === data.content.passwordHash) {
-        setIsAuthenticated(true);
-        sessionStorage.setItem('uploadAuthenticated', 'true');
-        setShowPasswordModal(false);
-        setPasswordInput('');
-        setAuthError('');
+        setIsAuthenticated(true); sessionStorage.setItem('uploadAuthenticated', 'true');
+        setShowPasswordModal(false); setPasswordInput(''); setAuthError('');
         if (pendingAction) { pendingAction(); setPendingAction(null); }
-      } else {
-        setAuthError('Incorrect password');
-        setPasswordInput('');
-      }
-    } catch (e) {
-      console.error('Auth error:', e);
-      setAuthError('Authentication failed');
-      setPasswordInput('');
-    }
+      } else { setAuthError('Incorrect password'); setPasswordInput(''); }
+    } catch (e) { setAuthError('Authentication failed'); setPasswordInput(''); }
   };
 
   return (
@@ -154,6 +133,7 @@ function StatsPage() {
   const parseIP = (ip) => { if (!ip) return 0; const str = String(ip); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
   const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+  const parsePct = (v) => { if (!v) return '0.0'; const s = String(v).replace('%', ''); return s; };
 
   const combinePlayerStats = (existing, newP, type) => {
     const map = new Map(); existing.forEach(p => map.set(p.name, { ...p }));
@@ -163,12 +143,56 @@ function StatsPage() {
         if (type === 'pitching') {
           const cIP = parseIP(e.ip) + parseIP(p.ip), eIP = parseIP(e.ip), nIP = parseIP(p.ip);
           const wAvg = (s1, i1, s2, i2) => (i1 + i2 === 0) ? 0 : ((parseFloat(s1) * i1) + (parseFloat(s2) * i2)) / (i1 + i2);
-          map.set(p.name, { ...e, g: e.g + p.g, gs: e.gs + p.gs, winPct: wAvg(e.winPct, eIP, p.winPct, nIP).toFixed(1), svPct: wAvg(e.svPct, eIP, p.svPct, nIP).toFixed(1), ip: formatIP(cIP), bf: e.bf + p.bf, era: wAvg(e.era, eIP, p.era, nIP).toFixed(2), avg: wAvg(e.avg, eIP, p.avg, nIP).toFixed(3), obp: wAvg(e.obp, eIP, p.obp, nIP).toFixed(3), babip: wAvg(e.babip, eIP, p.babip, nIP).toFixed(3), whip: wAvg(e.whip, eIP, p.whip, nIP).toFixed(2), braPer9: wAvg(e.braPer9, eIP, p.braPer9, nIP).toFixed(2), hrPer9: wAvg(e.hrPer9, eIP, p.hrPer9, nIP).toFixed(2), bbPer9: wAvg(e.bbPer9, eIP, p.bbPer9, nIP).toFixed(2), kPer9: wAvg(e.kPer9, eIP, p.kPer9, nIP).toFixed(2), lobPct: wAvg(e.lobPct, eIP, p.lobPct, nIP).toFixed(1), eraPlus: Math.round(wAvg(e.eraPlus, eIP, p.eraPlus, nIP)), fip: wAvg(e.fip, eIP, p.fip, nIP).toFixed(2), fipMinus: Math.round(wAvg(e.fipMinus, eIP, p.fipMinus, nIP)), war: (parseFloat(e.war||0) + parseFloat(p.war||0)).toFixed(1), siera: wAvg(e.siera, eIP, p.siera, nIP).toFixed(2) });
+          map.set(p.name, { ...e, 
+            g: e.g + p.g, gs: e.gs + p.gs, ip: formatIP(cIP), bf: e.bf + p.bf,
+            era: wAvg(e.era, eIP, p.era, nIP).toFixed(2),
+            avg: wAvg(e.avg, eIP, p.avg, nIP).toFixed(3),
+            obp: wAvg(e.obp, eIP, p.obp, nIP).toFixed(3),
+            babip: wAvg(e.babip, eIP, p.babip, nIP).toFixed(3),
+            whip: wAvg(e.whip, eIP, p.whip, nIP).toFixed(2),
+            braPer9: wAvg(e.braPer9, eIP, p.braPer9, nIP).toFixed(2),
+            hrPer9: wAvg(e.hrPer9, eIP, p.hrPer9, nIP).toFixed(2),
+            hPer9: wAvg(e.hPer9, eIP, p.hPer9, nIP).toFixed(2),
+            bbPer9: wAvg(e.bbPer9, eIP, p.bbPer9, nIP).toFixed(2),
+            kPer9: wAvg(e.kPer9, eIP, p.kPer9, nIP).toFixed(2),
+            lobPct: wAvg(e.lobPct, eIP, p.lobPct, nIP).toFixed(1),
+            eraPlus: Math.round(wAvg(e.eraPlus, eIP, p.eraPlus, nIP)),
+            fip: wAvg(e.fip, eIP, p.fip, nIP).toFixed(2),
+            fipMinus: Math.round(wAvg(e.fipMinus, eIP, p.fipMinus, nIP)),
+            war: (parseFloat(e.war||0) + parseFloat(p.war||0)).toFixed(1),
+            siera: wAvg(e.siera, eIP, p.siera, nIP).toFixed(2)
+          });
         } else {
-          const cPA = e.pa + p.pa, cAB = e.ab + p.ab, cH = e.h + p.h, c2B = e.doubles + p.doubles, c3B = e.triples + p.triples, cHR = e.hr + p.hr, cBB = e.bb + p.bb, cHP = e.hp + p.hp, cSO = e.so + p.so;
-          const avg = cAB > 0 ? (cH / cAB).toFixed(3) : '.000', obp = cPA > 0 ? ((cH + cBB + cHP) / cPA).toFixed(3) : '.000', tb = cH + c2B + (2 * c3B) + (3 * cHR), slg = cAB > 0 ? (tb / cAB).toFixed(3) : '.000', ops = (parseFloat(obp) + parseFloat(slg)).toFixed(3), iso = cAB > 0 ? ((tb - cH) / cAB).toFixed(3) : '.000';
-          const babip = (cAB - cSO - cHR) > 0 ? ((cH - cHR) / (cAB - cSO - cHR)).toFixed(3) : '.000';
-          map.set(p.name, { ...e, g: e.g + p.g, gs: e.gs + p.gs, pa: cPA, ab: cAB, h: cH, doubles: c2B, triples: c3B, hr: cHR, rbi: e.rbi + p.rbi, r: e.r + p.r, bb: cBB, ibb: e.ibb + p.ibb, hp: cHP, so: cSO, gidp: e.gidp + p.gidp, avg, obp, slg, iso, ops, opsPlus: Math.round(cPA > 0 ? ((e.opsPlus * e.pa) + (p.opsPlus * p.pa)) / cPA : 0), babip, war: (parseFloat(e.war||0) + parseFloat(p.war||0)).toFixed(1), sb: e.sb + p.sb, cs: e.cs + p.cs });
+          // Batting stat combination
+          const cG = e.g + p.g, cGS = e.gs + p.gs, cPA = e.pa + p.pa, cAB = e.ab + p.ab;
+          const cH = e.h + p.h, c2B = e.doubles + p.doubles, c3B = e.triples + p.triples, cHR = e.hr + p.hr;
+          const cSO = e.so + p.so, cGIDP = e.gidp + p.gidp;
+          
+          // Weighted averages based on PA
+          const wAvg = (s1, w1, s2, w2) => (w1 + w2 === 0) ? 0 : ((parseFloat(s1) * w1) + (parseFloat(s2) * w2)) / (w1 + w2);
+          
+          const avg = cAB > 0 ? (cH / cAB).toFixed(3) : '.000';
+          const tb = cH + c2B + (2 * c3B) + (3 * cHR);
+          const slg = cAB > 0 ? (tb / cAB).toFixed(3) : '.000';
+          const babipNum = cH - cHR, babipDenom = cAB - cSO - cHR;
+          const babip = babipDenom > 0 ? (babipNum / babipDenom).toFixed(3) : '.000';
+          
+          map.set(p.name, { ...e,
+            g: cG, gs: cGS, pa: cPA, ab: cAB, h: cH, doubles: c2B, triples: c3B, hr: cHR,
+            bbPct: wAvg(e.bbPct, e.pa, p.bbPct, p.pa).toFixed(1),
+            so: cSO, gidp: cGIDP, avg,
+            obp: wAvg(e.obp, e.pa, p.obp, p.pa).toFixed(3),
+            slg,
+            woba: wAvg(e.woba, e.pa, p.woba, p.pa).toFixed(3),
+            ops: wAvg(e.ops, e.pa, p.ops, p.pa).toFixed(3),
+            opsPlus: Math.round(wAvg(e.opsPlus, e.pa, p.opsPlus, p.pa)),
+            babip,
+            wrcPlus: Math.round(wAvg(e.wrcPlus, e.pa, p.wrcPlus, p.pa)),
+            wraa: (parseFloat(e.wraa||0) + parseFloat(p.wraa||0)).toFixed(1),
+            war: (parseFloat(e.war||0) + parseFloat(p.war||0)).toFixed(1),
+            sbPct: wAvg(e.sbPct, e.pa, p.sbPct, p.pa).toFixed(1),
+            bsr: (parseFloat(e.bsr||0) + parseFloat(p.bsr||0)).toFixed(1)
+          });
         }
       } else { map.set(p.name, { ...p, id: crypto.randomUUID() }); }
     });
@@ -177,9 +201,68 @@ function StatsPage() {
 
   const normalizePlayerData = (row, type) => {
     if (type === 'pitching') {
-      return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', throws: row.T || '', g: parseNum(row.G), gs: parseNum(row.GS), winPct: row['WIN%'] || '0.0', svPct: row['SV%'] || '0.0', ip: row.IP || '0', bf: parseNum(row.BF), era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000', babip: row.BABIP || '.000', whip: row.WHIP || '0.00', braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00', lobPct: row['LOB%'] || '0.0', eraPlus: parseNum(row['ERA+']), fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']), war: row.WAR || '0.0', siera: row.SIERA || '0.00' };
+      // POS,Name,T,OVR,VAR,G,GS,IP,BF,ERA,AVG,OBP,BABIP,WHIP,BRA/9,HR/9,H/9,BB/9,K/9,LOB%,ERA+,FIP,FIP-,WAR,SIERA
+      return {
+        id: crypto.randomUUID(),
+        name: row.Name?.trim() || 'Unknown',
+        pos: row.POS?.trim() || '',
+        throws: row.T || '',
+        ovr: parseNum(row.OVR),
+        vari: parseNum(row.VAR),
+        g: parseNum(row.G),
+        gs: parseNum(row.GS),
+        ip: row.IP || '0',
+        bf: parseNum(row.BF),
+        era: row.ERA || '0.00',
+        avg: row.AVG || '.000',
+        obp: row.OBP || '.000',
+        babip: row.BABIP || '.000',
+        whip: row.WHIP || '0.00',
+        braPer9: row['BRA/9'] || '0.00',
+        hrPer9: row['HR/9'] || '0.00',
+        hPer9: row['H/9'] || '0.00',
+        bbPer9: row['BB/9'] || '0.00',
+        kPer9: row['K/9'] || '0.00',
+        lobPct: parsePct(row['LOB%']),
+        eraPlus: parseNum(row['ERA+']),
+        fip: row.FIP || '0.00',
+        fipMinus: parseNum(row['FIP-']),
+        war: row.WAR || '0.0',
+        siera: row.SIERA || '0.00'
+      };
     } else {
-      return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', bats: row.B || '', g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB), h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR), rbi: parseNum(row.RBI), r: parseNum(row.R), bb: parseNum(row.BB), ibb: parseNum(row.IBB), hp: parseNum(row.HP), so: parseNum(row.SO), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000', iso: row.ISO || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']), babip: row.BABIP || '.000', war: row.WAR || '0.0', sb: parseNum(row.SB), cs: parseNum(row.CS) };
+      // POS,Name,B,OVR,VAR,G,GS,PA,AB,H,2B,3B,HR,BB%,SO,GIDP,AVG,OBP,SLG,wOBA,OPS,OPS+,BABIP,wRC+,wRAA,WAR,SB%,BsR
+      return {
+        id: crypto.randomUUID(),
+        name: row.Name?.trim() || 'Unknown',
+        pos: row.POS?.trim() || '',
+        bats: row.B || '',
+        ovr: parseNum(row.OVR),
+        vari: parseNum(row.VAR),
+        g: parseNum(row.G),
+        gs: parseNum(row.GS),
+        pa: parseNum(row.PA),
+        ab: parseNum(row.AB),
+        h: parseNum(row.H),
+        doubles: parseNum(row['2B']),
+        triples: parseNum(row['3B']),
+        hr: parseNum(row.HR),
+        bbPct: parsePct(row['BB%']),
+        so: parseNum(row.SO),
+        gidp: parseNum(row.GIDP),
+        avg: row.AVG || '.000',
+        obp: row.OBP || '.000',
+        slg: row.SLG || '.000',
+        woba: row.wOBA || '.000',
+        ops: row.OPS || '.000',
+        opsPlus: parseNum(row['OPS+']),
+        babip: row.BABIP || '.000',
+        wrcPlus: parseNum(row['wRC+']),
+        wraa: row.wRAA || '0.0',
+        war: row.WAR || '0.0',
+        sbPct: parsePct(row['SB%']),
+        bsr: row.BsR || '0.0'
+      };
     }
   };
 
@@ -462,11 +545,62 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const calcIPperG = (ip, g) => { if (!g) return '0.00'; const str = String(ip); let n = str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; return (n / g).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
+  // POS,Name,T,OVR,VAR,G,GS,IP,BF,ERA,AVG,OBP,BABIP,WHIP,BRA/9,HR/9,H/9,BB/9,K/9,LOB%,ERA+,FIP,FIP-,WAR,SIERA
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="winPct">WIN%</SortHeader><SortHeader field="svPct">SV%</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="siera">SIERA</SortHeader>
+    <SortHeader field="pos">POS</SortHeader>
+    <SortHeader field="name">Name</SortHeader>
+    <SortHeader field="throws">T</SortHeader>
+    <SortHeader field="ovr">OVR</SortHeader>
+    <SortHeader field="vari">VAR</SortHeader>
+    <SortHeader field="g">G</SortHeader>
+    <SortHeader field="gs">GS</SortHeader>
+    <SortHeader field="ip">IP</SortHeader>
+    <SortHeader field="ipPerG">IP/G</SortHeader>
+    <SortHeader field="bf">BF</SortHeader>
+    <SortHeader field="era">ERA</SortHeader>
+    <SortHeader field="avg">AVG</SortHeader>
+    <SortHeader field="obp">OBP</SortHeader>
+    <SortHeader field="babip">BABIP</SortHeader>
+    <SortHeader field="whip">WHIP</SortHeader>
+    <SortHeader field="braPer9">BRA/9</SortHeader>
+    <SortHeader field="hrPer9">HR/9</SortHeader>
+    <SortHeader field="hPer9">H/9</SortHeader>
+    <SortHeader field="bbPer9">BB/9</SortHeader>
+    <SortHeader field="kPer9">K/9</SortHeader>
+    <SortHeader field="lobPct">LOB%</SortHeader>
+    <SortHeader field="eraPlus">ERA+</SortHeader>
+    <SortHeader field="fip">FIP</SortHeader>
+    <SortHeader field="fipMinus">FIP-</SortHeader>
+    <SortHeader field="war">WAR</SortHeader>
+    <SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.winPct}</td><td style={styles.td}>{p.svPct}</td><td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td><td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td><td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td><td style={styles.tdStat}>{p.siera}</td>
+      <td style={styles.td}>{p.pos}</td>
+      <td style={styles.tdName}>{p.name}</td>
+      <td style={styles.td}>{p.throws}</td>
+      <td style={styles.tdOvr}>{p.ovr}</td>
+      <td style={styles.td}>{p.vari}</td>
+      <td style={styles.td}>{p.g}</td>
+      <td style={styles.td}>{p.gs}</td>
+      <td style={styles.td}>{p.ip}</td>
+      <td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td>
+      <td style={styles.td}>{p.bf}</td>
+      <td style={styles.tdStat}>{p.era}</td>
+      <td style={styles.tdStat}>{p.avg}</td>
+      <td style={styles.tdStat}>{p.obp}</td>
+      <td style={styles.tdStat}>{p.babip}</td>
+      <td style={styles.tdStat}>{p.whip}</td>
+      <td style={styles.tdStat}>{p.braPer9}</td>
+      <td style={styles.tdStat}>{p.hrPer9}</td>
+      <td style={styles.tdStat}>{p.hPer9}</td>
+      <td style={styles.tdStat}>{p.bbPer9}</td>
+      <td style={styles.tdStat}>{p.kPer9}</td>
+      <td style={styles.td}>{p.lobPct}</td>
+      <td style={styles.tdStat}>{p.eraPlus}</td>
+      <td style={styles.tdStat}>{p.fip}</td>
+      <td style={styles.tdStat}>{p.fipMinus}</td>
+      <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td>
+      <td style={{...styles.tdStat, color: parseFloat(p.siera) < 3.90 ? '#4ade80' : parseFloat(p.siera) > 3.90 ? '#f87171' : '#38bdf8'}}>{p.siera}</td>
     </tr>))}
   </tbody></table>);
 }
@@ -474,11 +608,66 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
 function BattingTable({ data, sortBy, sortDir, onSort }) {
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
+  // POS,Name,B,OVR,VAR,G,GS,PA,AB,H,2B,3B,HR,BB%,SO,GIDP,AVG,OBP,SLG,wOBA,OPS,OPS+,BABIP,wRC+,wRAA,WAR,SB%,BsR
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader><SortHeader field="rbi">RBI</SortHeader><SortHeader field="r">R</SortHeader><SortHeader field="bb">BB</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="iso">ISO</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="sb">SB</SortHeader><SortHeader field="cs">CS</SortHeader>
+    <SortHeader field="pos">POS</SortHeader>
+    <SortHeader field="name">Name</SortHeader>
+    <SortHeader field="bats">B</SortHeader>
+    <SortHeader field="ovr">OVR</SortHeader>
+    <SortHeader field="vari">VAR</SortHeader>
+    <SortHeader field="g">G</SortHeader>
+    <SortHeader field="gs">GS</SortHeader>
+    <SortHeader field="pa">PA</SortHeader>
+    <SortHeader field="ab">AB</SortHeader>
+    <SortHeader field="h">H</SortHeader>
+    <SortHeader field="doubles">2B</SortHeader>
+    <SortHeader field="triples">3B</SortHeader>
+    <SortHeader field="hr">HR</SortHeader>
+    <SortHeader field="bbPct">BB%</SortHeader>
+    <SortHeader field="so">SO</SortHeader>
+    <SortHeader field="gidp">GIDP</SortHeader>
+    <SortHeader field="avg">AVG</SortHeader>
+    <SortHeader field="obp">OBP</SortHeader>
+    <SortHeader field="slg">SLG</SortHeader>
+    <SortHeader field="woba">wOBA</SortHeader>
+    <SortHeader field="ops">OPS</SortHeader>
+    <SortHeader field="opsPlus">OPS+</SortHeader>
+    <SortHeader field="babip">BABIP</SortHeader>
+    <SortHeader field="wrcPlus">wRC+</SortHeader>
+    <SortHeader field="wraa">wRAA</SortHeader>
+    <SortHeader field="war">WAR</SortHeader>
+    <SortHeader field="sbPct">SB%</SortHeader>
+    <SortHeader field="bsr">BsR</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td><td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td><td style={styles.td}>{p.rbi}</td><td style={styles.td}>{p.r}</td><td style={styles.td}>{p.bb}</td><td style={styles.td}>{p.so}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td><td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.iso}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td><td style={styles.td}>{p.sb}</td><td style={styles.td}>{p.cs}</td>
+      <td style={styles.td}>{p.pos}</td>
+      <td style={styles.tdName}>{p.name}</td>
+      <td style={styles.td}>{p.bats}</td>
+      <td style={styles.tdOvr}>{p.ovr}</td>
+      <td style={styles.td}>{p.vari}</td>
+      <td style={styles.td}>{p.g}</td>
+      <td style={styles.td}>{p.gs}</td>
+      <td style={styles.td}>{p.pa}</td>
+      <td style={styles.td}>{p.ab}</td>
+      <td style={styles.td}>{p.h}</td>
+      <td style={styles.td}>{p.doubles}</td>
+      <td style={styles.td}>{p.triples}</td>
+      <td style={styles.td}>{p.hr}</td>
+      <td style={styles.td}>{p.bbPct}</td>
+      <td style={styles.td}>{p.so}</td>
+      <td style={styles.td}>{p.gidp}</td>
+      <td style={styles.tdStat}>{p.avg}</td>
+      <td style={styles.tdStat}>{p.obp}</td>
+      <td style={styles.tdStat}>{p.slg}</td>
+      <td style={{...styles.tdStat, color: parseFloat(p.woba) > 0.320 ? '#4ade80' : parseFloat(p.woba) < 0.320 ? '#f87171' : '#38bdf8'}}>{p.woba}</td>
+      <td style={styles.tdStat}>{p.ops}</td>
+      <td style={styles.tdStat}>{p.opsPlus}</td>
+      <td style={styles.tdStat}>{p.babip}</td>
+      <td style={styles.tdStat}>{p.wrcPlus}</td>
+      <td style={styles.tdStat}>{p.wraa}</td>
+      <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td>
+      <td style={styles.td}>{p.sbPct}</td>
+      <td style={styles.tdStat}>{p.bsr}</td>
     </tr>))}
   </tbody></table>);
 }
@@ -557,12 +746,13 @@ const styles = {
   valueInput: { padding: '6px 10px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 13, width: 80 },
   resultsCount: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   tableContainer: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'auto', maxHeight: 500 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
-  th: { padding: '10px 8px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
+  th: { padding: '10px 6px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
   tr: { borderBottom: '1px solid #334155' },
-  td: { padding: '8px 8px', color: '#e2e8f0', textAlign: 'center', fontFamily: "'Courier New', monospace" },
-  tdName: { padding: '8px 8px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' },
-  tdStat: { padding: '8px 8px', color: '#38bdf8', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
+  td: { padding: '6px 6px', color: '#e2e8f0', textAlign: 'center', fontFamily: "'Courier New', monospace" },
+  tdName: { padding: '6px 6px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' },
+  tdOvr: { padding: '6px 6px', color: '#fbbf24', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
+  tdStat: { padding: '6px 6px', color: '#38bdf8', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
   emptyTable: { padding: 40, textAlign: 'center', color: '#94a3b8' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   modal: { background: '#1e293b', padding: 32, borderRadius: 12, border: '2px solid #475569', maxWidth: 400, width: '90%' },
