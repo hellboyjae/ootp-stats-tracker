@@ -511,14 +511,7 @@ function StatFilter({ label, filter, onChange }) {
 }
 
 function PitchingTable({ data, sortBy, sortDir, onSort }) {
-  const SortHeader = ({ field, children }) => (
-    <th
-      style={{ ...styles.th, textAlign: field === 'name' ? 'left' : 'center' }}
-      onClick={() => onSort(field)}
-    >
-      {children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}
-    </th>
-  );
+  const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const calcIPperG = (ip, g) => { if (!g || g === 0) return '0.00'; let ipNum = 0; const ipStr = String(ip);
     if (ipStr.includes('.')) { const [w, f] = ipStr.split('.'); ipNum = parseFloat(w) + (parseFloat(f) / 3); } else { ipNum = parseFloat(ip) || 0; } return (ipNum / g).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data matches your filters.</div>;
@@ -544,14 +537,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
 }
 
 function BattingTable({ data, sortBy, sortDir, onSort }) {
-  const SortHeader = ({ field, children }) => (
-    <th
-      style={{ ...styles.th, textAlign: field === 'name' ? 'left' : 'center' }}
-      onClick={() => onSort(field)}
-    >
-      {children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}
-    </th>
-  );
+  const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data matches your filters.</div>;
   return (<table style={styles.table}><thead><tr>
     <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader>
@@ -606,7 +592,7 @@ const styles = {
   content: { flex: 1, padding: '24px 32px', overflow: 'auto' },
   welcome: { textAlign: 'center', padding: '60px 40px' },
   welcomeTitle: { fontSize: 32, color: '#fbbf24', marginBottom: 12 },
-  features: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginTop: 32, textAlign: 'center' },
+  features: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginTop: 32, textAlign: 'left' },
   feature: { padding: 16, background: '#1e293b', borderRadius: 8, border: '2px solid #334155', fontSize: 13, color: '#e2e8f0' },
   tournamentHeader: { marginBottom: 20, paddingBottom: 12, borderBottom: '2px solid #334155' },
   tournamentTitle: { fontSize: 24, color: '#fbbf24', margin: 0 },
@@ -640,6 +626,16 @@ const styles = {
   resultsCount: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   tableContainer: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'auto', maxHeight: 500 },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
+  th: {
+    textAlign: 'left',
+    padding: '10px 5px',
+  },
+  thNum: {
+    textAlign: 'right',
+    padding: '10px 5px',
+  },
+
+  // existing th definition
   th: { padding: '10px 5px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'left', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
   tr: { borderBottom: '1px solid #334155' },
   tdPos: { padding: '8px 5px', color: '#fbbf24', fontWeight: 'bold' },
