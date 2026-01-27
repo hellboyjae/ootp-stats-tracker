@@ -198,17 +198,89 @@ export default function App() {
     }
   };
 
+  // CSV ingestion helpers: trim headers, auto-detect batting vs pitching, and validate required columns
+  const normalizeHeader = (h) => (h ?? '').toString().trim();
+
+  const PITCHING_SIGNATURE = ['IP', 'BF', 'ERA', 'WHIP', 'K/9', 'BB/9', 'HR/9', 'ERA+', 'FIP', 'FIP-', 'SIERA', 'LOB%'];
+  const BATTING_SIGNATURE = ['PA', 'AB', 'H', '2B', '3B', 'HR', 'AVG', 'OBP', 'SLG', 'OPS', 'OPS+', 'ISO', 'BABIP', 'RBI'];
+
+  const detectCsvType = (headers = []) => {
+    const set = new Set(headers.map(normalizeHeader));
+    const pitchScore = PITCHING_SIGNATURE.reduce((acc, h) => acc + (set.has(h) ? 1 : 0), 0);
+    const batScore = BATTING_SIGNATURE.reduce((acc, h) => acc + (set.has(h) ? 1 : 0), 0);
+
+    // Require at least a small signal to avoid mis-detecting arbitrary CSVs.
+    const minSignal = 3;
+
+    if (pitchScore >= minSignal && pitchScore > batScore) return 'pitching';
+    if (batScore >= minSignal && batScore > pitchScore) return 'batting';
+
+    // Tie-breakers (common OOTP exports)
+    if (set.has('IP') && (set.has('K/9') || set.has('WHIP') || set.has('ERA'))) return 'pitching';
+    if (set.has('AB') && (set.has('SLG') || set.has('OPS') || set.has('OBP'))) return 'batting';
+
+    return null;
+  };
+
+  const validateCsvHeaders = (headers = [], type) => {
+    const set = new Set(headers.map(normalizeHeader));
+    const missing = [];
+
+    // Always require a player name column
+    if (!set.has('Name')) missing.push('Name');
+
+    // Minimal requirements for each type (keep intentionally small; the app fills many fields with defaults)
+    const req = type === 'pitching'
+      ? ['IP', 'ERA']   // common to essentially all pitching exports
+      : ['AB', 'H'];    // common to essentially all batting exports
+
+    req.forEach((h) => { if (!set.has(h)) missing.push(h); });
+
+    // Helpful (non-fatal) warnings for expected sabermetric columns
+    const recommended = type === 'pitching'
+      ? ['WHIP', 'K/9', 'BB/9', 'HR/9', 'FIP']
+      : ['OBP', 'SLG', 'OPS'];
+
+    const missingRecommended = recommended.filter((h) => !set.has(h));
+
+    return { ok: missing.length === 0, missing, missingRecommended };
+  };
+
+
   const handleFileUpload = (event) => {
     if (!isAuthenticated) { setShowPasswordModal(true); event.target.value = ''; return; }
     const file = event.target.files[0];
     if (!file || !selectedTournament) return;
     Papa.parse(file, {
-      header: true, skipEmptyLines: true,
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: normalizeHeader,
       complete: async (results) => {
+                const headers = (results?.meta?.fields || []).map(normalizeHeader);
+        const detectedType = detectCsvType(headers);
+        const typeToUse = detectedType || uploadType;
+
+        if (detectedType && detectedType !== uploadType) {
+          setUploadType(detectedType);
+          showNotification(`Auto-detected ${detectedType} CSV — switching upload type`, 'info');
+        } else if (!detectedType) {
+          showNotification(`Could not confidently auto-detect CSV type — using "${uploadType}"`, 'warning');
+        }
+
+        const validation = validateCsvHeaders(headers, typeToUse);
+        if (!validation.ok) {
+          showNotification(`CSV is missing required column(s): ${validation.missing.join(', ')}`, 'error');
+          event.target.value = '';
+          return;
+        }
+        if (validation.missingRecommended.length > 0) {
+          showNotification(`CSV parsed, but missing recommended column(s): ${validation.missingRecommended.join(', ')}`, 'warning');
+        }
+
         if (results.data.length === 0) { showNotification('No data found', 'error'); return; }
-        const processedData = results.data.filter(row => row.Name?.trim()).map(row => normalizePlayerData(row, uploadType));
-        const combinedData = combinePlayerStats(selectedTournament[uploadType], processedData, uploadType);
-        const updatedTournament = { ...selectedTournament, [uploadType]: combinedData };
+        const processedData = results.data.filter(row => row.Name?.trim()).map(row => normalizePlayerData(row, typeToUse));
+        const combinedData = combinePlayerStats(selectedTournament[typeToUse], processedData, typeToUse);
+        const updatedTournament = { ...selectedTournament, [typeToUse]: combinedData };
         await saveTournament(updatedTournament);
         setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updatedTournament : t));
         setSelectedTournament(updatedTournament);
@@ -291,7 +363,7 @@ export default function App() {
 
   return (
     <div style={styles.container}>
-      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#dc2626' : '#059669'}}>{notification.message}</div>}
+      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#dc2626' : notification.type === 'warning' ? '#d97706' : notification.type === 'info' ? '#2563eb' : '#059669'}}>{notification.message}</div>}
       {showPasswordModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modal}>
