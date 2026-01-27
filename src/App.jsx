@@ -227,21 +227,25 @@ function StatsPage() {
 
   const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
 
-  const createTournament = async () => {
+  const createTournament = () => {
     if (!newTournamentName.trim()) return;
-    const newT = { id: crypto.randomUUID(), name: newTournamentName.trim(), createdAt: new Date().toISOString(), category: sidebarTab, batting: [], pitching: [], uploadedHashes: [] };
-    await saveTournament(newT); setTournaments([newT, ...tournaments]); setSelectedTournament(newT);
-    localStorage.setItem('selectedTournamentId', newT.id); setNewTournamentName(''); setShowNewTournament(false);
-    showNotif(`Created "${newT.name}"!`);
+    requestAuth(async () => {
+      const newT = { id: crypto.randomUUID(), name: newTournamentName.trim(), createdAt: new Date().toISOString(), category: sidebarTab, batting: [], pitching: [], uploadedHashes: [] };
+      await saveTournament(newT); setTournaments([newT, ...tournaments]); setSelectedTournament(newT);
+      localStorage.setItem('selectedTournamentId', newT.id); setNewTournamentName(''); setShowNewTournament(false);
+      showNotif(`Created "${newT.name}"!`);
+    }, 'upload');
   };
 
-  const deleteTournament = async (id) => {
-    if (!confirm('Delete this and all its data?')) return;
-    try { await supabase.from('tournaments').delete().eq('id', id);
-      const updated = tournaments.filter(t => t.id !== id); setTournaments(updated);
-      if (selectedTournament?.id === id) { setSelectedTournament(null); localStorage.removeItem('selectedTournamentId'); }
-      showNotif('Deleted');
-    } catch (e) { showNotif('Failed to delete', 'error'); }
+  const deleteTournament = (id) => {
+    requestAuth(async () => {
+      if (!confirm('Delete this and all its data?')) return;
+      try { await supabase.from('tournaments').delete().eq('id', id);
+        const updated = tournaments.filter(t => t.id !== id); setTournaments(updated);
+        if (selectedTournament?.id === id) { setSelectedTournament(null); localStorage.removeItem('selectedTournamentId'); }
+        showNotif('Deleted');
+      } catch (e) { showNotif('Failed to delete', 'error'); }
+    }, 'master');
   };
 
   const selectTournament = (t) => { setSelectedTournament(t); localStorage.setItem('selectedTournamentId', t.id); };
@@ -421,7 +425,7 @@ function StatsPage() {
           </div>
           <div style={styles.sidebarHeader}>
             <h2 style={styles.sidebarTitle}>{sidebarTab === 'drafts' ? 'Drafts' : 'Tournaments'}</h2>
-            <button style={styles.addBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
+            <button style={hasAccess('upload') ? styles.addBtn : styles.addBtnLocked} onClick={() => hasAccess('upload') ? setShowNewTournament(true) : requestAuth(() => setShowNewTournament(true), 'upload')}>{hasAccess('upload') ? '+ New' : '🔒 New'}</button>
           </div>
           {showNewTournament && (<div style={styles.newForm}>
             <input type="text" placeholder="Name..." value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createTournament()} style={styles.input} autoFocus />
@@ -431,7 +435,7 @@ function StatsPage() {
             {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
               filteredTournaments.map(t => (<div key={t.id} style={{...styles.tournamentItem, ...(selectedTournament?.id === t.id ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
                 <div style={styles.tournamentInfo}><span style={styles.tournamentName}>{t.name}</span><span style={styles.tournamentStats}>{t.batting.length} bat · {t.pitching.length} pitch</span></div>
-                <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>×</button>
+                <button style={hasAccess('master') ? styles.delBtn : styles.delBtnLocked} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }} title={hasAccess('master') ? 'Delete' : 'Master password required'}>{hasAccess('master') ? '×' : '🔒'}</button>
               </div>))}
           </div>
         </aside>
@@ -821,6 +825,8 @@ function getStyles(t) {
     tournamentName: { fontWeight: 600, color: t.textPrimary, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     tournamentStats: { fontSize: 11, color: t.textMuted },
     delBtn: { width: 24, height: 24, background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 18 },
+    delBtnLocked: { width: 24, height: 24, background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, opacity: 0.6 },
+    addBtnLocked: { padding: '6px 12px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11 },
     
     // Content area
     content: { flex: 1, padding: '24px 32px', overflow: 'auto' },
