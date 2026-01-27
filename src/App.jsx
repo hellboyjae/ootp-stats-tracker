@@ -198,98 +198,17 @@ export default function App() {
     }
   };
 
-  // CSV ingestion helpers: trim headers, auto-detect batting vs pitching, and validate required columns
-  const normalizeHeader = (h) => (h ?? '').toString().replace(/^\uFEFF/, '').trim();
-
-  const EXPECTED_BATTING_HEADERS = [
-    'POS','#','Name','Inf','B','T','G','GS','PA','AB','H','2B','3B','HR','RBI','R','BB','IBB','HP','SO','GIDP','AVG','OBP','SLG','ISO','OPS','OPS+','BABIP','WAR','SB','CS'
-  ];
-
-  const EXPECTED_PITCHING_HEADERS = [
-    'POS','#','Name','T','G','GS','WIN%','SV%','IP','BF','ERA','AVG','OBP','BABIP','WHIP','BRA/9','HR/9','BB/9','K/9','LOB%','ERA+','FIP','FIP-','WAR','SIERA'
-  ];
-
-  const headersEqual = (a = [], b = []) => {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (normalizeHeader(a[i]) !== normalizeHeader(b[i])) return false;
-    }
-    return true;
-  };
-
-  const detectCsvType = (headers = []) => {
-    const normalized = headers.map(normalizeHeader);
-
-    if (headersEqual(normalized, EXPECTED_PITCHING_HEADERS)) return 'pitching';
-    if (headersEqual(normalized, EXPECTED_BATTING_HEADERS)) return 'batting';
-
-    return null;
-  };
-
-  const validateCsvHeaders = (headers = [], type) => {
-    const expected = type === 'pitching' ? EXPECTED_PITCHING_HEADERS : EXPECTED_BATTING_HEADERS;
-    const normalized = headers.map(normalizeHeader);
-
-    if (headersEqual(normalized, expected)) {
-      return { ok: true, reason: null };
-    }
-
-    const maxLen = Math.max(normalized.length, expected.length);
-    for (let i = 0; i < maxLen; i++) {
-      const got = normalized[i];
-      const exp = expected[i];
-      if (got !== exp) {
-        return {
-          ok: false,
-          reason: `Header mismatch at column ${i + 1}. Expected "${exp ?? '(end)'}" but got "${got ?? '(end)'}".`
-        };
-      }
-    }
-
-    return { ok: false, reason: 'Header mismatch.' };
-  };
-
-
   const handleFileUpload = (event) => {
     if (!isAuthenticated) { setShowPasswordModal(true); event.target.value = ''; return; }
     const file = event.target.files[0];
     if (!file || !selectedTournament) return;
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: normalizeHeader,
+      header: true, skipEmptyLines: true,
       complete: async (results) => {
-                const headers = (results?.meta?.fields || []).map(normalizeHeader);
-        const detectedType = detectCsvType(headers);
-
-        if (!detectedType) {
-          showNotification(
-            'Unrecognized CSV format. Header row must exactly match the expected OOTP export for batting or pitching.',
-            'error'
-          );
-          event.target.value = '';
-          return;
-        }
-
-        // Always follow detected type (hard requirement)
-        if (detectedType !== uploadType) {
-          setUploadType(detectedType);
-          showNotification(`Detected ${detectedType} CSV — switching upload type`, 'info');
-        }
-
-        const typeToUse = detectedType;
-
-        const validation = validateCsvHeaders(headers, typeToUse);
-        if (!validation.ok) {
-          showNotification(`${validation.reason} (Expected exact ${typeToUse} header set.)`, 'error');
-          event.target.value = '';
-          return;
-        }
-
         if (results.data.length === 0) { showNotification('No data found', 'error'); return; }
-        const processedData = results.data.filter(row => row.Name?.trim()).map(row => normalizePlayerData(row, typeToUse));
-        const combinedData = combinePlayerStats(selectedTournament[typeToUse], processedData, typeToUse);
-        const updatedTournament = { ...selectedTournament, [typeToUse]: combinedData };
+        const processedData = results.data.filter(row => row.Name?.trim()).map(row => normalizePlayerData(row, uploadType));
+        const combinedData = combinePlayerStats(selectedTournament[uploadType], processedData, uploadType);
+        const updatedTournament = { ...selectedTournament, [uploadType]: combinedData };
         await saveTournament(updatedTournament);
         setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updatedTournament : t));
         setSelectedTournament(updatedTournament);
@@ -372,7 +291,7 @@ export default function App() {
 
   return (
     <div style={styles.container}>
-      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#dc2626' : notification.type === 'warning' ? '#d97706' : notification.type === 'info' ? '#2563eb' : '#059669'}}>{notification.message}</div>}
+      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#dc2626' : '#059669'}}>{notification.message}</div>}
       {showPasswordModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modal}>
@@ -626,15 +545,7 @@ const styles = {
   resultsCount: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   tableContainer: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'auto', maxHeight: 500 },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
-  th: {
-    textAlign: 'left',
-    padding: '10px 5px',
-  },
-  thNum: {
-    textAlign: 'right',
-    padding: '10px 5px',
-  },
-
+  th: { padding: '10px 5px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'left', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
   tr: { borderBottom: '1px solid #334155' },
   tdPos: { padding: '8px 5px', color: '#fbbf24', fontWeight: 'bold' },
   tdName: { padding: '8px 5px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' },
