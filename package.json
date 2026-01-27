@@ -12,6 +12,7 @@
     "react-dom": "^18.2.0",
     "papaparse": "^5.4.1",
     "@supabase/supabase-js": "^2.39.0"
+    "react-router-dom": "^6.20.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
