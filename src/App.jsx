@@ -63,9 +63,9 @@ function useAuth() { return React.useContext(AuthContext); }
 function Layout({ children, notification }) {
   return (
     <div style={styles.container}>
-      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#dc2626' : '#059669'}}>{notification.message}</div>}
+      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#9e4600' : '#00683f'}}>{notification.message}</div>}
       <header style={styles.header}><div style={styles.headerContent}>
-        <div><h1 style={styles.title}>⚾ OOTP Stats Tracker</h1><p style={styles.subtitle}>Out of the Park Baseball Tournament Manager</p></div>
+        <div><h1 style={styles.title}>⚾ BeaneCounter</h1><p style={styles.subtitle}>Out of the Park Baseball Statistics Tool by ItsHellboy</p></div>
         <nav style={styles.nav}>
           <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
           <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
@@ -163,20 +163,15 @@ function StatsPage() {
             siera: wAvg(e.siera, eIP, p.siera, nIP).toFixed(2)
           });
         } else {
-          // Batting stat combination
           const cG = e.g + p.g, cGS = e.gs + p.gs, cPA = e.pa + p.pa, cAB = e.ab + p.ab;
           const cH = e.h + p.h, c2B = e.doubles + p.doubles, c3B = e.triples + p.triples, cHR = e.hr + p.hr;
           const cSO = e.so + p.so, cGIDP = e.gidp + p.gidp;
-          
-          // Weighted averages based on PA
           const wAvg = (s1, w1, s2, w2) => (w1 + w2 === 0) ? 0 : ((parseFloat(s1) * w1) + (parseFloat(s2) * w2)) / (w1 + w2);
-          
           const avg = cAB > 0 ? (cH / cAB).toFixed(3) : '.000';
           const tb = cH + c2B + (2 * c3B) + (3 * cHR);
           const slg = cAB > 0 ? (tb / cAB).toFixed(3) : '.000';
           const babipNum = cH - cHR, babipDenom = cAB - cSO - cHR;
           const babip = babipDenom > 0 ? (babipNum / babipDenom).toFixed(3) : '.000';
-          
           map.set(p.name, { ...e,
             g: cG, gs: cGS, pa: cPA, ab: cAB, h: cH, doubles: c2B, triples: c3B, hr: cHR,
             bbPct: wAvg(e.bbPct, e.pa, p.bbPct, p.pa).toFixed(1),
@@ -201,220 +196,85 @@ function StatsPage() {
 
   const normalizePlayerData = (row, type) => {
     if (type === 'pitching') {
-      // POS,Name,T,OVR,VAR,G,GS,IP,BF,ERA,AVG,OBP,BABIP,WHIP,BRA/9,HR/9,H/9,BB/9,K/9,LOB%,ERA+,FIP,FIP-,WAR,SIERA
       return {
-        id: crypto.randomUUID(),
-        name: row.Name?.trim() || 'Unknown',
-        pos: row.POS?.trim() || '',
-        throws: row.T || '',
-        ovr: parseNum(row.OVR),
-        vari: parseNum(row.VAR),
-        g: parseNum(row.G),
-        gs: parseNum(row.GS),
-        ip: row.IP || '0',
-        bf: parseNum(row.BF),
-        era: row.ERA || '0.00',
-        avg: row.AVG || '.000',
-        obp: row.OBP || '.000',
-        babip: row.BABIP || '.000',
-        whip: row.WHIP || '0.00',
-        braPer9: row['BRA/9'] || '0.00',
-        hrPer9: row['HR/9'] || '0.00',
-        hPer9: row['H/9'] || '0.00',
-        bbPer9: row['BB/9'] || '0.00',
-        kPer9: row['K/9'] || '0.00',
-        lobPct: parsePct(row['LOB%']),
-        eraPlus: parseNum(row['ERA+']),
-        fip: row.FIP || '0.00',
-        fipMinus: parseNum(row['FIP-']),
-        war: row.WAR || '0.0',
-        siera: row.SIERA || '0.00'
+        id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', throws: row.T || '',
+        ovr: parseNum(row.OVR), vari: parseNum(row.VAR), g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
+        era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000', babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
+        braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00', hPer9: row['H/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00',
+        lobPct: parsePct(row['LOB%']), eraPlus: parseNum(row['ERA+']), fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']), war: row.WAR || '0.0', siera: row.SIERA || '0.00'
       };
     } else {
-      // POS,Name,B,OVR,VAR,G,GS,PA,AB,H,2B,3B,HR,BB%,SO,GIDP,AVG,OBP,SLG,wOBA,OPS,OPS+,BABIP,wRC+,wRAA,WAR,SB%,BsR
       return {
-        id: crypto.randomUUID(),
-        name: row.Name?.trim() || 'Unknown',
-        pos: row.POS?.trim() || '',
-        bats: row.B || '',
-        ovr: parseNum(row.OVR),
-        vari: parseNum(row.VAR),
-        g: parseNum(row.G),
-        gs: parseNum(row.GS),
-        pa: parseNum(row.PA),
-        ab: parseNum(row.AB),
-        h: parseNum(row.H),
-        doubles: parseNum(row['2B']),
-        triples: parseNum(row['3B']),
-        hr: parseNum(row.HR),
-        bbPct: parsePct(row['BB%']),
-        so: parseNum(row.SO),
-        gidp: parseNum(row.GIDP),
-        avg: row.AVG || '.000',
-        obp: row.OBP || '.000',
-        slg: row.SLG || '.000',
-        woba: row.wOBA || '.000',
-        ops: row.OPS || '.000',
-        opsPlus: parseNum(row['OPS+']),
-        babip: row.BABIP || '.000',
-        wrcPlus: parseNum(row['wRC+']),
-        wraa: row.wRAA || '0.0',
-        war: row.WAR || '0.0',
-        sbPct: parsePct(row['SB%']),
-        bsr: row.BsR || '0.0'
+        id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', bats: row.B || '',
+        ovr: parseNum(row.OVR), vari: parseNum(row.VAR), g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
+        h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR), bbPct: parsePct(row['BB%']),
+        so: parseNum(row.SO), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
+        woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']), babip: row.BABIP || '.000',
+        wrcPlus: parseNum(row['wRC+']), wraa: row.wRAA || '0.0', war: row.WAR || '0.0', sbPct: parsePct(row['SB%']), bsr: row.BsR || '0.0'
       };
     }
   };
 
-  // Expected headers - EXACT MATCH required
   const PITCHING_HEADERS = ['POS', 'Name', 'T', 'OVR', 'VAR', 'G', 'GS', 'IP', 'BF', 'ERA', 'AVG', 'OBP', 'BABIP', 'WHIP', 'BRA/9', 'HR/9', 'H/9', 'BB/9', 'K/9', 'LOB%', 'ERA+', 'FIP', 'FIP-', 'WAR', 'SIERA'];
   const BATTING_HEADERS = ['POS', 'Name', 'B', 'OVR', 'VAR', 'G', 'GS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'BB%', 'SO', 'GIDP', 'AVG', 'OBP', 'SLG', 'wOBA', 'OPS', 'OPS+', 'BABIP', 'wRC+', 'wRAA', 'WAR', 'SB%', 'BsR'];
-  const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+  const MAX_FILE_SIZE = 1024 * 1024;
 
-  // Generate hash of file content for duplicate detection
   const hashContent = async (content) => {
     const encoder = new TextEncoder();
     const data = encoder.encode(content);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
   };
 
-  // Validate CSV headers match exactly
   const validateHeaders = (headers) => {
-    const normalizedHeaders = headers.map(h => h.trim());
-    
-    // Check for pitching
-    if (normalizedHeaders.length === PITCHING_HEADERS.length) {
-      const isPitching = PITCHING_HEADERS.every((h, i) => h === normalizedHeaders[i]);
-      if (isPitching) return { valid: true, type: 'pitching' };
+    const h = headers.map(x => x.trim());
+    if (h.length === PITCHING_HEADERS.length && PITCHING_HEADERS.every((x, i) => x === h[i])) return { valid: true, type: 'pitching' };
+    if (h.length === BATTING_HEADERS.length && BATTING_HEADERS.every((x, i) => x === h[i])) return { valid: true, type: 'batting' };
+    const isPitch = h.includes('IP') || h.includes('ERA');
+    const isBat = h.includes('AB') || h.includes('PA');
+    if (isPitch) {
+      const missing = PITCHING_HEADERS.filter(x => !h.includes(x));
+      const extra = h.filter(x => !PITCHING_HEADERS.includes(x));
+      return { valid: false, error: `Pitching header mismatch. ${missing.length ? `Missing: ${missing.join(', ')}. ` : ''}${extra.length ? `Extra: ${extra.join(', ')}. ` : ''}Expected ${PITCHING_HEADERS.length} cols, got ${h.length}.` };
     }
-    
-    // Check for batting
-    if (normalizedHeaders.length === BATTING_HEADERS.length) {
-      const isBatting = BATTING_HEADERS.every((h, i) => h === normalizedHeaders[i]);
-      if (isBatting) return { valid: true, type: 'batting' };
+    if (isBat) {
+      const missing = BATTING_HEADERS.filter(x => !h.includes(x));
+      const extra = h.filter(x => !BATTING_HEADERS.includes(x));
+      return { valid: false, error: `Batting header mismatch. ${missing.length ? `Missing: ${missing.join(', ')}. ` : ''}${extra.length ? `Extra: ${extra.join(', ')}. ` : ''}Expected ${BATTING_HEADERS.length} cols, got ${h.length}.` };
     }
-    
-    // Determine what's wrong for better error message
-    const hasPitchingIndicator = normalizedHeaders.includes('IP') || normalizedHeaders.includes('ERA');
-    const hasBattingIndicator = normalizedHeaders.includes('AB') || normalizedHeaders.includes('PA');
-    
-    if (hasPitchingIndicator) {
-      const missing = PITCHING_HEADERS.filter(h => !normalizedHeaders.includes(h));
-      const extra = normalizedHeaders.filter(h => !PITCHING_HEADERS.includes(h));
-      return { 
-        valid: false, 
-        error: `Pitching CSV header mismatch. ${missing.length > 0 ? `Missing: ${missing.join(', ')}. ` : ''}${extra.length > 0 ? `Unexpected: ${extra.join(', ')}. ` : ''}Expected ${PITCHING_HEADERS.length} columns, got ${normalizedHeaders.length}.`
-      };
-    }
-    
-    if (hasBattingIndicator) {
-      const missing = BATTING_HEADERS.filter(h => !normalizedHeaders.includes(h));
-      const extra = normalizedHeaders.filter(h => !BATTING_HEADERS.includes(h));
-      return { 
-        valid: false, 
-        error: `Batting CSV header mismatch. ${missing.length > 0 ? `Missing: ${missing.join(', ')}. ` : ''}${extra.length > 0 ? `Unexpected: ${extra.join(', ')}. ` : ''}Expected ${BATTING_HEADERS.length} columns, got ${normalizedHeaders.length}.`
-      };
-    }
-    
-    return { valid: false, error: 'Unrecognized CSV format. Must be pitching (with IP column) or batting (with AB column) stats.' };
+    return { valid: false, error: 'Unrecognized CSV format.' };
   };
 
   const handleFileUpload = (event) => {
-    const file = event.target.files[0]; 
-    if (!file || !selectedTournament) return;
-    
-    // File size check
-    if (file.size > MAX_FILE_SIZE) {
-      showNotif(`File too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Max size is 1MB.`, 'error');
-      event.target.value = '';
-      return;
-    }
-    
-    // File type check
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      showNotif('Invalid file type. Please upload a .csv file.', 'error');
-      event.target.value = '';
-      return;
-    }
-    
+    const file = event.target.files[0]; if (!file || !selectedTournament) return;
+    if (file.size > MAX_FILE_SIZE) { showNotif(`File too large (${(file.size/1024/1024).toFixed(2)}MB). Max 1MB.`, 'error'); event.target.value = ''; return; }
+    if (!file.name.toLowerCase().endsWith('.csv')) { showNotif('Invalid file type. Upload .csv', 'error'); event.target.value = ''; return; }
     requestAuth(async () => {
       try {
-        // Read file content for hashing
         const fileContent = await file.text();
         const fileHash = await hashContent(fileContent);
-        
-        // Check for duplicate upload
         const uploadedHashes = selectedTournament.uploadedHashes || [];
-        if (uploadedHashes.includes(fileHash)) {
-          showNotif('Duplicate file detected. This CSV has already been uploaded to this tournament.', 'error');
-          event.target.value = '';
-          return;
-        }
-        
-        Papa.parse(fileContent, { 
-          header: true, 
-          skipEmptyLines: true,
+        if (uploadedHashes.includes(fileHash)) { showNotif('Duplicate file already uploaded.', 'error'); event.target.value = ''; return; }
+        Papa.parse(fileContent, { header: true, skipEmptyLines: true,
           complete: async (results) => {
-            // Check if file has any data
-            if (!results.meta.fields || results.meta.fields.length === 0) {
-              showNotif('CSV has no headers. Please check the file format.', 'error');
-              event.target.value = '';
-              return;
-            }
-            
-            if (results.data.length === 0) {
-              showNotif('CSV has no data rows.', 'error');
-              event.target.value = '';
-              return;
-            }
-            
-            // Validate headers exactly
-            const headerValidation = validateHeaders(results.meta.fields);
-            if (!headerValidation.valid) {
-              showNotif(headerValidation.error, 'error');
-              event.target.value = '';
-              return;
-            }
-            
-            const type = headerValidation.type;
-            
-            // Validate data rows have content
+            if (!results.meta.fields?.length) { showNotif('CSV has no headers.', 'error'); event.target.value = ''; return; }
+            if (!results.data.length) { showNotif('CSV has no data rows.', 'error'); event.target.value = ''; return; }
+            const validation = validateHeaders(results.meta.fields);
+            if (!validation.valid) { showNotif(validation.error, 'error'); event.target.value = ''; return; }
             const validRows = results.data.filter(r => r.Name?.trim());
-            if (validRows.length === 0) {
-              showNotif('No valid player data found. Ensure Name column has values.', 'error');
-              event.target.value = '';
-              return;
-            }
-            
-            // Process the data
-            const processed = validRows.map(r => normalizePlayerData(r, type));
-            const combined = combinePlayerStats(selectedTournament[type], processed, type);
-            
-            // Save with the file hash to prevent duplicates
-            const newHashes = [...uploadedHashes, fileHash];
-            const updated = { 
-              ...selectedTournament, 
-              [type]: combined,
-              uploadedHashes: newHashes
-            };
-            
+            if (!validRows.length) { showNotif('No valid player data found.', 'error'); event.target.value = ''; return; }
+            const processed = validRows.map(r => normalizePlayerData(r, validation.type));
+            const combined = combinePlayerStats(selectedTournament[validation.type], processed, validation.type);
+            const updated = { ...selectedTournament, [validation.type]: combined, uploadedHashes: [...uploadedHashes, fileHash] };
             await saveTournament(updated);
             setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updated : t));
             setSelectedTournament(updated);
-            showNotif(`✓ ${type === 'pitching' ? 'Pitching' : 'Batting'}: ${processed.length} records → ${combined.length} total players`);
+            showNotif(`✓ ${validation.type === 'pitching' ? 'Pitching' : 'Batting'}: ${processed.length} → ${combined.length} players`);
             event.target.value = '';
           },
-          error: (error) => {
-            showNotif(`CSV parsing error: ${error.message}`, 'error');
-            event.target.value = '';
-          }
+          error: (e) => { showNotif(`CSV error: ${e.message}`, 'error'); event.target.value = ''; }
         });
-      } catch (error) {
-        showNotif(`File read error: ${error.message}`, 'error');
-        event.target.value = '';
-      }
+      } catch (e) { showNotif(`File error: ${e.message}`, 'error'); event.target.value = ''; }
     });
     event.target.value = '';
   };
@@ -517,6 +377,23 @@ function StatsPage() {
   );
 }
 
+// Markdown parser for Info page
+function parseMarkdown(text) {
+  if (!text) return '';
+  let html = text
+    .replace(/^### (.+)$/gm, '<h3 style="color:#9e4600;margin:16px 0 8px;font-size:16px;">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="color:#9e4600;margin:20px 0 10px;font-size:20px;">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 style="color:#9e4600;margin:24px 0 12px;font-size:24px;">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:#362096;padding:2px 6px;border-radius:3px;font-family:monospace;">$1</code>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin:12px 0;" />')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#9e4600;">$1</a>')
+    .replace(/^- (.+)$/gm, '<li style="margin:4px 0;margin-left:20px;">$1</li>')
+    .replace(/\n/g, '<br />');
+  return html;
+}
+
 function InfoPage() {
   const { isAuthenticated, requestAuth } = useAuth();
   const [content, setContent] = useState({ title: 'Info & FAQ', sections: [] });
@@ -524,6 +401,7 @@ function InfoPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState({ title: '', sections: [] });
   const [notification, setNotification] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => { loadContent(); }, []);
 
@@ -557,18 +435,40 @@ function InfoPage() {
         </div>
         {isEditing ? (<div style={styles.editContainer}>
           <div style={styles.editField}><label style={styles.editLabel}>Page Title</label><input type="text" value={editContent.title} onChange={(e) => setEditContent(c => ({ ...c, title: e.target.value }))} style={styles.input} /></div>
+          
+          <button onClick={() => setShowHelp(!showHelp)} style={styles.helpToggle}>{showHelp ? '▼ Hide' : '▶ Show'} Formatting Help</button>
+          {showHelp && (
+            <div style={styles.helpBox}>
+              <p style={styles.helpTitle}>Markdown Formatting:</p>
+              <code style={styles.helpCode}># Heading 1</code>
+              <code style={styles.helpCode}>## Heading 2</code>
+              <code style={styles.helpCode}>### Heading 3</code>
+              <code style={styles.helpCode}>**bold text**</code>
+              <code style={styles.helpCode}>*italic text*</code>
+              <code style={styles.helpCode}>`inline code`</code>
+              <code style={styles.helpCode}>[Link Text](https://url.com)</code>
+              <code style={styles.helpCode}>![Alt Text](https://image-url.com/image.jpg)</code>
+              <code style={styles.helpCode}>- List item</code>
+            </div>
+          )}
+          
           {editContent.sections.map((section, i) => (<div key={i} style={styles.editSection}>
             <div style={styles.editSectionHeader}><span style={styles.editSectionNum}>Section {i + 1}</span>
               <div style={styles.editSectionBtns}><button onClick={() => moveSection(i, -1)} style={styles.moveBtn} disabled={i === 0}>↑</button><button onClick={() => moveSection(i, 1)} style={styles.moveBtn} disabled={i === editContent.sections.length - 1}>↓</button><button onClick={() => removeSection(i)} style={styles.removeBtn}>✕</button></div>
             </div>
             <input type="text" value={section.heading} onChange={(e) => updateSection(i, 'heading', e.target.value)} style={styles.input} placeholder="Heading" />
-            <textarea value={section.body} onChange={(e) => updateSection(i, 'body', e.target.value)} style={styles.textarea} rows={4} />
+            <textarea value={section.body} onChange={(e) => updateSection(i, 'body', e.target.value)} style={styles.textareaLarge} rows={8} placeholder="Use Markdown for formatting..." />
+            <div style={styles.previewLabel}>Preview:</div>
+            <div style={styles.previewBox} dangerouslySetInnerHTML={{ __html: parseMarkdown(section.body) }} />
           </div>))}
           <button onClick={addSection} style={styles.addSectionBtn}>+ Add Section</button>
           <div style={styles.editActions}><button onClick={saveContent} style={styles.saveBtn}>Save Changes</button><button onClick={() => setIsEditing(false)} style={styles.cancelBtn}>Cancel</button></div>
         </div>) : (<div style={styles.infoContent}>
           {content.sections.length === 0 ? <p style={styles.emptyMsg}>No content yet. Click Edit to add some!</p> :
-            content.sections.map((s, i) => (<div key={i} style={styles.infoSection}><h3 style={styles.infoHeading}>{s.heading}</h3><p style={styles.infoBody}>{s.body}</p></div>))}
+            content.sections.map((s, i) => (<div key={i} style={styles.infoSection}>
+              <h3 style={styles.infoHeading}>{s.heading}</h3>
+              <div style={styles.infoBody} dangerouslySetInnerHTML={{ __html: parseMarkdown(s.body) }} />
+            </div>))}
         </div>)}
       </div>
     </Layout>
@@ -674,60 +574,11 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const calcIPperG = (ip, g) => { if (!g) return '0.00'; const str = String(ip); let n = str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; return (n / g).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
-  // POS,Name,T,OVR,VAR,G,GS,IP,BF,ERA,AVG,OBP,BABIP,WHIP,BRA/9,HR/9,H/9,BB/9,K/9,LOB%,ERA+,FIP,FIP-,WAR,SIERA
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader>
-    <SortHeader field="name">Name</SortHeader>
-    <SortHeader field="throws">T</SortHeader>
-    <SortHeader field="ovr">OVR</SortHeader>
-    <SortHeader field="vari">VAR</SortHeader>
-    <SortHeader field="g">G</SortHeader>
-    <SortHeader field="gs">GS</SortHeader>
-    <SortHeader field="ip">IP</SortHeader>
-    <SortHeader field="ipPerG">IP/G</SortHeader>
-    <SortHeader field="bf">BF</SortHeader>
-    <SortHeader field="era">ERA</SortHeader>
-    <SortHeader field="avg">AVG</SortHeader>
-    <SortHeader field="obp">OBP</SortHeader>
-    <SortHeader field="babip">BABIP</SortHeader>
-    <SortHeader field="whip">WHIP</SortHeader>
-    <SortHeader field="braPer9">BRA/9</SortHeader>
-    <SortHeader field="hrPer9">HR/9</SortHeader>
-    <SortHeader field="hPer9">H/9</SortHeader>
-    <SortHeader field="bbPer9">BB/9</SortHeader>
-    <SortHeader field="kPer9">K/9</SortHeader>
-    <SortHeader field="lobPct">LOB%</SortHeader>
-    <SortHeader field="eraPlus">ERA+</SortHeader>
-    <SortHeader field="fip">FIP</SortHeader>
-    <SortHeader field="fipMinus">FIP-</SortHeader>
-    <SortHeader field="war">WAR</SortHeader>
-    <SortHeader field="siera">SIERA</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="hPer9">H/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td>
-      <td style={styles.tdName}>{p.name}</td>
-      <td style={styles.td}>{p.throws}</td>
-      <td style={styles.tdOvr}>{p.ovr}</td>
-      <td style={styles.td}>{p.vari}</td>
-      <td style={styles.td}>{p.g}</td>
-      <td style={styles.td}>{p.gs}</td>
-      <td style={styles.td}>{p.ip}</td>
-      <td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td>
-      <td style={styles.td}>{p.bf}</td>
-      <td style={styles.tdStat}>{p.era}</td>
-      <td style={styles.tdStat}>{p.avg}</td>
-      <td style={styles.tdStat}>{p.obp}</td>
-      <td style={styles.tdStat}>{p.babip}</td>
-      <td style={styles.tdStat}>{p.whip}</td>
-      <td style={styles.tdStat}>{p.braPer9}</td>
-      <td style={styles.tdStat}>{p.hrPer9}</td>
-      <td style={styles.tdStat}>{p.hPer9}</td>
-      <td style={styles.tdStat}>{p.bbPer9}</td>
-      <td style={styles.tdStat}>{p.kPer9}</td>
-      <td style={styles.td}>{p.lobPct}</td>
-      <td style={styles.tdStat}>{p.eraPlus}</td>
-      <td style={styles.tdStat}>{p.fip}</td>
-      <td style={styles.tdStat}>{p.fipMinus}</td>
+      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td><td style={styles.tdOvr}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td><td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.hPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.siera) < 3.90 ? '#4ade80' : parseFloat(p.siera) > 3.90 ? '#f87171' : '#38bdf8'}}>{p.siera}</td>
     </tr>))}
@@ -737,66 +588,15 @@ function PitchingTable({ data, sortBy, sortDir, onSort }) {
 function BattingTable({ data, sortBy, sortDir, onSort }) {
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
-  // POS,Name,B,OVR,VAR,G,GS,PA,AB,H,2B,3B,HR,BB%,SO,GIDP,AVG,OBP,SLG,wOBA,OPS,OPS+,BABIP,wRC+,wRAA,WAR,SB%,BsR
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader>
-    <SortHeader field="name">Name</SortHeader>
-    <SortHeader field="bats">B</SortHeader>
-    <SortHeader field="ovr">OVR</SortHeader>
-    <SortHeader field="vari">VAR</SortHeader>
-    <SortHeader field="g">G</SortHeader>
-    <SortHeader field="gs">GS</SortHeader>
-    <SortHeader field="pa">PA</SortHeader>
-    <SortHeader field="ab">AB</SortHeader>
-    <SortHeader field="h">H</SortHeader>
-    <SortHeader field="doubles">2B</SortHeader>
-    <SortHeader field="triples">3B</SortHeader>
-    <SortHeader field="hr">HR</SortHeader>
-    <SortHeader field="bbPct">BB%</SortHeader>
-    <SortHeader field="so">SO</SortHeader>
-    <SortHeader field="gidp">GIDP</SortHeader>
-    <SortHeader field="avg">AVG</SortHeader>
-    <SortHeader field="obp">OBP</SortHeader>
-    <SortHeader field="slg">SLG</SortHeader>
-    <SortHeader field="woba">wOBA</SortHeader>
-    <SortHeader field="ops">OPS</SortHeader>
-    <SortHeader field="opsPlus">OPS+</SortHeader>
-    <SortHeader field="babip">BABIP</SortHeader>
-    <SortHeader field="wrcPlus">wRC+</SortHeader>
-    <SortHeader field="wraa">wRAA</SortHeader>
-    <SortHeader field="war">WAR</SortHeader>
-    <SortHeader field="sbPct">SB%</SortHeader>
-    <SortHeader field="bsr">BsR</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader><SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="gidp">GIDP</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td>
-      <td style={styles.tdName}>{p.name}</td>
-      <td style={styles.td}>{p.bats}</td>
-      <td style={styles.tdOvr}>{p.ovr}</td>
-      <td style={styles.td}>{p.vari}</td>
-      <td style={styles.td}>{p.g}</td>
-      <td style={styles.td}>{p.gs}</td>
-      <td style={styles.td}>{p.pa}</td>
-      <td style={styles.td}>{p.ab}</td>
-      <td style={styles.td}>{p.h}</td>
-      <td style={styles.td}>{p.doubles}</td>
-      <td style={styles.td}>{p.triples}</td>
-      <td style={styles.td}>{p.hr}</td>
-      <td style={styles.td}>{p.bbPct}</td>
-      <td style={styles.td}>{p.so}</td>
-      <td style={styles.td}>{p.gidp}</td>
-      <td style={styles.tdStat}>{p.avg}</td>
-      <td style={styles.tdStat}>{p.obp}</td>
-      <td style={styles.tdStat}>{p.slg}</td>
+      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td><td style={styles.tdOvr}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td><td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td><td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td><td style={styles.td}>{p.gidp}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.woba) > 0.320 ? '#4ade80' : parseFloat(p.woba) < 0.320 ? '#f87171' : '#38bdf8'}}>{p.woba}</td>
-      <td style={styles.tdStat}>{p.ops}</td>
-      <td style={styles.tdStat}>{p.opsPlus}</td>
-      <td style={styles.tdStat}>{p.babip}</td>
-      <td style={styles.tdStat}>{p.wrcPlus}</td>
-      <td style={styles.tdStat}>{p.wraa}</td>
+      <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td>
-      <td style={styles.td}>{p.sbPct}</td>
-      <td style={styles.tdStat}>{p.bsr}</td>
+      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>
     </tr>))}
   </tbody></table>);
 }
@@ -810,117 +610,163 @@ export default function App() {
 }
 
 const styles = {
-  container: { minHeight: '100vh', background: '#0f172a', fontFamily: "'Courier New', monospace", color: '#f1f5f9' },
-  loading: { minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f1f5f9' },
+  // Main container - dark purple base
+  container: { minHeight: '100vh', background: '#171367', fontFamily: "'Courier New', monospace", color: '#ffffff' },
+  loading: { minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff' },
   notification: { position: 'fixed', top: 20, right: 20, padding: '12px 24px', borderRadius: 8, color: '#fff', fontWeight: 'bold', zIndex: 1000 },
-  header: { background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', borderBottom: '4px solid #fbbf24', padding: '20px 32px' },
+  
+  // Header - gradient purple with orange accent
+  header: { background: 'linear-gradient(135deg, #171367, #362096)', borderBottom: '4px solid #9e4600', padding: '20px 32px' },
   headerContent: { maxWidth: 1800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
-  title: { margin: 0, fontSize: 28, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: 2 },
-  subtitle: { margin: '4px 0 0', fontSize: 14, color: '#e2e8f0' },
+  title: { margin: 0, fontSize: 28, color: '#9e4600', textTransform: 'uppercase', letterSpacing: 2 },
+  subtitle: { margin: '4px 0 0', fontSize: 14, color: '#ffffff' },
+  
+  // Navigation
   nav: { display: 'flex', gap: 8 },
-  navLink: { padding: '10px 20px', background: '#1e3a8a', color: '#e2e8f0', textDecoration: 'none', borderRadius: 6, fontWeight: 'bold', fontSize: 14, border: '2px solid transparent' },
-  navLinkActive: { background: '#fbbf24', color: '#1e3a8a', borderColor: '#fbbf24' },
+  navLink: { padding: '10px 20px', background: '#362096', color: '#ffffff', textDecoration: 'none', borderRadius: 6, fontWeight: 'bold', fontSize: 14, border: '2px solid transparent' },
+  navLinkActive: { background: '#9e4600', color: '#ffffff', borderColor: '#9e4600' },
+  
+  // Main layout
   main: { display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 120px)' },
-  sidebar: { width: 260, background: '#1e293b', borderRight: '2px solid #334155', padding: 16, flexShrink: 0 },
+  
+  // Sidebar
+  sidebar: { width: 260, background: '#362096', borderRight: '2px solid #9e4600', padding: 16, flexShrink: 0 },
   sidebarTabs: { display: 'flex', gap: 4, marginBottom: 16 },
-  sidebarTabBtn: { flex: 1, padding: '10px 8px', background: '#334155', color: '#94a3b8', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
-  sidebarTabActive: { background: '#475569', color: '#fbbf24' },
-  sidebarHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '2px solid #334155' },
-  sidebarTitle: { margin: 0, fontSize: 14, color: '#fbbf24', textTransform: 'uppercase', fontWeight: 'bold' },
-  addBtn: { padding: '6px 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
-  newForm: { marginBottom: 12, padding: 12, background: '#334155', borderRadius: 8 },
-  input: { width: '100%', padding: 10, background: '#1e293b', border: '2px solid #475569', borderRadius: 4, color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box', marginBottom: 8 },
-  textarea: { width: '100%', padding: 10, background: '#1e293b', border: '2px solid #475569', borderRadius: 4, color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' },
+  sidebarTabBtn: { flex: 1, padding: '10px 8px', background: '#171367', color: '#ffffff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
+  sidebarTabActive: { background: '#9e4600', color: '#ffffff' },
+  sidebarHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '2px solid #9e4600' },
+  sidebarTitle: { margin: 0, fontSize: 14, color: '#9e4600', textTransform: 'uppercase', fontWeight: 'bold' },
+  
+  // Buttons
+  addBtn: { padding: '6px 12px', background: '#00683f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
+  saveBtn: { flex: 1, padding: 8, background: '#00683f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
+  cancelBtn: { flex: 1, padding: 8, background: '#9e4600', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' },
+  uploadBtn: { padding: '10px 20px', background: '#00683f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
+  uploadBtnLocked: { padding: '10px 20px', background: '#362096', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
+  resetBtn: { padding: '10px 16px', background: '#9e4600', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+  editBtn: { padding: '10px 20px', background: '#362096', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
+  
+  // Forms
+  newForm: { marginBottom: 12, padding: 12, background: '#171367', borderRadius: 8 },
+  input: { width: '100%', padding: 10, background: '#171367', border: '2px solid #9e4600', borderRadius: 4, color: '#ffffff', fontSize: 14, boxSizing: 'border-box', marginBottom: 8 },
+  textarea: { width: '100%', padding: 10, background: '#171367', border: '2px solid #9e4600', borderRadius: 4, color: '#ffffff', fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' },
+  textareaLarge: { width: '100%', padding: 10, background: '#171367', border: '2px solid #9e4600', borderRadius: 4, color: '#ffffff', fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', minHeight: 150 },
   formBtns: { display: 'flex', gap: 8, marginTop: 10 },
-  saveBtn: { flex: 1, padding: 8, background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  cancelBtn: { flex: 1, padding: 8, background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' },
+  
+  // Tournament list
   tournamentList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  emptyMsg: { color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: '20px 0' },
-  tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: '#334155', borderRadius: 6, cursor: 'pointer', border: '2px solid transparent' },
-  tournamentActive: { borderColor: '#fbbf24', background: '#475569' },
+  emptyMsg: { color: '#ffffff', fontSize: 13, textAlign: 'center', padding: '20px 0', opacity: 0.8 },
+  tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: '#171367', borderRadius: 6, cursor: 'pointer', border: '2px solid transparent' },
+  tournamentActive: { borderColor: '#9e4600', background: '#362096' },
   tournamentInfo: { display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' },
-  tournamentName: { fontWeight: 'bold', color: '#f1f5f9', fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  tournamentStats: { fontSize: 11, color: '#94a3b8' },
-  delBtn: { width: 24, height: 24, background: 'transparent', color: '#94a3b8', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 18 },
+  tournamentName: { fontWeight: 'bold', color: '#ffffff', fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  tournamentStats: { fontSize: 11, color: '#ffffff', opacity: 0.7 },
+  delBtn: { width: 24, height: 24, background: 'transparent', color: '#ffffff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 18, opacity: 0.7 },
+  
+  // Content area
   content: { flex: 1, padding: '24px 32px', overflow: 'auto' },
   welcome: { textAlign: 'center', padding: '60px 40px' },
-  welcomeTitle: { fontSize: 32, color: '#fbbf24', marginBottom: 12 },
-  tournamentHeader: { marginBottom: 20, paddingBottom: 12, borderBottom: '2px solid #334155' },
-  tournamentTitle: { fontSize: 24, color: '#fbbf24', margin: 0 },
+  welcomeTitle: { fontSize: 32, color: '#9e4600', marginBottom: 12 },
+  
+  // Tournament header
+  tournamentHeader: { marginBottom: 20, paddingBottom: 12, borderBottom: '2px solid #9e4600' },
+  tournamentTitle: { fontSize: 24, color: '#9e4600', margin: 0 },
   handednessContainer: { display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' },
-  handednessGroup: { display: 'flex', alignItems: 'center', gap: 12, background: '#334155', padding: '8px 16px', borderRadius: 6 },
-  handednessLabel: { color: '#fbbf24', fontWeight: 'bold', fontSize: 13 },
-  handednessValue: { color: '#f1f5f9', fontSize: 13, fontFamily: "'Courier New', monospace" },
-  uploadSection: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: 16, background: '#1e293b', borderRadius: 8, border: '2px dashed #475569', flexWrap: 'wrap' },
-  uploadBtn: { padding: '10px 20px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  uploadBtnLocked: { padding: '10px 20px', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  uploadHint: { color: '#94a3b8', fontSize: 12 },
+  handednessGroup: { display: 'flex', alignItems: 'center', gap: 12, background: '#362096', padding: '8px 16px', borderRadius: 6 },
+  handednessLabel: { color: '#9e4600', fontWeight: 'bold', fontSize: 13 },
+  handednessValue: { color: '#ffffff', fontSize: 13, fontFamily: "'Courier New', monospace" },
+  
+  // Upload section
+  uploadSection: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: 16, background: '#362096', borderRadius: 8, border: '2px dashed #9e4600', flexWrap: 'wrap' },
+  uploadHint: { color: '#ffffff', fontSize: 12, opacity: 0.8 },
+  
+  // Tabs
   tabs: { display: 'flex', gap: 8, marginBottom: 16 },
-  tab: { padding: '12px 24px', background: '#334155', color: '#e2e8f0', border: '2px solid #475569', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
-  tabActive: { background: '#475569', borderColor: '#fbbf24', color: '#fbbf24' },
+  tab: { padding: '12px 24px', background: '#362096', color: '#ffffff', border: '2px solid #9e4600', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
+  tabActive: { background: '#9e4600', borderColor: '#9e4600', color: '#ffffff' },
+  
+  // Filters
   filterBar: { display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' },
-  searchInput: { padding: '10px 16px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 14, width: 200 },
-  filterSelect: { padding: '10px 16px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 14, cursor: 'pointer' },
-  advancedFilterBtn: { padding: '10px 16px', background: '#334155', color: '#e2e8f0', border: '2px solid #475569', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 'bold' },
-  advancedFilterBtnActive: { borderColor: '#fbbf24', color: '#fbbf24' },
-  advancedFilterBtnHasFilters: { background: '#475569', color: '#38bdf8' },
-  resetBtn: { padding: '10px 16px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 },
-  advancedFilters: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', padding: 16, marginBottom: 16 },
+  searchInput: { padding: '10px 16px', background: '#362096', color: '#ffffff', border: '2px solid #9e4600', borderRadius: 4, fontSize: 14, width: 200 },
+  filterSelect: { padding: '10px 16px', background: '#362096', color: '#ffffff', border: '2px solid #9e4600', borderRadius: 4, fontSize: 14, cursor: 'pointer' },
+  advancedFilterBtn: { padding: '10px 16px', background: '#362096', color: '#ffffff', border: '2px solid #9e4600', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 'bold' },
+  advancedFilterBtnActive: { borderColor: '#00683f', color: '#00683f' },
+  advancedFilterBtnHasFilters: { background: '#00683f', color: '#ffffff' },
+  advancedFilters: { background: '#362096', borderRadius: 8, border: '2px solid #9e4600', padding: 16, marginBottom: 16 },
   filterGroup: { display: 'flex', gap: 24, flexWrap: 'wrap' },
   statFilter: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 },
-  statFilterLabel: { display: 'flex', alignItems: 'center', gap: 8, color: '#f1f5f9', fontSize: 13, fontWeight: 'bold', cursor: 'pointer' },
+  statFilterLabel: { display: 'flex', alignItems: 'center', gap: 8, color: '#ffffff', fontSize: 13, fontWeight: 'bold', cursor: 'pointer' },
   checkbox: { width: 16, height: 16, cursor: 'pointer' },
   statFilterControls: { display: 'flex', gap: 8 },
-  operatorSelect: { padding: '6px 10px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 13, cursor: 'pointer' },
-  valueInput: { padding: '6px 10px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 13, width: 80 },
-  resultsCount: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
-  tableContainer: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'auto', maxHeight: 500 },
+  operatorSelect: { padding: '6px 10px', background: '#171367', color: '#ffffff', border: '2px solid #9e4600', borderRadius: 4, fontSize: 13, cursor: 'pointer' },
+  valueInput: { padding: '6px 10px', background: '#171367', color: '#ffffff', border: '2px solid #9e4600', borderRadius: 4, fontSize: 13, width: 80 },
+  resultsCount: { color: '#ffffff', fontSize: 12, marginBottom: 8, opacity: 0.8 },
+  
+  // Table - keeping stat colors unchanged
+  tableContainer: { background: '#362096', borderRadius: 8, border: '2px solid #9e4600', overflow: 'auto', maxHeight: 500 },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
-  th: { padding: '10px 6px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
-  tr: { borderBottom: '1px solid #334155' },
+  th: { padding: '10px 6px', background: '#171367', color: '#9e4600', fontWeight: 'bold', textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #9e4600', userSelect: 'none' },
+  tr: { borderBottom: '1px solid #362096' },
   td: { padding: '6px 6px', color: '#e2e8f0', textAlign: 'center', fontFamily: "'Courier New', monospace" },
   tdName: { padding: '6px 6px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' },
-  tdOvr: { padding: '6px 6px', color: '#fbbf24', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
+  tdOvr: { padding: '6px 6px', color: '#9e4600', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
   tdStat: { padding: '6px 6px', color: '#38bdf8', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
-  emptyTable: { padding: 40, textAlign: 'center', color: '#94a3b8' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: '#1e293b', padding: 32, borderRadius: 12, border: '2px solid #475569', maxWidth: 400, width: '90%' },
-  modalTitle: { margin: '0 0 12px', color: '#fbbf24', fontSize: 20 },
-  modalText: { margin: '0 0 20px', color: '#94a3b8', fontSize: 14 },
+  emptyTable: { padding: 40, textAlign: 'center', color: '#ffffff', opacity: 0.7 },
+  
+  // Modal
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(23,19,103,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modal: { background: '#362096', padding: 32, borderRadius: 12, border: '2px solid #9e4600', maxWidth: 400, width: '90%' },
+  modalTitle: { margin: '0 0 12px', color: '#9e4600', fontSize: 20 },
+  modalText: { margin: '0 0 20px', color: '#ffffff', fontSize: 14, opacity: 0.8 },
   modalBtns: { display: 'flex', gap: 12, marginTop: 16 },
   authError: { color: '#f87171', fontSize: 13, margin: '0 0 12px', padding: '8px 12px', background: 'rgba(248, 113, 113, 0.1)', borderRadius: 4 },
+  
+  // Page content
   pageContent: { flex: 1, padding: '24px 32px', maxWidth: 1200, margin: '0 auto' },
-  pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid #334155' },
-  pageTitle: { margin: 0, fontSize: 28, color: '#fbbf24' },
-  editBtn: { padding: '10px 20px', background: '#475569', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
+  pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid #9e4600' },
+  pageTitle: { margin: 0, fontSize: 28, color: '#9e4600' },
+  
+  // Info page
   infoContent: { display: 'flex', flexDirection: 'column', gap: 24 },
-  infoSection: { background: '#1e293b', padding: 24, borderRadius: 8, border: '2px solid #334155' },
-  infoHeading: { margin: '0 0 12px', color: '#fbbf24', fontSize: 20 },
-  infoBody: { margin: 0, color: '#e2e8f0', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' },
+  infoSection: { background: '#362096', padding: 24, borderRadius: 8, border: '2px solid #9e4600' },
+  infoHeading: { margin: '0 0 12px', color: '#9e4600', fontSize: 20 },
+  infoBody: { margin: 0, color: '#ffffff', fontSize: 14, lineHeight: 1.6 },
+  
+  // Edit mode
   editContainer: { display: 'flex', flexDirection: 'column', gap: 16 },
   editField: { display: 'flex', flexDirection: 'column', gap: 8 },
-  editLabel: { color: '#fbbf24', fontWeight: 'bold', fontSize: 13 },
-  editSection: { background: '#1e293b', padding: 16, borderRadius: 8, border: '2px solid #334155' },
+  editLabel: { color: '#9e4600', fontWeight: 'bold', fontSize: 13 },
+  editSection: { background: '#362096', padding: 16, borderRadius: 8, border: '2px solid #9e4600' },
   editSectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  editSectionNum: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
+  editSectionNum: { color: '#ffffff', fontSize: 12, fontWeight: 'bold', opacity: 0.7 },
   editSectionBtns: { display: 'flex', gap: 8 },
-  moveBtn: { width: 28, height: 28, background: '#475569', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-  removeBtn: { width: 28, height: 28, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-  addSectionBtn: { padding: '12px 24px', background: '#334155', color: '#fbbf24', border: '2px dashed #475569', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
+  moveBtn: { width: 28, height: 28, background: '#171367', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
+  removeBtn: { width: 28, height: 28, background: '#9e4600', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
+  addSectionBtn: { padding: '12px 24px', background: '#171367', color: '#9e4600', border: '2px dashed #9e4600', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
   editActions: { display: 'flex', gap: 12, marginTop: 16 },
-  addVideoForm: { background: '#1e293b', padding: 24, borderRadius: 8, border: '2px solid #334155', marginBottom: 24 },
-  formTitle: { margin: '0 0 16px', color: '#fbbf24', fontSize: 18 },
+  
+  // Markdown help
+  helpToggle: { background: '#171367', color: '#9e4600', border: '1px solid #9e4600', padding: '8px 16px', borderRadius: 4, cursor: 'pointer', fontSize: 12, marginBottom: 8 },
+  helpBox: { background: '#171367', border: '1px solid #9e4600', borderRadius: 8, padding: 16, marginBottom: 16 },
+  helpTitle: { color: '#9e4600', margin: '0 0 12px', fontWeight: 'bold' },
+  helpCode: { display: 'block', background: '#362096', padding: '4px 8px', borderRadius: 4, marginBottom: 6, color: '#ffffff', fontSize: 12, fontFamily: 'monospace' },
+  previewLabel: { color: '#9e4600', fontSize: 12, fontWeight: 'bold', marginTop: 12, marginBottom: 4 },
+  previewBox: { background: '#171367', border: '1px solid #9e4600', borderRadius: 8, padding: 16, minHeight: 60, color: '#ffffff', fontSize: 14, lineHeight: 1.6 },
+  
+  // Videos page
+  addVideoForm: { background: '#362096', padding: 24, borderRadius: 8, border: '2px solid #9e4600', marginBottom: 24 },
+  formTitle: { margin: '0 0 16px', color: '#9e4600', fontSize: 18 },
   videoGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 },
-  videoCard: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'hidden', position: 'relative' },
-  thumbnailContainer: { position: 'relative', paddingTop: '56.25%', background: '#0f172a', cursor: 'pointer' },
+  videoCard: { background: '#362096', borderRadius: 8, border: '2px solid #9e4600', overflow: 'hidden', position: 'relative' },
+  thumbnailContainer: { position: 'relative', paddingTop: '56.25%', background: '#171367', cursor: 'pointer' },
   thumbnail: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' },
-  thumbnailPlaceholder: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, color: '#475569' },
-  playOverlay: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 60, height: 60, background: 'rgba(251, 191, 36, 0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#1e293b', opacity: 0, transition: 'opacity 0.2s' },
+  thumbnailPlaceholder: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, color: '#9e4600' },
+  playOverlay: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 60, height: 60, background: 'rgba(158, 70, 0, 0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#ffffff', opacity: 0, transition: 'opacity 0.2s' },
   videoInfo: { padding: 16 },
-  videoTitle: { display: 'block', color: '#f1f5f9', fontWeight: 'bold', fontSize: 14, marginBottom: 4 },
-  videoPlatform: { color: '#94a3b8', fontSize: 12 },
-  removeVideoBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, background: 'rgba(220, 38, 38, 0.9)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-  videoPlayerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  videoTitle: { display: 'block', color: '#ffffff', fontWeight: 'bold', fontSize: 14, marginBottom: 4 },
+  videoPlatform: { color: '#ffffff', fontSize: 12, opacity: 0.7 },
+  removeVideoBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, background: 'rgba(158, 70, 0, 0.9)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
+  videoPlayerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(23,19,103,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   videoPlayerContainer: { position: 'relative', width: '90%', maxWidth: 1000, aspectRatio: '16/9' },
   videoPlayer: { width: '100%', height: '100%', borderRadius: 8 },
   closePlayerBtn: { position: 'absolute', top: -40, right: 0, background: 'transparent', color: '#fff', border: 'none', fontSize: 32, cursor: 'pointer' }
