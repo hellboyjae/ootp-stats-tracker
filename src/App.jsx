@@ -256,14 +256,17 @@ function StatsPage() {
   const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
 
   const combinePlayerStats = (existing, newP, type) => {
-    const map = new Map(); existing.forEach(p => map.set(p.name, { ...p }));
+    // Use name+ovr as unique key to keep different card versions separate
+    const getPlayerKey = (p) => `${p.name}|${p.ovr}`;
+    const map = new Map(); existing.forEach(p => map.set(getPlayerKey(p), { ...p }));
     newP.forEach(p => {
-      if (map.has(p.name)) {
-        const e = map.get(p.name);
+      const key = getPlayerKey(p);
+      if (map.has(key)) {
+        const e = map.get(key);
         if (type === 'pitching') {
           const cIP = parseIP(e.ip) + parseIP(p.ip), eIP = parseIP(e.ip), nIP = parseIP(p.ip);
           const wAvg = (s1, i1, s2, i2) => (i1 + i2 === 0) ? 0 : ((parseFloat(s1) * i1) + (parseFloat(s2) * i2)) / (i1 + i2);
-          map.set(p.name, { ...e, g: e.g + p.g, gs: e.gs + p.gs, ip: formatIP(cIP), bf: e.bf + p.bf,
+          map.set(key, { ...e, g: e.g + p.g, gs: e.gs + p.gs, ip: formatIP(cIP), bf: e.bf + p.bf,
             era: wAvg(e.era, eIP, p.era, nIP).toFixed(2), avg: wAvg(e.avg, eIP, p.avg, nIP).toFixed(3),
             obp: wAvg(e.obp, eIP, p.obp, nIP).toFixed(3), babip: wAvg(e.babip, eIP, p.babip, nIP).toFixed(3),
             whip: wAvg(e.whip, eIP, p.whip, nIP).toFixed(2), braPer9: wAvg(e.braPer9, eIP, p.braPer9, nIP).toFixed(2),
@@ -282,7 +285,7 @@ function StatsPage() {
           const tb = cH + c2B + (2 * c3B) + (3 * cHR);
           const slg = cAB > 0 ? (tb / cAB).toFixed(3) : '.000';
           const babip = (cAB - cSO - cHR) > 0 ? ((cH - cHR) / (cAB - cSO - cHR)).toFixed(3) : '.000';
-          map.set(p.name, { ...e, g: cG, gs: cGS, pa: cPA, ab: cAB, h: cH, doubles: c2B, triples: c3B, hr: cHR,
+          map.set(key, { ...e, g: cG, gs: cGS, pa: cPA, ab: cAB, h: cH, doubles: c2B, triples: c3B, hr: cHR,
             bbPct: wAvg(e.bbPct, e.pa, p.bbPct, p.pa).toFixed(1), so: cSO, gidp: cGIDP, avg,
             obp: wAvg(e.obp, e.pa, p.obp, p.pa).toFixed(3), slg,
             woba: wAvg(e.woba, e.pa, p.woba, p.pa).toFixed(3), ops: wAvg(e.ops, e.pa, p.ops, p.pa).toFixed(3),
@@ -294,7 +297,7 @@ function StatsPage() {
             bsr: (parseFloat(e.bsr||0) + parseFloat(p.bsr||0)).toFixed(1)
           });
         }
-      } else { map.set(p.name, { ...p, id: crypto.randomUUID() }); }
+      } else { map.set(key, { ...p, id: crypto.randomUUID() }); }
     });
     return Array.from(map.values());
   };
@@ -349,35 +352,71 @@ function StatsPage() {
   };
 
   const handleFileUpload = (event) => {
-    const file = event.target.files[0]; if (!file || !selectedTournament) return;
-    if (file.size > MAX_FILE_SIZE) { showNotif(`File too large. Max 1MB.`, 'error'); event.target.value = ''; return; }
-    if (!file.name.toLowerCase().endsWith('.csv')) { showNotif('Invalid file type. Upload .csv', 'error'); event.target.value = ''; return; }
+    const files = Array.from(event.target.files); 
+    if (!files.length || !selectedTournament) return;
+    
+    // Validate all files first
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) { showNotif(`File "${file.name}" too large. Max 1MB.`, 'error'); event.target.value = ''; return; }
+      if (!file.name.toLowerCase().endsWith('.csv')) { showNotif(`File "${file.name}" is not a .csv`, 'error'); event.target.value = ''; return; }
+    }
+    
     requestAuth(async () => {
       try {
-        const fileContent = await file.text();
-        const fileHash = await hashContent(fileContent);
-        const uploadedHashes = selectedTournament.uploadedHashes || [];
-        if (uploadedHashes.includes(fileHash)) { showNotif('Duplicate file already uploaded.', 'error'); event.target.value = ''; return; }
-        Papa.parse(fileContent, { header: true, skipEmptyLines: true,
-          complete: async (results) => {
-            if (!results.meta.fields?.length) { showNotif('CSV has no headers.', 'error'); event.target.value = ''; return; }
-            if (!results.data.length) { showNotif('CSV has no data rows.', 'error'); event.target.value = ''; return; }
-            const validation = validateHeaders(results.meta.fields);
-            if (!validation.valid) { showNotif(validation.error, 'error'); event.target.value = ''; return; }
-            const validRows = results.data.filter(r => r.Name?.trim());
-            if (!validRows.length) { showNotif('No valid player data found.', 'error'); event.target.value = ''; return; }
-            const processed = validRows.map(r => normalizePlayerData(r, validation.type));
-            const combined = combinePlayerStats(selectedTournament[validation.type], processed, validation.type);
-            const updated = { ...selectedTournament, [validation.type]: combined, uploadedHashes: [...uploadedHashes, fileHash] };
-            await saveTournament(updated);
-            setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updated : t));
-            setSelectedTournament(updated);
-            showNotif(`✓ ${validation.type === 'pitching' ? 'Pitching' : 'Batting'}: ${processed.length} → ${combined.length} players`);
-            event.target.value = '';
-          },
-          error: (e) => { showNotif(`CSV error: ${e.message}`, 'error'); event.target.value = ''; }
-        });
-      } catch (e) { showNotif(`File error: ${e.message}`, 'error'); event.target.value = ''; }
+        let currentTournament = { ...selectedTournament };
+        let uploadedHashes = [...(currentTournament.uploadedHashes || [])];
+        let totalBatting = 0, totalPitching = 0;
+        let skippedDupes = 0;
+        
+        for (const file of files) {
+          const fileContent = await file.text();
+          const fileHash = await hashContent(fileContent);
+          
+          if (uploadedHashes.includes(fileHash)) { 
+            skippedDupes++; 
+            continue; 
+          }
+          
+          const parseResult = await new Promise((resolve, reject) => {
+            Papa.parse(fileContent, { 
+              header: true, 
+              skipEmptyLines: true,
+              complete: (results) => resolve(results),
+              error: (e) => reject(e)
+            });
+          });
+          
+          if (!parseResult.meta.fields?.length || !parseResult.data.length) continue;
+          
+          const validation = validateHeaders(parseResult.meta.fields);
+          if (!validation.valid) { showNotif(`${file.name}: ${validation.error}`, 'error'); continue; }
+          
+          const validRows = parseResult.data.filter(r => r.Name?.trim());
+          if (!validRows.length) continue;
+          
+          const processed = validRows.map(r => normalizePlayerData(r, validation.type));
+          const combined = combinePlayerStats(currentTournament[validation.type], processed, validation.type);
+          
+          currentTournament = { ...currentTournament, [validation.type]: combined };
+          uploadedHashes.push(fileHash);
+          
+          if (validation.type === 'batting') totalBatting += processed.length;
+          else totalPitching += processed.length;
+        }
+        
+        currentTournament.uploadedHashes = uploadedHashes;
+        await saveTournament(currentTournament);
+        setTournaments(tournaments.map(t => t.id === selectedTournament.id ? currentTournament : t));
+        setSelectedTournament(currentTournament);
+        
+        let msg = '✓ Uploaded:';
+        if (totalBatting) msg += ` ${totalBatting} batters`;
+        if (totalPitching) msg += `${totalBatting ? ',' : ''} ${totalPitching} pitchers`;
+        if (skippedDupes) msg += ` (${skippedDupes} duplicate${skippedDupes > 1 ? 's' : ''} skipped)`;
+        if (!totalBatting && !totalPitching) msg = skippedDupes ? `All ${skippedDupes} file(s) already uploaded` : 'No valid data found';
+        showNotif(msg, (!totalBatting && !totalPitching) ? 'error' : undefined);
+        event.target.value = '';
+      } catch (e) { showNotif(`Upload error: ${e.message}`, 'error'); event.target.value = ''; }
     });
     event.target.value = '';
   };
@@ -485,7 +524,7 @@ function StatsPage() {
               </div>)}
             </div>
             <div style={styles.uploadSection}>
-              <label style={hasAccess('upload') ? styles.uploadBtn : styles.uploadBtnLocked}>{hasAccess('upload') ? '📁 Upload CSV' : '🔒 Upload CSV'}<input type="file" accept=".csv" onChange={handleFileUpload} style={{display:'none'}} /></label>
+              <label style={hasAccess('upload') ? styles.uploadBtn : styles.uploadBtnLocked}>{hasAccess('upload') ? '📁 Upload CSVs' : '🔒 Upload CSVs'}<input type="file" accept=".csv" multiple onChange={handleFileUpload} style={{display:'none'}} /></label>
               <span style={styles.uploadHint}>{hasAccess('upload') ? 'Auto-detects type • Same-name players combined' : 'Password required'}</span>
             </div>
             <div style={styles.tabs}>
