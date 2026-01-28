@@ -191,6 +191,7 @@ function StatsPage() {
   const [showNewTournament, setShowNewTournament] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState('');
   const [filters, setFilters] = useState({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
+  const [showPer9, setShowPer9] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('tournaments');
@@ -462,15 +463,16 @@ function StatsPage() {
                 {(activeTab === 'pitching' ? pitchingPositions : battingPositions).map(pos => (<option key={pos} value={pos}>{pos === 'all' ? 'All Positions' : pos}</option>))}
               </select>
               <button style={{...styles.advancedFilterBtn, ...(showAdvancedFilters ? styles.advancedFilterBtnActive : {}), ...(getActiveFilterCount() > 0 ? styles.advancedFilterBtnHasFilters : {})}} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>🎚️ Filters {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}</button>
+              <button style={{...styles.per9Toggle, ...(showPer9 ? styles.per9ToggleActive : {})}} onClick={() => setShowPer9(!showPer9)} title="Show per-9 innings calculations (recommended)">📊 Per-9 {showPer9 ? 'ON' : 'OFF'}</button>
               {getActiveFilterCount() > 0 && <button style={styles.resetBtn} onClick={resetFilters}>Reset All</button>}
             </div>
             {showAdvancedFilters && (<div style={styles.advancedFilters}><div style={styles.filterGroup}>
               <StatFilter label="Games (G)" filter={filters.gFilter} onChange={(u) => updateStatFilter('gFilter', u)} theme={theme} />
               {activeTab === 'batting' ? (<><StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} theme={theme} /><StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} theme={theme} /></>) : (<StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} theme={theme} />)}
             </div></div>)}
-            <div style={styles.resultsCount}>Showing {filteredData.length} of {totalData} players</div>
+            <div style={styles.resultsCount}>Showing {filteredData.length} of {totalData} players {showPer9 && <span style={styles.per9Hint}>• Per-9 stats enabled (recommended)</span>}</div>
             <div style={styles.tableContainer}>
-              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} />}
+              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} />}
             </div>
           </>)}
         </div>
@@ -663,39 +665,43 @@ function StatFilter({ label, filter, onChange, theme }) {
     </select><input type="number" value={filter.value} onChange={(e) => onChange({ value: e.target.value })} style={styles.valueInput} disabled={!filter.enabled} min="0" /></div></div>);
 }
 
-function PitchingTable({ data, sortBy, sortDir, onSort, theme }) {
+function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const calcIPperG = (ip, g) => { if (!g) return '0.00'; const str = String(ip); let n = str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; return (n / g).toFixed(2); };
+  const calcPer9 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 9).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="hPer9">H/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="siera">SIERA</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="hPer9">H/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader>{showPer9 && <th style={styles.thPer9}>WAR/9</th>}<SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td>
       <td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td><td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.hPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
+      {showPer9 && <td style={styles.tdPer9}>{calcPer9(p.war, p.g)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.siera) < 3.90 ? '#22C55E' : parseFloat(p.siera) > 3.90 ? '#EF4444' : styles.tdStat.color}}>{p.siera}</td>
     </tr>))}
   </tbody></table>);
 }
 
-function BattingTable({ data, sortBy, sortDir, onSort, theme }) {
+function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
+  const calcPer9 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 9).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader><SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="gidp">GIDP</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader>{showPer9 && <th style={styles.thPer9}>HR/9</th>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader>{showPer9 && <th style={styles.thPer9}>SO/9</th>}<SortHeader field="gidp">GIDP</SortHeader>{showPer9 && <th style={styles.thPer9}>GIDP/9</th>}<SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <th style={styles.thPer9}>wRAA/9</th>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <th style={styles.thPer9}>WAR/9</th>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <th style={styles.thPer9}>BsR/9</th>}
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td>
-      <td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td><td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td><td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td><td style={styles.td}>{p.gidp}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
+      <td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td><td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.hr, p.g)}</td>}<td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.so, p.g)}</td>}<td style={styles.td}>{p.gidp}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.gidp, p.g)}</td>}<td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.woba) > 0.320 ? '#22C55E' : parseFloat(p.woba) < 0.320 ? '#EF4444' : styles.tdStat.color}}>{p.woba}</td>
-      <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>
+      <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.wraa, p.g)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
-      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>
+      {showPer9 && <td style={styles.tdPer9}>{calcPer9(p.war, p.g)}</td>}
+      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.bsr, p.g)}</td>}
     </tr>))}
   </tbody></table>);
 }
@@ -858,6 +864,9 @@ function getStyles(t) {
     advancedFilterBtn: { padding: '8px 14px', background: t.cardBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 },
     advancedFilterBtnActive: { borderColor: t.accent, color: t.accent },
     advancedFilterBtnHasFilters: { background: t.accent, color: '#fff', borderColor: t.accent },
+    per9Toggle: { padding: '8px 14px', background: t.cardBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+    per9ToggleActive: { background: t.success, color: '#fff', borderColor: t.success },
+    per9Hint: { color: t.success, fontWeight: 600 },
     advancedFilters: { background: t.cardBg, borderRadius: 8, border: `1px solid ${t.border}`, padding: 16, marginBottom: 16 },
     filterGroup: { display: 'flex', gap: 24, flexWrap: 'wrap' },
     statFilter: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 },
@@ -872,11 +881,13 @@ function getStyles(t) {
     tableContainer: { background: t.cardBg, borderRadius: 8, border: `1px solid ${t.tableBorder}`, overflow: 'auto', maxHeight: 500 },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
     th: { padding: '10px 6px', background: t.tableHeaderBg, color: t.accent, fontWeight: 700, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `2px solid ${t.tableBorder}`, userSelect: 'none' },
+    thPer9: { padding: '10px 6px', background: t.tableHeaderBg, color: t.warning, fontWeight: 700, textAlign: 'center', position: 'sticky', top: 0, whiteSpace: 'nowrap', borderBottom: `2px solid ${t.tableBorder}`, userSelect: 'none', fontSize: 10 },
     tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg },
     td: { padding: '6px 6px', color: t.textPrimary, textAlign: 'center', fontFamily: 'monospace' },
     tdName: { padding: '6px 6px', color: t.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'left' },
     tdOvr: { padding: '6px 6px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700 },
     tdStat: { padding: '6px 6px', color: t.accent, textAlign: 'center', fontFamily: 'monospace', fontWeight: 600 },
+    tdPer9: { padding: '6px 6px', color: t.warning, textAlign: 'center', fontFamily: 'monospace', fontWeight: 600, fontSize: 10 },
     emptyTable: { padding: 40, textAlign: 'center', color: t.textMuted },
     
     // Modal
