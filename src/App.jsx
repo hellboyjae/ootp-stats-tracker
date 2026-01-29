@@ -2,6 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
+import { Analytics } from "@vercel/analytics/react";
 
 // Theme Context
 const ThemeContext = createContext();
@@ -787,7 +788,7 @@ export default function App() {
     <Route path="/" element={<StatsPage />} />
     <Route path="/info" element={<InfoPage />} />
     <Route path="/videos" element={<VideosPage />} />
-  </Routes></AuthProvider></ThemeProvider></BrowserRouter>);
+  </Routes><Analytics /></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
 // Theme definitions
