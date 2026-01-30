@@ -192,6 +192,7 @@ function StatsPage() {
   const [newTournamentName, setNewTournamentName] = useState('');
   const [filters, setFilters] = useState({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
   const [showPer9, setShowPer9] = useState(false);
+  const [showTraditional, setShowTraditional] = useState(true);
   const [notification, setNotification] = useState(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('tournaments');
@@ -435,20 +436,13 @@ function StatsPage() {
     
     // Handle Per-9 and advanced stats sorting
     const calcPer9Value = (val, g) => (!g || g === 0) ? 0 : parseFloat(val || 0) / g * 9;
-    const calcPer162Value = (val, g) => (!g || g === 0) ? 0 : parseFloat(val || 0) / g * 162;
-    const calcWarPer600PA = (war, pa) => { const paNum = parseFloat(pa) || 0; return (!paNum || paNum === 0) ? 0 : parseFloat(war || 0) / paNum * 600; };
+    const calcPer600PA = (val, pa) => { const paNum = parseFloat(pa) || 0; return (!paNum || paNum === 0) ? 0 : parseFloat(val || 0) / paNum * 600; };
     const parseIPValue = (ip) => { const str = String(ip); return str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; };
     const calcWarPer200IP = (war, ip) => { const ipNum = parseIPValue(ip); return (!ipNum || ipNum === 0) ? 0 : parseFloat(war || 0) / ipNum * 200; };
     
     const per9Fields = {
-      hrPer9Bat: 'hr',
-      soPer9: 'so',
       gidpPer9: 'gidp',
       wraaPer9: 'wraa'
-    };
-    
-    const per162Fields = {
-      bsrPer162: 'bsr'
     };
     
     f.sort((a, b) => {
@@ -458,23 +452,18 @@ function StatsPage() {
         const baseField = per9Fields[filters.sortBy];
         av = calcPer9Value(a[baseField], a.g);
         bv = calcPer9Value(b[baseField], b.g);
-      } else if (per162Fields[filters.sortBy]) {
-        // Sorting by a per-162 field
-        const baseField = per162Fields[filters.sortBy];
-        av = calcPer162Value(a[baseField], a.g);
-        bv = calcPer162Value(b[baseField], b.g);
       } else if (filters.sortBy === 'warPer600PA' && type === 'batting') {
         // WAR/600PA for batters
-        av = calcWarPer600PA(a.war, a.pa);
-        bv = calcWarPer600PA(b.war, b.pa);
+        av = calcPer600PA(a.war, a.pa);
+        bv = calcPer600PA(b.war, b.pa);
+      } else if (filters.sortBy === 'bsrPer600PA' && type === 'batting') {
+        // BsR/600PA for batters
+        av = calcPer600PA(a.bsr, a.pa);
+        bv = calcPer600PA(b.bsr, b.pa);
       } else if (filters.sortBy === 'warPer200IP' && type === 'pitching') {
         // WAR/200IP for pitchers
         av = calcWarPer200IP(a.war, a.ip);
         bv = calcWarPer200IP(b.war, b.ip);
-      } else if (filters.sortBy === 'hrPer9' && type === 'batting') {
-        // HR/9 for batting (different from pitching's existing hrPer9)
-        av = calcPer9Value(a.hr, a.g);
-        bv = calcPer9Value(b.hr, b.g);
       } else {
         av = a[filters.sortBy];
         bv = b[filters.sortBy];
@@ -576,6 +565,9 @@ function StatsPage() {
               </select>
               <button style={{...styles.advancedFilterBtn, ...(showAdvancedFilters ? styles.advancedFilterBtnActive : {}), ...(getActiveFilterCount() > 0 ? styles.advancedFilterBtnHasFilters : {})}} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>🎚️ Filters {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}</button>
               <button style={{...styles.per9Toggle, ...(showPer9 ? styles.per9ToggleActive : {})}} onClick={() => setShowPer9(!showPer9)} title="Show advanced per-162 game calculations">📊 Advanced Stats {showPer9 ? 'ON' : 'OFF'}</button>
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <button style={{...styles.per9Toggle, ...(!showTraditional ? styles.per9ToggleActive : {})}} onClick={() => setShowTraditional(!showTraditional)} title="Traditional stats are counting stats such as hits, doubles, triples, and evaluation stats that have become outdated by more efficient indicators such as ERA.">📉 Hide Traditional {showTraditional ? 'OFF' : 'ON'}</button>
+              </div>
               {getActiveFilterCount() > 0 && <button style={styles.resetBtn} onClick={resetFilters}>Reset All</button>}
             </div>
             {showAdvancedFilters && (<div style={styles.advancedFilters}><div style={styles.filterGroup}>
@@ -584,7 +576,7 @@ function StatsPage() {
             </div></div>)}
             <div style={styles.resultsCount}>Showing {filteredData.length} of {totalData} players {showPer9 && <span style={styles.per9Hint}>• Advanced stats enabled</span>}</div>
             <div style={styles.tableContainer}>
-              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} />}
+              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} />}
             </div>
           </>)}
         </div>
@@ -777,7 +769,7 @@ function StatFilter({ label, filter, onChange, theme }) {
     </select><input type="number" value={filter.value} onChange={(e) => onChange({ value: e.target.value })} style={styles.valueInput} disabled={!filter.enabled} min="0" /></div></div>);
 }
 
-function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
+function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const SortHeaderPer9 = ({ field, children }) => (<th style={styles.thPer9} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
@@ -786,12 +778,12 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
   const calcWarPer200IP = (war, ip) => { const ipNum = parseIP(ip); if (!ipNum || ipNum === 0) return '0.00'; return (parseFloat(war || 0) / ipNum * 200).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="hPer9">H/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer200IP">WAR/200IP</SortHeaderPer9>}<SortHeader field="siera">SIERA</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>{showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader>{showTraditional && <SortHeader field="bf">BF</SortHeader>}{showTraditional && <SortHeader field="era">ERA</SortHeader>}{showTraditional && <SortHeader field="avg">AVG</SortHeader>}{showTraditional && <SortHeader field="obp">OBP</SortHeader>}<SortHeader field="babip">BABIP</SortHeader>{showTraditional && <SortHeader field="whip">WHIP</SortHeader>}<SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader>{showTraditional && <SortHeader field="hPer9">H/9</SortHeader>}<SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer200IP">WAR/200IP</SortHeaderPer9>}<SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td>
-      <td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td><td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.hPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
+      <td style={styles.td}>{p.vari}</td>{showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td>{showTraditional && <td style={styles.td}>{p.bf}</td>}{showTraditional && <td style={styles.tdStat}>{p.era}</td>}{showTraditional && <td style={styles.tdStat}>{p.avg}</td>}{showTraditional && <td style={styles.tdStat}>{p.obp}</td>}<td style={styles.tdStat}>{p.babip}</td>{showTraditional && <td style={styles.tdStat}>{p.whip}</td>}<td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td>{showTraditional && <td style={styles.tdStat}>{p.hPer9}</td>}<td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
       {showPer9 && <td style={styles.tdPer9}>{calcWarPer200IP(p.war, p.ip)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.siera) < 3.90 ? '#22C55E' : parseFloat(p.siera) > 3.90 ? '#EF4444' : styles.tdStat.color}}>{p.siera}</td>
@@ -799,26 +791,26 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
   </tbody></table>);
 }
 
-function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
+function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const SortHeaderPer9 = ({ field, children }) => (<th style={styles.thPer9} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
-  const calcPer162 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 162).toFixed(2); };
   const calcPer9 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 9).toFixed(2); };
   const calcWarPer600PA = (war, pa) => { const paNum = parseFloat(pa) || 0; if (!paNum || paNum === 0) return '0.00'; return (parseFloat(war || 0) / paNum * 600).toFixed(2); };
+  const calcBsrPer600PA = (bsr, pa) => { const paNum = parseFloat(pa) || 0; if (!paNum || paNum === 0) return '0.00'; return (parseFloat(bsr || 0) / paNum * 600).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader>{showPer9 && <SortHeaderPer9 field="hrPer9">HR/9</SortHeaderPer9>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader>{showPer9 && <SortHeaderPer9 field="soPer9">SO/9</SortHeaderPer9>}<SortHeader field="gidp">GIDP</SortHeader>{showPer9 && <SortHeaderPer9 field="gidpPer9">GIDP/9</SortHeaderPer9>}<SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeaderPer9 field="wraaPer9">wRAA/9</SortHeaderPer9>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer600PA">WAR/600PA</SortHeaderPer9>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeaderPer9 field="bsrPer162">BsR/162</SortHeaderPer9>}
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>{showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="pa">PA</SortHeader>{showTraditional && <SortHeader field="ab">AB</SortHeader>}{showTraditional && <SortHeader field="h">H</SortHeader>}{showTraditional && <SortHeader field="doubles">2B</SortHeader>}{showTraditional && <SortHeader field="triples">3B</SortHeader>}{showTraditional && <SortHeader field="hr">HR</SortHeader>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="gidp">GIDP</SortHeader>{showPer9 && <SortHeaderPer9 field="gidpPer9">GIDP/9</SortHeaderPer9>}<SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeaderPer9 field="wraaPer9">wRAA/9</SortHeaderPer9>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer600PA">WAR/600PA</SortHeaderPer9>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeaderPer9 field="bsrPer600PA">BsR/600PA</SortHeaderPer9>}
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td>
-      <td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td><td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.hr, p.g)}</td>}<td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.so, p.g)}</td>}<td style={styles.td}>{p.gidp}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.gidp, p.g)}</td>}<td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
+      <td style={styles.td}>{p.vari}</td>{showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>{showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}{showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td><td style={styles.td}>{p.gidp}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.gidp, p.g)}</td>}<td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.woba) > 0.320 ? '#22C55E' : parseFloat(p.woba) < 0.320 ? '#EF4444' : styles.tdStat.color}}>{p.woba}</td>
       <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.wraa, p.g)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
       {showPer9 && <td style={styles.tdPer9}>{calcWarPer600PA(p.war, p.pa)}</td>}
-      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer162(p.bsr, p.g)}</td>}
+      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcBsrPer600PA(p.bsr, p.pa)}</td>}
     </tr>))}
   </tbody></table>);
 }
