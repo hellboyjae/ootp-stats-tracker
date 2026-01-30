@@ -1,572 +1,2011 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 
-const UPLOAD_PASSWORD = 'nanodoctorootp1';
-const AuthContext = React.createContext();
+// Theme Context
+const ThemeContext = createContext();
+
+function ThemeProvider({ children }) {
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved ? saved === 'dark' : true; // Default to dark
+  });
+
+  useEffect(() => {
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
+  const toggle = () => setIsDark(!isDark);
+  const theme = isDark ? darkTheme : lightTheme;
+
+  return (
+    <ThemeContext.Provider value={{ isDark, toggle, theme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+function useTheme() { return useContext(ThemeContext); }
+
+// Auth Context
+const AuthContext = createContext();
+
+// Auth levels: 'none' | 'upload' | 'master'
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 function AuthProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { theme } = useTheme();
+  const [authLevel, setAuthLevel] = useState('none'); // 'none' | 'upload' | 'master'
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
+  const [requiredLevel, setRequiredLevel] = useState('upload');
+  const [authError, setAuthError] = useState('');
 
-  useEffect(() => { if (sessionStorage.getItem('uploadAuthenticated') === 'true') setIsAuthenticated(true); }, []);
+  useEffect(() => { 
+    const saved = sessionStorage.getItem('authLevel');
+    if (saved === 'master' || saved === 'upload') setAuthLevel(saved);
+  }, []);
 
-  const requestAuth = (onSuccess) => {
-    if (isAuthenticated) { onSuccess(); } else { setPendingAction(() => onSuccess); setShowPasswordModal(true); }
+  // Check if current auth level meets required level
+  const hasAccess = (required) => {
+    if (authLevel === 'master') return true;
+    if (authLevel === 'upload' && required === 'upload') return true;
+    return false;
   };
 
-  const handlePasswordSubmit = () => {
-    if (passwordInput === UPLOAD_PASSWORD) {
-      setIsAuthenticated(true); sessionStorage.setItem('uploadAuthenticated', 'true');
-      setShowPasswordModal(false); setPasswordInput('');
-      if (pendingAction) { pendingAction(); setPendingAction(null); }
-    } else { setPasswordInput(''); }
+  // Request auth for a specific level
+  const requestAuth = (onSuccess, level = 'upload') => {
+    if (hasAccess(level)) { 
+      onSuccess(); 
+    } else { 
+      setPendingAction(() => onSuccess); 
+      setRequiredLevel(level);
+      setShowPasswordModal(true); 
+      setAuthError(''); 
+    }
   };
+
+  const handlePasswordSubmit = async () => {
+    try {
+      const hashedInput = await hashPassword(passwordInput);
+      const { data, error } = await supabase.from('site_content').select('content').eq('id', 'auth').single();
+      if (error || !data?.content) { setAuthError('Auth not configured'); setPasswordInput(''); return; }
+      
+      const { passwordHash, uploadPasswordHash } = data.content;
+      
+      // Check master password first
+      if (passwordHash && hashedInput === passwordHash) {
+        setAuthLevel('master'); 
+        sessionStorage.setItem('authLevel', 'master');
+        setShowPasswordModal(false); 
+        setPasswordInput(''); 
+        setAuthError('');
+        if (pendingAction) { pendingAction(); setPendingAction(null); }
+        return;
+      }
+      
+      // Check upload-only password
+      if (uploadPasswordHash && hashedInput === uploadPasswordHash) {
+        // Upload password only works if upload-level access is sufficient
+        if (requiredLevel === 'upload') {
+          setAuthLevel('upload'); 
+          sessionStorage.setItem('authLevel', 'upload');
+          setShowPasswordModal(false); 
+          setPasswordInput(''); 
+          setAuthError('');
+          if (pendingAction) { pendingAction(); setPendingAction(null); }
+        } else {
+          setAuthError('This action requires master password');
+          setPasswordInput('');
+        }
+        return;
+      }
+      
+      setAuthError('Incorrect password'); 
+      setPasswordInput('');
+    } catch (e) { 
+      setAuthError('Authentication failed'); 
+      setPasswordInput(''); 
+    }
+  };
+
+  const styles = getStyles(theme);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, requestAuth }}>
+    <AuthContext.Provider value={{ authLevel, hasAccess, requestAuth }}>
       {children}
       {showPasswordModal && (
-        <div style={styles.modalOverlay}><div style={styles.modal}>
-          <h3 style={styles.modalTitle}>🔐 Enter Password</h3>
-          <p style={styles.modalText}>This action requires authentication.</p>
-          <input type="password" placeholder="Enter password..." value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()} style={styles.input} autoFocus />
-          <div style={styles.modalBtns}>
-            <button onClick={handlePasswordSubmit} style={styles.saveBtn}>Submit</button>
-            <button onClick={() => { setShowPasswordModal(false); setPasswordInput(''); setPendingAction(null); }} style={styles.cancelBtn}>Cancel</button>
+        <div style={styles.modalOverlay} onClick={() => { setShowPasswordModal(false); setPasswordInput(''); setAuthError(''); }}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Authentication Required</h2>
+            <p style={styles.modalText}>
+              {requiredLevel === 'master' ? 'This action requires master access.' : 'Enter password to continue.'}
+            </p>
+            {authError && <div style={styles.authError}>{authError}</div>}
+            <input 
+              type="password" 
+              value={passwordInput} 
+              onChange={e => setPasswordInput(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit()} 
+              placeholder="Password" 
+              style={styles.searchInput} 
+              autoFocus
+            />
+            <div style={styles.modalBtns}>
+              <button style={{...styles.btn, ...styles.btnSecondary}} onClick={() => { setShowPasswordModal(false); setPasswordInput(''); setAuthError(''); }}>Cancel</button>
+              <button style={styles.btn} onClick={handlePasswordSubmit}>Submit</button>
+            </div>
           </div>
-        </div></div>
+        </div>
       )}
     </AuthContext.Provider>
   );
 }
 
-function useAuth() { return React.useContext(AuthContext); }
+function useAuth() { return useContext(AuthContext); }
 
-function Layout({ children, notification }) {
+// Theme definitions
+const darkTheme = {
+  // Backgrounds - clear visual hierarchy
+  mainBg: '#0d1117',           // Darkest - page background
+  sidebarBg: '#161b22',        // Sidebar chrome
+  cardBg: '#1c2128',           // Control cards
+  tableContainerBg: '#21262d', // Table container - brighter than surroundings
+  tableRowBg: '#21262d',       // Table rows
+  tableRowHover: '#2d333b',    // Row hover
+  tableHeaderBg: '#161b22',    // Table header
+  inputBg: '#0d1117',          // Inputs
+  
+  // Borders - subtle, not heavy
+  border: '#30363d',           // General borders
+  borderSubtle: '#21262d',     // Very subtle borders
+  tableBorder: '#30363d',      // Table borders
+  inputBorder: '#30363d',      // Input borders
+  
+  // Text - clear hierarchy
+  textPrimary: '#e6edf3',      // Primary text (white)
+  textSecondary: '#8b949e',    // Secondary text (dimmed)
+  textMuted: '#6e7681',        // Muted/meta text
+  
+  // Accent & semantic colors
+  accent: '#58a6ff',           // Primary accent (blue)
+  success: '#3fb950',          // Green
+  warning: '#d29922',          // Gold/amber
+  error: '#f85149',            // Red
+};
+
+const lightTheme = {
+  mainBg: '#ffffff',
+  sidebarBg: '#f6f8fa',
+  cardBg: '#f6f8fa',
+  tableContainerBg: '#ffffff',
+  tableRowBg: '#ffffff',
+  tableRowHover: '#f6f8fa',
+  tableHeaderBg: '#f6f8fa',
+  inputBg: '#ffffff',
+  
+  border: '#d0d7de',
+  borderSubtle: '#d8dee4',
+  tableBorder: '#d0d7de',
+  inputBorder: '#d0d7de',
+  
+  textPrimary: '#1f2328',
+  textSecondary: '#656d76',
+  textMuted: '#8c959f',
+  
+  accent: '#0969da',
+  success: '#1a7f37',
+  warning: '#9a6700',
+  error: '#d1242f',
+};
+
+function TournamentPage() {
+  const { theme } = useTheme();
+  const { requestAuth } = useAuth();
+  const [tournaments, setTournaments] = useState([]);
+  const [activeTournamentId, setActiveTournamentId] = useState(null);
+  const [parsedData, setParsedData] = useState({});
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadingFor, setUploadingFor] = useState(null);
+  
+  // UI states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [positionFilter, setPositionFilter] = useState('All');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [isPer9Mode, setIsPer9Mode] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  
+  // Advanced filters state
+  const [activeFilters, setActiveFilters] = useState({});
+
+  useEffect(() => { loadTournaments(); }, []);
+
+  async function loadTournaments() {
+    const { data } = await supabase.from('site_content').select('content').eq('id', 'tournaments').single();
+    if (data?.content) {
+      setTournaments(data.content || []);
+      if (data.content.length > 0 && !activeTournamentId) {
+        setActiveTournamentId(data.content[0].id);
+      }
+    }
+  }
+
+  async function handleAddTournament() {
+    requestAuth(async () => {
+      const name = prompt('Tournament name:');
+      if (!name) return;
+      const newT = { id: Date.now().toString(), name, files: {} };
+      const updated = [...tournaments, newT];
+      await supabase.from('site_content').update({ content: updated }).eq('id', 'tournaments');
+      setTournaments(updated);
+      setActiveTournamentId(newT.id);
+    }, 'upload');
+  }
+
+  async function handleDeleteTournament(id) {
+    requestAuth(async () => {
+      if (!window.confirm('Delete this tournament?')) return;
+      const updated = tournaments.filter(t => t.id !== id);
+      await supabase.from('site_content').update({ content: updated }).eq('id', 'tournaments');
+      setTournaments(updated);
+      if (activeTournamentId === id) setActiveTournamentId(updated[0]?.id || null);
+    }, 'master');
+  }
+
+  function handleFileUpload(e, fileType) {
+    requestAuth(() => {
+      const file = e.target.files[0];
+      if (!file) return;
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (result) => {
+          const t = tournaments.find(x => x.id === uploadingFor);
+          if (!t) return;
+          t.files[fileType] = result.data;
+          const updated = tournaments.map(x => x.id === uploadingFor ? t : x);
+          await supabase.from('site_content').update({ content: updated }).eq('id', 'tournaments');
+          setTournaments(updated);
+          setParsedData(prev => ({ ...prev, [uploadingFor]: { ...prev[uploadingFor], [fileType]: result.data } }));
+          setShowUpload(false);
+          setUploadingFor(null);
+        }
+      });
+    }, 'upload');
+  }
+
+  const activeTournament = tournaments.find(t => t.id === activeTournamentId);
+  const hitterData = activeTournament?.files?.hitters || [];
+  const pitcherData = activeTournament?.files?.pitchers || [];
+
+  // Compute handedness stats
+  const handednessStats = React.useMemo(() => {
+    const stats = { LHH: 0, RHH: 0, LHP: 0, RHP: 0 };
+    hitterData.forEach(row => {
+      if (row.Bats === 'L') stats.LHH++;
+      else if (row.Bats === 'R') stats.RHH++;
+    });
+    pitcherData.forEach(row => {
+      if (row.Throws === 'L') stats.LHP++;
+      else if (row.Throws === 'R') stats.RHP++;
+    });
+    return stats;
+  }, [hitterData, pitcherData]);
+
+  const styles = getStyles(theme);
+
+  // Stat definitions for toggles
+  const hitterStatGroups = [
+    { label: 'Contact', stats: ['CON', 'GAP', 'POW', 'EYE', 'K%'] },
+    { label: 'Speed', stats: ['SPD', 'STL', 'BR'] },
+    { label: 'Defense', stats: ['Field', 'Arm', 'Turn2', 'React', 'Blk'] }
+  ];
+
+  const pitcherStatGroups = [
+    { label: 'Pitches', stats: ['Stuff', 'Movement'] },
+    { label: 'Control', stats: ['Control', 'Cmd'] },
+    { label: 'Other', stats: ['GB%', 'Stamina'] }
+  ];
+
+  const [visibleHitterStats, setVisibleHitterStats] = useState(
+    hitterStatGroups.flatMap(g => g.stats)
+  );
+  const [visiblePitcherStats, setVisiblePitcherStats] = useState(
+    pitcherStatGroups.flatMap(g => g.stats)
+  );
+
+  const toggleStatGroup = (isHitter, groupStats) => {
+    if (isHitter) {
+      const allVisible = groupStats.every(s => visibleHitterStats.includes(s));
+      setVisibleHitterStats(prev => 
+        allVisible ? prev.filter(s => !groupStats.includes(s)) : [...new Set([...prev, ...groupStats])]
+      );
+    } else {
+      const allVisible = groupStats.every(s => visiblePitcherStats.includes(s));
+      setVisiblePitcherStats(prev =>
+        allVisible ? prev.filter(s => !groupStats.includes(s)) : [...new Set([...prev, ...groupStats])]
+      );
+    }
+  };
+
   return (
-    <div style={styles.container}>
-      {notification && <div style={{...styles.notification, background: notification.type === 'error' ? '#dc2626' : '#059669'}}>{notification.message}</div>}
-      <header style={styles.header}><div style={styles.headerContent}>
-        <div><h1 style={styles.title}>⚾ OOTP Stats Tracker</h1><p style={styles.subtitle}>Out of the Park Baseball Tournament Manager</p></div>
-        <nav style={styles.nav}>
-          <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
-          <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
-          <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info & FAQ</NavLink>
-        </nav>
-      </div></header>
-      {children}
+    <div style={styles.tournamentPage}>
+      {/* Sidebar */}
+      <div style={styles.sidebar}>
+        <div style={styles.sidebarHeader}>
+          <h2 style={styles.sidebarTitle}>Tournaments</h2>
+          <button onClick={handleAddTournament} style={styles.addBtn}>+</button>
+        </div>
+        <div style={styles.tournamentList}>
+          {tournaments.map(t => (
+            <div
+              key={t.id}
+              onClick={() => setActiveTournamentId(t.id)}
+              style={{
+                ...styles.tournamentItem,
+                ...(activeTournamentId === t.id ? styles.tournamentActive : {})
+              }}
+            >
+              <div style={styles.tournamentInfo}>
+                <div style={styles.tournamentName}>{t.name}</div>
+                <div style={styles.tournamentStats}>
+                  {(t.files?.hitters?.length || 0) + (t.files?.pitchers?.length || 0)} players
+                </div>
+              </div>
+              <button 
+                onClick={e => { e.stopPropagation(); handleDeleteTournament(t.id); }}
+                style={styles.delBtn}
+                title="Delete tournament"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div style={styles.content}>
+        {!activeTournament ? (
+          <div style={styles.welcome}>
+            <div style={styles.welcomeTitle}>BeaneCounter</div>
+            <div style={styles.welcomeText}>Select a tournament or create a new one to get started</div>
+          </div>
+        ) : (
+          <>
+            {/* Tournament header - LOW EMPHASIS */}
+            <div style={styles.tournamentHeaderCompact}>
+              <h1 style={styles.tournamentTitleCompact}>{activeTournament.name}</h1>
+              <div style={styles.handednessContainerCompact}>
+                <span style={styles.handednessItemCompact}>
+                  <span style={styles.handednessLabelCompact}>LHH</span>
+                  <span style={styles.handednessValueCompact}>{handednessStats.LHH}</span>
+                </span>
+                <span style={styles.handednessItemCompact}>
+                  <span style={styles.handednessLabelCompact}>RHH</span>
+                  <span style={styles.handednessValueCompact}>{handednessStats.RHH}</span>
+                </span>
+                <span style={styles.handednessSeparator}>|</span>
+                <span style={styles.handednessItemCompact}>
+                  <span style={styles.handednessLabelCompact}>LHP</span>
+                  <span style={styles.handednessValueCompact}>{handednessStats.LHP}</span>
+                </span>
+                <span style={styles.handednessItemCompact}>
+                  <span style={styles.handednessLabelCompact}>RHP</span>
+                  <span style={styles.handednessValueCompact}>{handednessStats.RHP}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Upload section - only show when needed */}
+            {(!hitterData.length || !pitcherData.length) && (
+              <div style={styles.uploadSectionCompact}>
+                <span style={styles.uploadHint}>Missing data files:</span>
+                {!hitterData.length && (
+                  <label style={styles.uploadLabel}>
+                    <input 
+                      type="file" 
+                      accept=".csv" 
+                      onChange={e => { setUploadingFor(activeTournamentId); handleFileUpload(e, 'hitters'); }}
+                      style={{display: 'none'}}
+                    />
+                    <span style={styles.uploadBtn}>Upload Hitters CSV</span>
+                  </label>
+                )}
+                {!pitcherData.length && (
+                  <label style={styles.uploadLabel}>
+                    <input 
+                      type="file" 
+                      accept=".csv" 
+                      onChange={e => { setUploadingFor(activeTournamentId); handleFileUpload(e, 'pitchers'); }}
+                      style={{display: 'none'}}
+                    />
+                    <span style={styles.uploadBtn}>Upload Pitchers CSV</span>
+                  </label>
+                )}
+              </div>
+            )}
+
+            {/* Data tables */}
+            {hitterData.length > 0 && (
+              <DataTable
+                title="Hitters"
+                data={hitterData}
+                type="hitter"
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                positionFilter={positionFilter}
+                setPositionFilter={setPositionFilter}
+                showAdvancedFilters={showAdvancedFilters}
+                setShowAdvancedFilters={setShowAdvancedFilters}
+                isPer9Mode={isPer9Mode}
+                setIsPer9Mode={setIsPer9Mode}
+                sortConfig={sortConfig}
+                setSortConfig={setSortConfig}
+                activeFilters={activeFilters}
+                setActiveFilters={setActiveFilters}
+                visibleStats={visibleHitterStats}
+                statGroups={hitterStatGroups}
+                toggleStatGroup={toggleStatGroup}
+              />
+            )}
+
+            {pitcherData.length > 0 && (
+              <DataTable
+                title="Pitchers"
+                data={pitcherData}
+                type="pitcher"
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                positionFilter={positionFilter}
+                setPositionFilter={setPositionFilter}
+                showAdvancedFilters={showAdvancedFilters}
+                setShowAdvancedFilters={setShowAdvancedFilters}
+                isPer9Mode={isPer9Mode}
+                setIsPer9Mode={setIsPer9Mode}
+                sortConfig={sortConfig}
+                setSortConfig={setSortConfig}
+                activeFilters={activeFilters}
+                setActiveFilters={setActiveFilters}
+                visibleStats={visiblePitcherStats}
+                statGroups={pitcherStatGroups}
+                toggleStatGroup={toggleStatGroup}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function StatsPage() {
-  const { isAuthenticated, requestAuth } = useAuth();
-  const [tournaments, setTournaments] = useState([]);
-  const [selectedTournament, setSelectedTournament] = useState(null);
-  const [activeTab, setActiveTab] = useState('pitching');
-  const [isLoading, setIsLoading] = useState(true);
-  const [showNewTournament, setShowNewTournament] = useState(false);
-  const [newTournamentName, setNewTournamentName] = useState('');
-  const [filters, setFilters] = useState({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
-  const [notification, setNotification] = useState(null);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState('tournaments');
+function DataTable({ 
+  title, data, type, searchTerm, setSearchTerm, positionFilter, setPositionFilter,
+  showAdvancedFilters, setShowAdvancedFilters, isPer9Mode, setIsPer9Mode,
+  sortConfig, setSortConfig, activeFilters, setActiveFilters,
+  visibleStats, statGroups, toggleStatGroup
+}) {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
 
-  useEffect(() => { loadData(); }, []);
+  const isHitter = type === 'hitter';
+  const positionKey = isHitter ? 'Position' : 'Role';
+  
+  // Get all unique positions
+  const allPositions = [...new Set(data.map(p => p[positionKey]))].filter(Boolean).sort();
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      const parsed = (data || []).map(t => ({ id: t.id, name: t.name, createdAt: t.created_at, category: t.category || 'tournaments', batting: t.batting || [], pitching: t.pitching || [] }));
-      setTournaments(parsed);
-      const lastSelectedId = localStorage.getItem('selectedTournamentId');
-      if (lastSelectedId) { const found = parsed.find(t => t.id === lastSelectedId); if (found) { setSelectedTournament(found); setSidebarTab(found.category || 'tournaments'); } }
-    } catch (e) { console.error('Load error:', e); showNotif('Failed to load', 'error'); }
-    setIsLoading(false);
-  };
+  // Define stat columns based on type
+  const statColumns = isHitter 
+    ? visibleStats
+    : visibleStats;
 
-  const saveTournament = async (tournament) => {
-    try { await supabase.from('tournaments').upsert({ id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching }); }
-    catch (e) { showNotif('Failed to save', 'error'); }
-  };
-
-  const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
-
-  const createTournament = async () => {
-    if (!newTournamentName.trim()) return;
-    const newT = { id: crypto.randomUUID(), name: newTournamentName.trim(), createdAt: new Date().toISOString(), category: sidebarTab, batting: [], pitching: [] };
-    await saveTournament(newT); setTournaments([newT, ...tournaments]); setSelectedTournament(newT);
-    localStorage.setItem('selectedTournamentId', newT.id); setNewTournamentName(''); setShowNewTournament(false);
-    showNotif(`Created "${newT.name}"!`);
-  };
-
-  const deleteTournament = async (id) => {
-    if (!confirm('Delete this and all its data?')) return;
-    try { await supabase.from('tournaments').delete().eq('id', id);
-      const updated = tournaments.filter(t => t.id !== id); setTournaments(updated);
-      if (selectedTournament?.id === id) { setSelectedTournament(null); localStorage.removeItem('selectedTournamentId'); }
-      showNotif('Deleted');
-    } catch (e) { showNotif('Failed to delete', 'error'); }
-  };
-
-  const selectTournament = (t) => { setSelectedTournament(t); localStorage.setItem('selectedTournamentId', t.id); };
-  const parseIP = (ip) => { if (!ip) return 0; const str = String(ip); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
-  const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
-  const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
-
-  const combinePlayerStats = (existing, newP, type) => {
-    const map = new Map(); existing.forEach(p => map.set(p.name, { ...p }));
-    newP.forEach(p => {
-      if (map.has(p.name)) {
-        const e = map.get(p.name);
-        if (type === 'pitching') {
-          const cIP = parseIP(e.ip) + parseIP(p.ip), eIP = parseIP(e.ip), nIP = parseIP(p.ip);
-          const wAvg = (s1, i1, s2, i2) => (i1 + i2 === 0) ? 0 : ((parseFloat(s1) * i1) + (parseFloat(s2) * i2)) / (i1 + i2);
-          map.set(p.name, { ...e, g: e.g + p.g, gs: e.gs + p.gs, winPct: wAvg(e.winPct, eIP, p.winPct, nIP).toFixed(1), svPct: wAvg(e.svPct, eIP, p.svPct, nIP).toFixed(1), ip: formatIP(cIP), bf: e.bf + p.bf, era: wAvg(e.era, eIP, p.era, nIP).toFixed(2), avg: wAvg(e.avg, eIP, p.avg, nIP).toFixed(3), obp: wAvg(e.obp, eIP, p.obp, nIP).toFixed(3), babip: wAvg(e.babip, eIP, p.babip, nIP).toFixed(3), whip: wAvg(e.whip, eIP, p.whip, nIP).toFixed(2), braPer9: wAvg(e.braPer9, eIP, p.braPer9, nIP).toFixed(2), hrPer9: wAvg(e.hrPer9, eIP, p.hrPer9, nIP).toFixed(2), bbPer9: wAvg(e.bbPer9, eIP, p.bbPer9, nIP).toFixed(2), kPer9: wAvg(e.kPer9, eIP, p.kPer9, nIP).toFixed(2), lobPct: wAvg(e.lobPct, eIP, p.lobPct, nIP).toFixed(1), eraPlus: Math.round(wAvg(e.eraPlus, eIP, p.eraPlus, nIP)), fip: wAvg(e.fip, eIP, p.fip, nIP).toFixed(2), fipMinus: Math.round(wAvg(e.fipMinus, eIP, p.fipMinus, nIP)), war: (parseFloat(e.war||0) + parseFloat(p.war||0)).toFixed(1), siera: wAvg(e.siera, eIP, p.siera, nIP).toFixed(2) });
-        } else {
-          const cPA = e.pa + p.pa, cAB = e.ab + p.ab, cH = e.h + p.h, c2B = e.doubles + p.doubles, c3B = e.triples + p.triples, cHR = e.hr + p.hr, cBB = e.bb + p.bb, cHP = e.hp + p.hp, cSO = e.so + p.so;
-          const avg = cAB > 0 ? (cH / cAB).toFixed(3) : '.000', obp = cPA > 0 ? ((cH + cBB + cHP) / cPA).toFixed(3) : '.000', tb = cH + c2B + (2 * c3B) + (3 * cHR), slg = cAB > 0 ? (tb / cAB).toFixed(3) : '.000', ops = (parseFloat(obp) + parseFloat(slg)).toFixed(3), iso = cAB > 0 ? ((tb - cH) / cAB).toFixed(3) : '.000';
-          const babip = (cAB - cSO - cHR) > 0 ? ((cH - cHR) / (cAB - cSO - cHR)).toFixed(3) : '.000';
-          map.set(p.name, { ...e, g: e.g + p.g, gs: e.gs + p.gs, pa: cPA, ab: cAB, h: cH, doubles: c2B, triples: c3B, hr: cHR, rbi: e.rbi + p.rbi, r: e.r + p.r, bb: cBB, ibb: e.ibb + p.ibb, hp: cHP, so: cSO, gidp: e.gidp + p.gidp, avg, obp, slg, iso, ops, opsPlus: Math.round(cPA > 0 ? ((e.opsPlus * e.pa) + (p.opsPlus * p.pa)) / cPA : 0), babip, war: (parseFloat(e.war||0) + parseFloat(p.war||0)).toFixed(1), sb: e.sb + p.sb, cs: e.cs + p.cs });
-        }
-      } else { map.set(p.name, { ...p, id: crypto.randomUUID() }); }
+  // Filter and sort data
+  let filtered = data.filter(p => {
+    const name = p.Name || '';
+    const pos = p[positionKey] || '';
+    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesPosition = positionFilter === 'All' || pos === positionFilter;
+    
+    // Apply advanced filters
+    const matchesAdvanced = Object.entries(activeFilters).every(([stat, filter]) => {
+      if (!filter.enabled) return true;
+      const val = parseFloat(p[stat]);
+      const threshold = parseFloat(filter.value);
+      if (isNaN(val) || isNaN(threshold)) return true;
+      
+      switch (filter.operator) {
+        case '>': return val > threshold;
+        case '<': return val < threshold;
+        case '>=': return val >= threshold;
+        case '<=': return val <= threshold;
+        case '=': return Math.abs(val - threshold) < 0.01;
+        default: return true;
+      }
     });
-    return Array.from(map.values());
+    
+    return matchesSearch && matchesPosition && matchesAdvanced;
+  });
+
+  // Apply sorting
+  if (sortConfig.key) {
+    filtered.sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+      
+      // Handle numeric sorting
+      const aNum = parseFloat(aVal);
+      const bNum = parseFloat(bVal);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+      
+      // String sorting
+      aVal = String(aVal || '');
+      bVal = String(bVal || '');
+      if (sortConfig.direction === 'asc') {
+        return aVal.localeCompare(bVal);
+      } else {
+        return bVal.localeCompare(aVal);
+      }
+    });
+  }
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
   };
 
-  const normalizePlayerData = (row, type) => {
-    if (type === 'pitching') {
-      return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', throws: row.T || '', g: parseNum(row.G), gs: parseNum(row.GS), winPct: row['WIN%'] || '0.0', svPct: row['SV%'] || '0.0', ip: row.IP || '0', bf: parseNum(row.BF), era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000', babip: row.BABIP || '.000', whip: row.WHIP || '0.00', braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00', lobPct: row['LOB%'] || '0.0', eraPlus: parseNum(row['ERA+']), fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']), war: row.WAR || '0.0', siera: row.SIERA || '0.00' };
-    } else {
-      return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', bats: row.B || '', g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB), h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR), rbi: parseNum(row.RBI), r: parseNum(row.R), bb: parseNum(row.BB), ibb: parseNum(row.IBB), hp: parseNum(row.HP), so: parseNum(row.SO), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000', iso: row.ISO || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']), babip: row.BABIP || '.000', war: row.WAR || '0.0', sb: parseNum(row.SB), cs: parseNum(row.CS) };
+  const handleFilterChange = (stat, field, value) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [stat]: { ...(prev[stat] || { enabled: false, operator: '>', value: '' }), [field]: value }
+    }));
+  };
+
+  const activeFilterCount = Object.values(activeFilters).filter(f => f.enabled).length;
+
+  // Color coding for stats
+  const getStatColor = (stat, value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return theme.textPrimary;
+    
+    // Percentage stats (K%)
+    if (stat.includes('%')) {
+      if (num >= 25) return theme.error;
+      if (num >= 20) return theme.warning;
+      return theme.textPrimary;
     }
+    
+    // OVR
+    if (stat === 'OVR') {
+      if (num >= 80) return theme.warning;
+      if (num >= 70) return theme.success;
+      return theme.textPrimary;
+    }
+    
+    // Standard stats
+    if (num >= 70) return theme.success;
+    if (num >= 60) return theme.textPrimary;
+    if (num >= 50) return theme.warning;
+    return theme.error;
   };
-
-  const detectCSVType = (headers) => { const h = new Set(headers.map(x => x.toUpperCase())); if (h.has('IP')) return 'pitching'; if (h.has('AB')) return 'batting'; return null; };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0]; if (!file || !selectedTournament) return;
-    requestAuth(() => {
-      Papa.parse(file, { header: true, skipEmptyLines: true,
-        complete: async (results) => {
-          if (results.data.length === 0) { showNotif('No data', 'error'); return; }
-          const type = detectCSVType(results.meta.fields || []);
-          if (!type) { showNotif('Could not detect CSV type', 'error'); return; }
-          const processed = results.data.filter(r => r.Name?.trim()).map(r => normalizePlayerData(r, type));
-          const combined = combinePlayerStats(selectedTournament[type], processed, type);
-          const updated = { ...selectedTournament, [type]: combined };
-          await saveTournament(updated);
-          setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updated : t));
-          setSelectedTournament(updated);
-          showNotif(`${type === 'pitching' ? 'Pitching' : 'Batting'}: ${processed.length} → ${combined.length} players`);
-        },
-        error: () => showNotif('CSV Error', 'error')
-      });
-    });
-    event.target.value = '';
-  };
-
-  const passesFilter = (v, f) => { if (!f.enabled) return true; const nv = parseFloat(v) || 0, fv = parseFloat(f.value) || 0; return f.operator === '>' ? nv > fv : f.operator === '>=' ? nv >= fv : f.operator === '=' ? nv === fv : f.operator === '<=' ? nv <= fv : nv < fv; };
-
-  const getFilteredData = (data, type) => {
-    if (!data) return [];
-    let f = [...data];
-    if (filters.search) f = f.filter(p => p.name.toLowerCase().includes(filters.search.toLowerCase()));
-    if (filters.position !== 'all') f = f.filter(p => p.pos.toUpperCase() === filters.position.toUpperCase());
-    f = f.filter(p => passesFilter(p.g, filters.gFilter));
-    if (type === 'batting') { f = f.filter(p => passesFilter(p.pa, filters.paFilter) && passesFilter(p.ab, filters.abFilter)); }
-    else { f = f.filter(p => passesFilter(parseIP(p.ip), filters.ipFilter)); }
-    f.sort((a, b) => { let av = a[filters.sortBy], bv = b[filters.sortBy]; if (!isNaN(parseFloat(av)) && !isNaN(parseFloat(bv))) { av = parseFloat(av); bv = parseFloat(bv); return filters.sortDir === 'asc' ? av - bv : bv - av; } return filters.sortDir === 'asc' ? String(av||'').localeCompare(String(bv||'')) : String(bv||'').localeCompare(String(av||'')); });
-    return f;
-  };
-
-  const toggleSort = (field) => { if (filters.sortBy === field) setFilters(f => ({ ...f, sortDir: f.sortDir === 'asc' ? 'desc' : 'asc' })); else setFilters(f => ({ ...f, sortBy: field, sortDir: 'desc' })); };
-  const updateStatFilter = (name, updates) => setFilters(f => ({ ...f, [name]: { ...f[name], ...updates } }));
-  const resetFilters = () => setFilters({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
-  const getActiveFilterCount = () => { let c = 0; if (filters.position !== 'all') c++; ['gFilter', 'paFilter', 'abFilter', 'ipFilter'].forEach(f => { if (filters[f].enabled) c++; }); return c; };
-
-  const pitchingPositions = ['all', 'SP', 'RP', 'CL'];
-  const battingPositions = ['all', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
-
-  const getHandednessStats = (players, field) => {
-    if (!players || players.length === 0) return { L: 0, S: 0, R: 0 };
-    const total = players.length, counts = { L: 0, S: 0, R: 0 };
-    players.forEach(p => { const v = (p[field] || '').toUpperCase(); if (counts[v] !== undefined) counts[v]++; });
-    return { L: ((counts.L / total) * 100).toFixed(0), S: ((counts.S / total) * 100).toFixed(0), R: ((counts.R / total) * 100).toFixed(0) };
-  };
-
-  const filteredTournaments = tournaments.filter(t => (t.category || 'tournaments') === sidebarTab);
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
-  const filteredData = selectedTournament ? getFilteredData(selectedTournament[activeTab], activeTab) : [];
-  const totalData = selectedTournament ? selectedTournament[activeTab].length : 0;
 
   return (
-    <Layout notification={notification}>
-      <main style={styles.main}>
-        <aside style={styles.sidebar}>
-          <div style={styles.sidebarTabs}>
-            <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('tournaments')}>Tournaments</button>
-            <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'drafts' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('drafts')}>Drafts</button>
-          </div>
-          <div style={styles.sidebarHeader}>
-            <h2 style={styles.sidebarTitle}>{sidebarTab === 'drafts' ? 'Drafts' : 'Tournaments'}</h2>
-            <button style={styles.addBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
-          </div>
-          {showNewTournament && (<div style={styles.newForm}>
-            <input type="text" placeholder="Name..." value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createTournament()} style={styles.input} autoFocus />
-            <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => setShowNewTournament(false)} style={styles.cancelBtn}>Cancel</button></div>
-          </div>)}
-          <div style={styles.tournamentList}>
-            {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
-              filteredTournaments.map(t => (<div key={t.id} style={{...styles.tournamentItem, ...(selectedTournament?.id === t.id ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
-                <div style={styles.tournamentInfo}><span style={styles.tournamentName}>{t.name}</span><span style={styles.tournamentStats}>{t.batting.length} bat · {t.pitching.length} pitch</span></div>
-                <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>×</button>
-              </div>))}
-          </div>
-        </aside>
-        <div style={styles.content}>
-          {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>🏆 Welcome!</h2><p>Create or select a tournament to start tracking stats.</p></div>) : (<>
-            <div style={styles.tournamentHeader}>
-              <h2 style={styles.tournamentTitle}>{selectedTournament.name}</h2>
-              {(selectedTournament.pitching.length > 0 || selectedTournament.batting.length > 0) && (<div style={styles.handednessContainer}>
-                {selectedTournament.pitching.length > 0 && (() => { const s = getHandednessStats(selectedTournament.pitching, 'throws'); return (<div style={styles.handednessGroup}><span style={styles.handednessLabel}>Pitchers (T):</span><span style={styles.handednessValue}>L {s.L}%</span><span style={styles.handednessValue}>S {s.S}%</span><span style={styles.handednessValue}>R {s.R}%</span></div>); })()}
-                {selectedTournament.batting.length > 0 && (() => { const s = getHandednessStats(selectedTournament.batting, 'bats'); return (<div style={styles.handednessGroup}><span style={styles.handednessLabel}>Batters (B):</span><span style={styles.handednessValue}>L {s.L}%</span><span style={styles.handednessValue}>S {s.S}%</span><span style={styles.handednessValue}>R {s.R}%</span></div>); })()}
-              </div>)}
-            </div>
-            <div style={styles.uploadSection}>
-              <label style={isAuthenticated ? styles.uploadBtn : styles.uploadBtnLocked}>{isAuthenticated ? '📁 Upload CSV' : '🔒 Upload CSV'}<input type="file" accept=".csv" onChange={handleFileUpload} style={{display:'none'}} /></label>
-              <span style={styles.uploadHint}>{isAuthenticated ? 'Auto-detects type • Same-name players combined' : 'Password required'}</span>
-            </div>
-            <div style={styles.tabs}>
-              <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); }}>⚾ Pitching ({selectedTournament.pitching.length})</button>
-              <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all'})); }}>🏏 Batting ({selectedTournament.batting.length})</button>
-            </div>
-            <div style={styles.filterBar}>
-              <input type="text" placeholder="Search..." value={filters.search} onChange={(e) => setFilters(f => ({...f, search: e.target.value}))} style={styles.searchInput} />
-              <select value={filters.position} onChange={(e) => setFilters(f => ({...f, position: e.target.value}))} style={styles.filterSelect}>
-                {(activeTab === 'pitching' ? pitchingPositions : battingPositions).map(pos => (<option key={pos} value={pos}>{pos === 'all' ? 'All Positions' : pos}</option>))}
-              </select>
-              <button style={{...styles.advancedFilterBtn, ...(showAdvancedFilters ? styles.advancedFilterBtnActive : {}), ...(getActiveFilterCount() > 0 ? styles.advancedFilterBtnHasFilters : {})}} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>🎚️ Filters {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}</button>
-              {getActiveFilterCount() > 0 && <button style={styles.resetBtn} onClick={resetFilters}>Reset All</button>}
-            </div>
-            {showAdvancedFilters && (<div style={styles.advancedFilters}><div style={styles.filterGroup}>
-              <StatFilter label="Games (G)" filter={filters.gFilter} onChange={(u) => updateStatFilter('gFilter', u)} />
-              {activeTab === 'batting' ? (<><StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} /><StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} /></>) : (<StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} />)}
-            </div></div>)}
-            <div style={styles.resultsCount}>Showing {filteredData.length} of {totalData} players</div>
-            <div style={styles.tableContainer}>
-              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} />}
-            </div>
-          </>)}
+    <div style={styles.tableSection}>
+      {/* Unified Control Bar */}
+      <div style={styles.controlBar}>
+        {/* Left side - Search and filters */}
+        <div style={styles.controlBarLeft}>
+          <input
+            type="text"
+            placeholder="Search players..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={styles.searchInputCompact}
+          />
+          <select
+            value={positionFilter}
+            onChange={e => setPositionFilter(e.target.value)}
+            style={styles.filterSelectCompact}
+          >
+            <option value="All">All Positions</option>
+            {allPositions.map(pos => (
+              <option key={pos} value={pos}>{pos}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            style={{
+              ...styles.controlButton,
+              ...(showAdvancedFilters ? styles.controlButtonActive : {}),
+              ...(activeFilterCount > 0 ? styles.controlButtonHasFilters : {})
+            }}
+          >
+            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+          </button>
         </div>
-      </main>
-    </Layout>
+
+        {/* Right side - Stat toggles */}
+        <div style={styles.controlBarRight}>
+          <div style={styles.statToggleGroup}>
+            {statGroups.map(group => {
+              const allVisible = group.stats.every(s => visibleStats.includes(s));
+              return (
+                <button
+                  key={group.label}
+                  onClick={() => toggleStatGroup(isHitter, group.stats)}
+                  style={{
+                    ...styles.statToggle,
+                    ...(allVisible ? styles.statToggleActive : {})
+                  }}
+                >
+                  {group.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Advanced Filters Panel */}
+      {showAdvancedFilters && (
+        <div style={styles.advancedFiltersCompact}>
+          <div style={styles.filterGridCompact}>
+            {statColumns.slice(0, 8).map(stat => {
+              const filter = activeFilters[stat] || { enabled: false, operator: '>', value: '' };
+              return (
+                <div key={stat} style={styles.filterItemCompact}>
+                  <label style={styles.filterLabelCompact}>
+                    <input
+                      type="checkbox"
+                      checked={filter.enabled}
+                      onChange={e => handleFilterChange(stat, 'enabled', e.target.checked)}
+                      style={styles.checkbox}
+                    />
+                    <span style={styles.filterStatName}>{stat}</span>
+                  </label>
+                  {filter.enabled && (
+                    <div style={styles.filterControls}>
+                      <select
+                        value={filter.operator}
+                        onChange={e => handleFilterChange(stat, 'operator', e.target.value)}
+                        style={styles.filterOperator}
+                      >
+                        <option value=">">{'>'}</option>
+                        <option value="<">{'<'}</option>
+                        <option value=">=">{'>='}</option>
+                        <option value="<=">{'<='}</option>
+                        <option value="=">=</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={filter.value}
+                        onChange={e => handleFilterChange(stat, 'value', e.target.value)}
+                        placeholder="Value"
+                        style={styles.filterValue}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Results count */}
+      <div style={styles.resultsCount}>
+        {filtered.length} {filtered.length === 1 ? 'player' : 'players'}
+      </div>
+
+      {/* Table */}
+      <div style={styles.tableContainerElevated}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.thSticky} onClick={() => handleSort('Name')}>
+                Name {sortConfig.key === 'Name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th style={styles.thSticky} onClick={() => handleSort(positionKey)}>
+                {positionKey} {sortConfig.key === positionKey && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th style={styles.thSticky} onClick={() => handleSort(isHitter ? 'Bats' : 'Throws')}>
+                {isHitter ? 'B' : 'T'} {sortConfig.key === (isHitter ? 'Bats' : 'Throws') && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th style={{...styles.thSticky, ...styles.thOvr}} onClick={() => handleSort('OVR')}>
+                OVR {sortConfig.key === 'OVR' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              {statColumns.map(stat => (
+                <th key={stat} style={styles.thSticky} onClick={() => handleSort(stat)}>
+                  {stat} {sortConfig.key === stat && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={4 + statColumns.length} style={styles.emptyTable}>
+                  No players found
+                </td>
+              </tr>
+            ) : (
+              filtered.map((player, idx) => (
+                <tr key={idx} style={styles.tableRow}>
+                  <td style={styles.tdName}>{player.Name}</td>
+                  <td style={styles.tdCenter}>{player[positionKey]}</td>
+                  <td style={styles.tdCenter}>{player[isHitter ? 'Bats' : 'Throws']}</td>
+                  <td style={{...styles.tdCenter, ...styles.tdOvr, color: getStatColor('OVR', player.OVR)}}>
+                    {player.OVR}
+                  </td>
+                  {statColumns.map(stat => (
+                    <td 
+                      key={stat} 
+                      style={{
+                        ...styles.tdCenter,
+                        color: getStatColor(stat, player[stat])
+                      }}
+                    >
+                      {player[stat] || '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
 function InfoPage() {
-  const { isAuthenticated, requestAuth } = useAuth();
-  const [content, setContent] = useState({ title: 'Info & FAQ', sections: [] });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState({ title: '', sections: [] });
-  const [notification, setNotification] = useState(null);
+  const { theme } = useTheme();
+  const { hasAccess, requestAuth } = useAuth();
+  const [content, setContent] = useState([]);
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState([]);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => { loadContent(); }, []);
 
-  const loadContent = async () => {
-    setIsLoading(true);
-    try { const { data } = await supabase.from('site_content').select('*').eq('id', 'info').single(); if (data?.content) setContent(data.content); }
-    catch (e) { console.log('No content yet'); }
-    setIsLoading(false);
-  };
+  async function loadContent() {
+    const { data } = await supabase.from('site_content').select('content').eq('id', 'info').single();
+    if (data?.content) {
+      setContent(data.content);
+      setEditContent(data.content);
+    }
+  }
 
-  const saveContent = async () => {
-    try { await supabase.from('site_content').upsert({ id: 'info', content: editContent, updated_at: new Date().toISOString() }); setContent(editContent); setIsEditing(false); showNotif('Saved!'); }
-    catch (e) { showNotif('Failed to save', 'error'); }
-  };
+  function toggleEdit() {
+    if (!editMode) {
+      requestAuth(() => setEditMode(true), 'master');
+    } else {
+      setEditMode(false);
+      setEditContent(content);
+    }
+  }
 
-  const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
-  const startEditing = () => { requestAuth(() => { setEditContent(JSON.parse(JSON.stringify(content))); setIsEditing(true); }); };
-  const addSection = () => { setEditContent(c => ({ ...c, sections: [...c.sections, { heading: 'New Section', body: 'Content here...' }] })); };
-  const updateSection = (i, field, value) => { setEditContent(c => { const s = [...c.sections]; s[i] = { ...s[i], [field]: value }; return { ...c, sections: s }; }); };
-  const removeSection = (i) => { setEditContent(c => ({ ...c, sections: c.sections.filter((_, idx) => idx !== i) })); };
-  const moveSection = (i, dir) => { const ni = i + dir; if (ni < 0 || ni >= editContent.sections.length) return; setEditContent(c => { const s = [...c.sections]; [s[i], s[ni]] = [s[ni], s[i]]; return { ...c, sections: s }; }); };
+  async function saveContent() {
+    await supabase.from('site_content').update({ content: editContent }).eq('id', 'info');
+    setContent(editContent);
+    setEditMode(false);
+  }
 
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+  const styles = getStyles(theme);
 
   return (
-    <Layout notification={notification}>
-      <div style={styles.pageContent}>
-        <div style={styles.pageHeader}>
-          <h2 style={styles.pageTitle}>{isEditing ? 'Edit Info & FAQ' : content.title}</h2>
-          {!isEditing && <button onClick={startEditing} style={styles.editBtn}>{isAuthenticated ? '✏️ Edit' : '🔒 Edit'}</button>}
+    <div style={styles.pageContent}>
+      <div style={styles.pageHeader}>
+        <h1 style={styles.pageTitle}>Information</h1>
+        <div style={{display: 'flex', gap: 12}}>
+          {hasAccess('master') && (
+            <>
+              {editMode && <button style={styles.btn} onClick={saveContent}>Save</button>}
+              <button style={{...styles.btn, ...styles.btnSecondary}} onClick={toggleEdit}>
+                {editMode ? 'Cancel' : 'Edit'}
+              </button>
+            </>
+          )}
         </div>
-        {isEditing ? (<div style={styles.editContainer}>
-          <div style={styles.editField}><label style={styles.editLabel}>Page Title</label><input type="text" value={editContent.title} onChange={(e) => setEditContent(c => ({ ...c, title: e.target.value }))} style={styles.input} /></div>
-          {editContent.sections.map((section, i) => (<div key={i} style={styles.editSection}>
-            <div style={styles.editSectionHeader}><span style={styles.editSectionNum}>Section {i + 1}</span>
-              <div style={styles.editSectionBtns}><button onClick={() => moveSection(i, -1)} style={styles.moveBtn} disabled={i === 0}>↑</button><button onClick={() => moveSection(i, 1)} style={styles.moveBtn} disabled={i === editContent.sections.length - 1}>↓</button><button onClick={() => removeSection(i)} style={styles.removeBtn}>✕</button></div>
-            </div>
-            <input type="text" value={section.heading} onChange={(e) => updateSection(i, 'heading', e.target.value)} style={styles.input} placeholder="Heading" />
-            <textarea value={section.body} onChange={(e) => updateSection(i, 'body', e.target.value)} style={styles.textarea} rows={4} />
-          </div>))}
-          <button onClick={addSection} style={styles.addSectionBtn}>+ Add Section</button>
-          <div style={styles.editActions}><button onClick={saveContent} style={styles.saveBtn}>Save Changes</button><button onClick={() => setIsEditing(false)} style={styles.cancelBtn}>Cancel</button></div>
-        </div>) : (<div style={styles.infoContent}>
-          {content.sections.length === 0 ? <p style={styles.emptyMsg}>No content yet. Click Edit to add some!</p> :
-            content.sections.map((s, i) => (<div key={i} style={styles.infoSection}><h3 style={styles.infoHeading}>{s.heading}</h3><p style={styles.infoBody}>{s.body}</p></div>))}
-        </div>)}
       </div>
-    </Layout>
+      {editMode ? (
+        <EditView content={editContent} setContent={setEditContent} showHelp={showHelp} setShowHelp={setShowHelp} />
+      ) : (
+        <ReadView content={content} />
+      )}
+    </div>
   );
 }
 
+function ReadView({ content }) {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
+  return (
+    <div style={styles.infoContent}>
+      {content.map((section, i) => (
+        <div key={i} style={styles.infoSection}>
+          <h2 style={styles.infoHeading}>{section.heading}</h2>
+          <div style={styles.infoBody} dangerouslySetInnerHTML={{ __html: parseMarkdown(section.body) }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EditView({ content, setContent, showHelp, setShowHelp }) {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
+  const updateSection = (i, field, val) => {
+    const updated = [...content];
+    updated[i][field] = val;
+    setContent(updated);
+  };
+
+  const moveSection = (i, dir) => {
+    if ((dir === -1 && i === 0) || (dir === 1 && i === content.length - 1)) return;
+    const updated = [...content];
+    [updated[i], updated[i + dir]] = [updated[i + dir], updated[i]];
+    setContent(updated);
+  };
+
+  const removeSection = (i) => {
+    setContent(content.filter((_, idx) => idx !== i));
+  };
+
+  const addSection = () => {
+    setContent([...content, { heading: 'New Section', body: '' }]);
+  };
+
+  return (
+    <div style={styles.editContainer}>
+      <button style={styles.helpToggle} onClick={() => setShowHelp(!showHelp)}>
+        {showHelp ? 'Hide' : 'Show'} Markdown Help
+      </button>
+      {showHelp && <MarkdownHelp />}
+      {content.map((section, i) => (
+        <div key={i} style={styles.editSection}>
+          <div style={styles.editSectionHeader}>
+            <span style={styles.editSectionNum}>Section {i + 1}</span>
+            <div style={styles.editSectionBtns}>
+              <button style={styles.moveBtn} onClick={() => moveSection(i, -1)}>↑</button>
+              <button style={styles.moveBtn} onClick={() => moveSection(i, 1)}>↓</button>
+              <button style={styles.removeBtn} onClick={() => removeSection(i)}>×</button>
+            </div>
+          </div>
+          <div style={styles.editField}>
+            <label style={styles.editLabel}>Heading</label>
+            <input
+              value={section.heading}
+              onChange={e => updateSection(i, 'heading', e.target.value)}
+              style={styles.searchInput}
+            />
+          </div>
+          <div style={styles.editField}>
+            <label style={styles.editLabel}>Body (Markdown supported)</label>
+            <textarea
+              value={section.body}
+              onChange={e => updateSection(i, 'body', e.target.value)}
+              rows={8}
+              style={{...styles.searchInput, resize: 'vertical', fontFamily: 'monospace', fontSize: 13}}
+            />
+          </div>
+          <div style={styles.editField}>
+            <div style={styles.previewLabel}>Preview:</div>
+            <div style={styles.previewBox} dangerouslySetInnerHTML={{ __html: parseMarkdown(section.body) }} />
+          </div>
+        </div>
+      ))}
+      <button style={styles.addSectionBtn} onClick={addSection}>+ Add Section</button>
+    </div>
+  );
+}
+
+function MarkdownHelp() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  
+  return (
+    <div style={styles.helpBox}>
+      <div style={styles.helpTitle}>Markdown Syntax</div>
+      <code style={styles.helpCode}>**bold text**</code>
+      <code style={styles.helpCode}>*italic text*</code>
+      <code style={styles.helpCode}>[link text](https://url.com)</code>
+      <code style={styles.helpCode}>- bullet point</code>
+      <code style={styles.helpCode}>1. numbered list</code>
+    </div>
+  );
+}
+
+function parseMarkdown(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/\n/g, '<br/>');
+}
+
 function VideosPage() {
-  const { isAuthenticated, requestAuth } = useAuth();
+  const { theme } = useTheme();
+  const { hasAccess, requestAuth } = useAuth();
   const [videos, setVideos] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newVideoUrl, setNewVideoUrl] = useState('');
-  const [newVideoTitle, setNewVideoTitle] = useState('');
-  const [notification, setNotification] = useState(null);
+  const [newVideo, setNewVideo] = useState({ title: '', url: '' });
   const [playingVideo, setPlayingVideo] = useState(null);
 
   useEffect(() => { loadVideos(); }, []);
 
-  const loadVideos = async () => {
-    setIsLoading(true);
-    try { const { data } = await supabase.from('site_content').select('*').eq('id', 'videos').single(); if (data?.content?.videos) setVideos(data.content.videos); }
-    catch (e) { console.log('No videos yet'); }
-    setIsLoading(false);
-  };
+  async function loadVideos() {
+    const { data } = await supabase.from('site_content').select('content').eq('id', 'videos').single();
+    if (data?.content) setVideos(data.content);
+  }
 
-  const saveVideos = async (newVideos) => {
-    try { await supabase.from('site_content').upsert({ id: 'videos', content: { videos: newVideos }, updated_at: new Date().toISOString() }); setVideos(newVideos); }
-    catch (e) { showNotif('Failed to save', 'error'); }
-  };
+  function handleAddVideo() {
+    requestAuth(() => setShowAddForm(true), 'master');
+  }
 
-  const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
+  async function saveVideo() {
+    if (!newVideo.title || !newVideo.url) return;
+    const video = { id: Date.now().toString(), ...newVideo };
+    const updated = [...videos, video];
+    await supabase.from('site_content').update({ content: updated }).eq('id', 'videos');
+    setVideos(updated);
+    setNewVideo({ title: '', url: '' });
+    setShowAddForm(false);
+  }
 
-  const extractVideoId = (url) => {
-    const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (ytMatch) return { platform: 'youtube', id: ytMatch[1] };
-    const twitchClip = url.match(/clips\.twitch\.tv\/([a-zA-Z0-9_-]+)/);
-    if (twitchClip) return { platform: 'twitch-clip', id: twitchClip[1] };
-    const twitchVideo = url.match(/twitch\.tv\/videos\/(\d+)/);
-    if (twitchVideo) return { platform: 'twitch-video', id: twitchVideo[1] };
+  async function removeVideo(id) {
+    requestAuth(async () => {
+      const updated = videos.filter(v => v.id !== id);
+      await supabase.from('site_content').update({ content: updated }).eq('id', 'videos');
+      setVideos(updated);
+    }, 'master');
+  }
+
+  function getEmbedUrl(url) {
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      const videoId = url.includes('youtu.be') 
+        ? url.split('youtu.be/')[1]?.split('?')[0]
+        : new URLSearchParams(new URL(url).search).get('v');
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    if (url.includes('vimeo.com')) {
+      const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
+      return `https://player.vimeo.com/video/${videoId}`;
+    }
+    return url;
+  }
+
+  function getThumbnail(url) {
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      const videoId = url.includes('youtu.be') 
+        ? url.split('youtu.be/')[1]?.split('?')[0]
+        : new URLSearchParams(new URL(url).search).get('v');
+      return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    }
     return null;
-  };
+  }
 
-  const getThumbnail = (v) => v.platform === 'youtube' ? `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` : null;
-  const getEmbedUrl = (v) => v.platform === 'youtube' ? `https://www.youtube.com/embed/${v.id}` : v.platform === 'twitch-clip' ? `https://clips.twitch.tv/embed?clip=${v.id}&parent=${window.location.hostname}` : `https://player.twitch.tv/?video=${v.id}&parent=${window.location.hostname}`;
-
-  const addVideo = () => {
-    requestAuth(() => {
-      const info = extractVideoId(newVideoUrl);
-      if (!info) { showNotif('Invalid URL. Use YouTube or Twitch.', 'error'); return; }
-      const newVideo = { ...info, title: newVideoTitle || 'Untitled', addedAt: new Date().toISOString() };
-      saveVideos([newVideo, ...videos]); setNewVideoUrl(''); setNewVideoTitle(''); setShowAddForm(false); showNotif('Video added!');
-    });
-  };
-
-  const removeVideo = (i) => { requestAuth(() => { if (!confirm('Remove this video?')) return; saveVideos(videos.filter((_, idx) => idx !== i)); showNotif('Removed'); }); };
-
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+  const styles = getStyles(theme);
 
   return (
-    <Layout notification={notification}>
-      <div style={styles.pageContent}>
-        <div style={styles.pageHeader}>
-          <h2 style={styles.pageTitle}>📺 Videos</h2>
-          <button onClick={() => requestAuth(() => setShowAddForm(true))} style={isAuthenticated ? styles.addBtn : styles.uploadBtnLocked}>{isAuthenticated ? '+ Add Video' : '🔒 Add Video'}</button>
-        </div>
-        {showAddForm && (<div style={styles.addVideoForm}>
-          <h3 style={styles.formTitle}>Add New Video</h3>
-          <input type="text" placeholder="Video title (optional)" value={newVideoTitle} onChange={(e) => setNewVideoTitle(e.target.value)} style={styles.input} />
-          <input type="text" placeholder="YouTube or Twitch URL..." value={newVideoUrl} onChange={(e) => setNewVideoUrl(e.target.value)} style={styles.input} />
-          <div style={styles.formBtns}><button onClick={addVideo} style={styles.saveBtn}>Add Video</button><button onClick={() => { setShowAddForm(false); setNewVideoUrl(''); setNewVideoTitle(''); }} style={styles.cancelBtn}>Cancel</button></div>
-        </div>)}
-        {playingVideo !== null && (<div style={styles.videoPlayerOverlay} onClick={() => setPlayingVideo(null)}>
-          <div style={styles.videoPlayerContainer} onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setPlayingVideo(null)} style={styles.closePlayerBtn}>✕</button>
-            <iframe src={getEmbedUrl(videos[playingVideo])} style={styles.videoPlayer} frameBorder="0" allowFullScreen allow="autoplay; encrypted-media" />
-          </div>
-        </div>)}
-        {videos.length === 0 ? <p style={styles.emptyMsg}>No videos yet. Add some videos to share!</p> : (
-          <div style={styles.videoGrid}>
-            {videos.map((v, i) => (<div key={i} style={styles.videoCard}>
-              <div style={styles.thumbnailContainer} onClick={() => setPlayingVideo(i)}>
-                {getThumbnail(v) ? <img src={getThumbnail(v)} alt={v.title} style={styles.thumbnail} /> : <div style={styles.thumbnailPlaceholder}>▶</div>}
-                <div style={styles.playOverlay}>▶</div>
-              </div>
-              <div style={styles.videoInfo}><span style={styles.videoTitle}>{v.title}</span><span style={styles.videoPlatform}>{v.platform === 'youtube' ? 'YouTube' : 'Twitch'}</span></div>
-              {isAuthenticated && <button onClick={() => removeVideo(i)} style={styles.removeVideoBtn}>✕</button>}
-            </div>))}
-          </div>
+    <div style={styles.pageContent}>
+      <div style={styles.pageHeader}>
+        <h1 style={styles.pageTitle}>Videos</h1>
+        {hasAccess('master') && !showAddForm && (
+          <button style={styles.btn} onClick={handleAddVideo}>Add Video</button>
         )}
       </div>
-    </Layout>
+
+      {showAddForm && (
+        <div style={styles.addVideoForm}>
+          <h2 style={styles.formTitle}>Add New Video</h2>
+          <div style={styles.editField}>
+            <label style={styles.editLabel}>Title</label>
+            <input
+              value={newVideo.title}
+              onChange={e => setNewVideo({...newVideo, title: e.target.value})}
+              style={styles.searchInput}
+              placeholder="Video title"
+            />
+          </div>
+          <div style={styles.editField}>
+            <label style={styles.editLabel}>URL</label>
+            <input
+              value={newVideo.url}
+              onChange={e => setNewVideo({...newVideo, url: e.target.value})}
+              style={styles.searchInput}
+              placeholder="YouTube or Vimeo URL"
+            />
+          </div>
+          <div style={styles.modalBtns}>
+            <button style={{...styles.btn, ...styles.btnSecondary}} onClick={() => { setShowAddForm(false); setNewVideo({ title: '', url: '' }); }}>Cancel</button>
+            <button style={styles.btn} onClick={saveVideo}>Add Video</button>
+          </div>
+        </div>
+      )}
+
+      <div style={styles.videoGrid}>
+        {videos.map(video => (
+          <div key={video.id} style={styles.videoCard}>
+            <div 
+              style={styles.thumbnailContainer}
+              onClick={() => setPlayingVideo(video)}
+              onMouseEnter={e => e.currentTarget.querySelector('.play-overlay').style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.querySelector('.play-overlay').style.opacity = '0'}
+            >
+              {getThumbnail(video.url) ? (
+                <img src={getThumbnail(video.url)} alt={video.title} style={styles.thumbnail} />
+              ) : (
+                <div style={styles.thumbnailPlaceholder}>🎥</div>
+              )}
+              <div className="play-overlay" style={styles.playOverlay}>▶</div>
+            </div>
+            <div style={styles.videoInfo}>
+              <span style={styles.videoTitle}>{video.title}</span>
+              <span style={styles.videoPlatform}>
+                {video.url.includes('youtube') ? 'YouTube' : video.url.includes('vimeo') ? 'Vimeo' : 'Video'}
+              </span>
+            </div>
+            {hasAccess('master') && (
+              <button style={styles.removeVideoBtn} onClick={() => removeVideo(video.id)}>×</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {playingVideo && (
+        <div style={styles.videoPlayerOverlay} onClick={() => setPlayingVideo(null)}>
+          <div style={styles.videoPlayerContainer} onClick={e => e.stopPropagation()}>
+            <button style={styles.closePlayerBtn} onClick={() => setPlayingVideo(null)}>×</button>
+            <iframe
+              src={getEmbedUrl(playingVideo.url)}
+              style={styles.videoPlayer}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function StatFilter({ label, filter, onChange }) {
-  return (<div style={styles.statFilter}><label style={styles.statFilterLabel}><input type="checkbox" checked={filter.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} style={styles.checkbox} />{label}</label>
-    <div style={styles.statFilterControls}><select value={filter.operator} onChange={(e) => onChange({ operator: e.target.value })} style={styles.operatorSelect} disabled={!filter.enabled}>
-      <option value=">">{'>'}</option><option value=">=">{'>='}</option><option value="=">=</option><option value="<=">{'<='}</option><option value="<">{'<'}</option>
-    </select><input type="number" value={filter.value} onChange={(e) => onChange({ value: e.target.value })} style={styles.valueInput} disabled={!filter.enabled} min="0" /></div></div>);
+function App() {
+  return (
+    <BrowserRouter>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserRouter>
+  );
 }
 
-function PitchingTable({ data, sortBy, sortDir, onSort }) {
-  const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
-  const calcIPperG = (ip, g) => { if (!g) return '0.00'; const str = String(ip); let n = str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; return (n / g).toFixed(2); };
-  if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
-  return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="winPct">WIN%</SortHeader><SortHeader field="svPct">SV%</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="siera">SIERA</SortHeader>
-  </tr></thead><tbody>
-    {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.winPct}</td><td style={styles.td}>{p.svPct}</td><td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td><td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td><td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td><td style={styles.tdStat}>{p.siera}</td>
-    </tr>))}
-  </tbody></table>);
+function AppContent() {
+  const { theme, toggle } = useTheme();
+  const styles = getStyles(theme);
+
+  return (
+    <div style={styles.app}>
+      <nav style={styles.nav}>
+        <div style={styles.navLeft}>
+          <div style={styles.logo}>BeaneCounter</div>
+        </div>
+        <div style={styles.navLinks}>
+          <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>
+            Tournaments
+          </NavLink>
+          <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>
+            Info
+          </NavLink>
+          <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>
+            Videos
+          </NavLink>
+        </div>
+        <button onClick={toggle} style={styles.themeToggle}>
+          {theme === darkTheme ? '☀️' : '🌙'}
+        </button>
+      </nav>
+      <Routes>
+        <Route path="/" element={<TournamentPage />} />
+        <Route path="/info" element={<InfoPage />} />
+        <Route path="/videos" element={<VideosPage />} />
+      </Routes>
+    </div>
+  );
 }
 
-function BattingTable({ data, sortBy, sortDir, onSort }) {
-  const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
-  if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
-  return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader><SortHeader field="rbi">RBI</SortHeader><SortHeader field="r">R</SortHeader><SortHeader field="bb">BB</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="iso">ISO</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="war">WAR</SortHeader><SortHeader field="sb">SB</SortHeader><SortHeader field="cs">CS</SortHeader>
-  </tr></thead><tbody>
-    {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.pa}</td><td style={styles.td}>{p.ab}</td><td style={styles.td}>{p.h}</td><td style={styles.td}>{p.doubles}</td><td style={styles.td}>{p.triples}</td><td style={styles.td}>{p.hr}</td><td style={styles.td}>{p.rbi}</td><td style={styles.td}>{p.r}</td><td style={styles.td}>{p.bb}</td><td style={styles.td}>{p.so}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td><td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.iso}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#4ade80' : '#f87171'}}>{p.war}</td><td style={styles.td}>{p.sb}</td><td style={styles.td}>{p.cs}</td>
-    </tr>))}
-  </tbody></table>);
+function getStyles(t) {
+  return {
+    // App container
+    app: { 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100vh', 
+      background: t.mainBg, 
+      color: t.textPrimary,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    },
+    
+    // Navigation - treated as chrome, reduced emphasis
+    nav: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      padding: '0 24px', 
+      height: 56,
+      background: t.sidebarBg, 
+      borderBottom: `1px solid ${t.borderSubtle}`,
+      flexShrink: 0
+    },
+    navLeft: { display: 'flex', alignItems: 'center', gap: 24 },
+    logo: { 
+      fontSize: 18, 
+      fontWeight: 700, 
+      color: t.accent,
+      letterSpacing: '-0.5px'
+    },
+    navLinks: { display: 'flex', gap: 4 },
+    navLink: { 
+      padding: '8px 16px', 
+      color: t.textSecondary, 
+      textDecoration: 'none', 
+      borderRadius: 6, 
+      fontSize: 14,
+      fontWeight: 500,
+      transition: 'all 0.15s'
+    },
+    navLinkActive: { 
+      background: t.mainBg, 
+      color: t.textPrimary,
+      fontWeight: 600
+    },
+    themeToggle: { 
+      background: 'transparent', 
+      border: 'none', 
+      fontSize: 20, 
+      cursor: 'pointer', 
+      padding: 8,
+      opacity: 0.7,
+      transition: 'opacity 0.15s'
+    },
+    
+    // Buttons
+    btn: { 
+      padding: '8px 16px', 
+      background: t.accent, 
+      color: '#fff', 
+      border: 'none', 
+      borderRadius: 6, 
+      cursor: 'pointer', 
+      fontWeight: 600, 
+      fontSize: 13,
+      transition: 'opacity 0.15s'
+    },
+    btnSecondary: { 
+      background: t.cardBg, 
+      color: t.textPrimary, 
+      border: `1px solid ${t.border}`
+    },
+    
+    // Tournament page layout
+    tournamentPage: { display: 'flex', flex: 1, overflow: 'hidden' },
+    
+    // Sidebar - reduced emphasis, treated as navigation chrome
+    sidebar: { 
+      width: 260, 
+      background: t.sidebarBg, 
+      borderRight: `1px solid ${t.borderSubtle}`,
+      display: 'flex', 
+      flexDirection: 'column',
+      flexShrink: 0
+    },
+    sidebarHeader: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      padding: '16px 16px 12px',
+      borderBottom: `1px solid ${t.borderSubtle}`
+    },
+    sidebarTitle: { 
+      fontSize: 13, 
+      fontWeight: 600, 
+      color: t.textMuted, 
+      margin: 0,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    },
+    addBtn: { 
+      width: 28, 
+      height: 28, 
+      background: t.cardBg, 
+      color: t.accent, 
+      border: `1px solid ${t.border}`, 
+      borderRadius: 6, 
+      cursor: 'pointer', 
+      fontWeight: 700, 
+      fontSize: 16,
+      transition: 'all 0.15s'
+    },
+    tournamentList: { 
+      flex: 1, 
+      overflow: 'auto', 
+      padding: '8px 12px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4
+    },
+    tournamentItem: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      padding: '10px 12px', 
+      background: 'transparent',
+      borderRadius: 6, 
+      cursor: 'pointer', 
+      border: '1px solid transparent',
+      transition: 'all 0.15s'
+    },
+    tournamentActive: { 
+      background: t.cardBg,
+      border: `1px solid ${t.border}`
+    },
+    tournamentInfo: { 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 2, 
+      overflow: 'hidden',
+      flex: 1
+    },
+    tournamentName: { 
+      fontWeight: 600, 
+      color: t.textPrimary, 
+      fontSize: 13, 
+      whiteSpace: 'nowrap', 
+      overflow: 'hidden', 
+      textOverflow: 'ellipsis'
+    },
+    tournamentStats: { 
+      fontSize: 11, 
+      color: t.textMuted
+    },
+    delBtn: { 
+      width: 24, 
+      height: 24, 
+      background: 'transparent', 
+      color: t.textMuted, 
+      border: 'none', 
+      borderRadius: 4, 
+      cursor: 'pointer', 
+      fontSize: 18,
+      opacity: 0.5,
+      transition: 'opacity 0.15s',
+      flexShrink: 0,
+      marginLeft: 8
+    },
+    
+    // Main content area
+    content: { 
+      flex: 1, 
+      padding: '20px 24px', 
+      overflow: 'auto',
+      background: t.mainBg
+    },
+    welcome: { 
+      textAlign: 'center', 
+      padding: '80px 40px' 
+    },
+    welcomeTitle: { 
+      fontSize: 36, 
+      color: t.accent, 
+      marginBottom: 12, 
+      fontWeight: 700,
+      letterSpacing: '-1px'
+    },
+    welcomeText: { 
+      color: t.textSecondary, 
+      fontSize: 15
+    },
+    
+    // Tournament header - LOW EMPHASIS (page context)
+    tournamentHeaderCompact: { 
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+      paddingBottom: 10,
+      borderBottom: `1px solid ${t.borderSubtle}`
+    },
+    tournamentTitleCompact: { 
+      fontSize: 20, 
+      color: t.textSecondary, 
+      margin: 0, 
+      fontWeight: 600,
+      letterSpacing: '-0.3px'
+    },
+    handednessContainerCompact: { 
+      display: 'flex', 
+      gap: 12,
+      alignItems: 'center',
+      fontSize: 11,
+      color: t.textMuted
+    },
+    handednessItemCompact: {
+      display: 'flex',
+      gap: 4,
+      alignItems: 'center'
+    },
+    handednessLabelCompact: {
+      fontWeight: 500,
+      textTransform: 'uppercase',
+      letterSpacing: '0.3px'
+    },
+    handednessValueCompact: {
+      fontFamily: 'Consolas, Monaco, monospace',
+      fontWeight: 600,
+      color: t.textSecondary
+    },
+    handednessSeparator: {
+      color: t.borderSubtle,
+      margin: '0 4px'
+    },
+    
+    // Upload section
+    uploadSectionCompact: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: 12, 
+      marginBottom: 16, 
+      padding: '10px 14px', 
+      background: t.cardBg, 
+      borderRadius: 6,
+      border: `1px solid ${t.border}`
+    },
+    uploadHint: { 
+      color: t.textMuted, 
+      fontSize: 12,
+      fontWeight: 500
+    },
+    uploadLabel: {
+      cursor: 'pointer'
+    },
+    uploadBtn: {
+      padding: '6px 12px',
+      background: t.accent,
+      color: '#fff',
+      borderRadius: 4,
+      fontSize: 12,
+      fontWeight: 600,
+      display: 'inline-block',
+      transition: 'opacity 0.15s'
+    },
+    
+    // Table section wrapper
+    tableSection: {
+      marginBottom: 32
+    },
+    
+    // UNIFIED CONTROL BAR - MEDIUM EMPHASIS
+    controlBar: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 16,
+      padding: '10px 14px',
+      background: t.cardBg,
+      borderRadius: 6,
+      border: `1px solid ${t.border}`,
+      marginBottom: 12,
+      flexWrap: 'wrap'
+    },
+    controlBarLeft: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+      minWidth: 300
+    },
+    controlBarRight: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    },
+    
+    // Search input - compact
+    searchInputCompact: { 
+      padding: '6px 10px', 
+      background: t.inputBg, 
+      color: t.textPrimary, 
+      border: `1px solid ${t.inputBorder}`, 
+      borderRadius: 4, 
+      fontSize: 13,
+      fontFamily: 'inherit',
+      width: 180,
+      transition: 'border-color 0.15s'
+    },
+    
+    // Filter select - compact
+    filterSelectCompact: { 
+      padding: '6px 10px', 
+      background: t.inputBg, 
+      color: t.textPrimary, 
+      border: `1px solid ${t.inputBorder}`, 
+      borderRadius: 4, 
+      fontSize: 13, 
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+      minWidth: 110
+    },
+    
+    // Control buttons
+    controlButton: {
+      padding: '6px 12px',
+      background: 'transparent',
+      color: t.textSecondary,
+      border: `1px solid ${t.border}`,
+      borderRadius: 4,
+      cursor: 'pointer',
+      fontSize: 12,
+      fontWeight: 600,
+      transition: 'all 0.15s',
+      whiteSpace: 'nowrap'
+    },
+    controlButtonActive: {
+      color: t.accent,
+      borderColor: t.accent
+    },
+    controlButtonHasFilters: {
+      background: t.accent,
+      color: '#fff',
+      borderColor: t.accent
+    },
+    
+    // Stat toggle group
+    statToggleGroup: {
+      display: 'flex',
+      gap: 4,
+      background: t.inputBg,
+      padding: 3,
+      borderRadius: 4,
+      border: `1px solid ${t.border}`
+    },
+    statToggle: {
+      padding: '4px 10px',
+      background: 'transparent',
+      color: t.textSecondary,
+      border: 'none',
+      borderRadius: 3,
+      cursor: 'pointer',
+      fontSize: 11,
+      fontWeight: 600,
+      transition: 'all 0.15s',
+      textTransform: 'uppercase',
+      letterSpacing: '0.3px'
+    },
+    statToggleActive: {
+      background: t.cardBg,
+      color: t.accent
+    },
+    
+    // Advanced filters - compact
+    advancedFiltersCompact: {
+      background: t.cardBg,
+      borderRadius: 6,
+      border: `1px solid ${t.border}`,
+      padding: 12,
+      marginBottom: 12
+    },
+    filterGridCompact: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+      gap: 10
+    },
+    filterItemCompact: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    },
+    filterLabelCompact: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      cursor: 'pointer',
+      fontSize: 12,
+      fontWeight: 500,
+      color: t.textPrimary
+    },
+    filterStatName: {
+      fontFamily: 'Consolas, Monaco, monospace',
+      fontSize: 11
+    },
+    checkbox: {
+      width: 14,
+      height: 14,
+      cursor: 'pointer',
+      accentColor: t.accent
+    },
+    filterControls: {
+      display: 'flex',
+      gap: 4
+    },
+    filterOperator: {
+      padding: '4px 6px',
+      background: t.inputBg,
+      color: t.textPrimary,
+      border: `1px solid ${t.inputBorder}`,
+      borderRadius: 3,
+      fontSize: 11,
+      cursor: 'pointer',
+      fontFamily: 'Consolas, Monaco, monospace',
+      width: 45
+    },
+    filterValue: {
+      padding: '4px 6px',
+      background: t.inputBg,
+      color: t.textPrimary,
+      border: `1px solid ${t.inputBorder}`,
+      borderRadius: 3,
+      fontSize: 11,
+      flex: 1,
+      fontFamily: 'Consolas, Monaco, monospace'
+    },
+    
+    // Results count
+    resultsCount: { 
+      color: t.textMuted, 
+      fontSize: 11, 
+      marginBottom: 6,
+      fontWeight: 500,
+      letterSpacing: '0.2px'
+    },
+    
+    // TABLE CONTAINER - HIGHEST EMPHASIS - visually dominates
+    tableContainerElevated: { 
+      background: t.tableContainerBg,
+      borderRadius: 6,
+      border: `1px solid ${t.tableBorder}`,
+      overflow: 'auto',
+      maxHeight: '70vh',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+    },
+    
+    // Table - dense, professional
+    table: { 
+      width: '100%', 
+      borderCollapse: 'collapse',
+      fontSize: 12,
+      fontVariantNumeric: 'tabular-nums'
+    },
+    
+    // Table header - sticky, dimmed
+    thSticky: { 
+      padding: '7px 8px',
+      background: t.tableHeaderBg,
+      color: t.textSecondary,
+      fontWeight: 600,
+      textAlign: 'center',
+      position: 'sticky',
+      top: 0,
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+      borderBottom: `1px solid ${t.tableBorder}`,
+      userSelect: 'none',
+      fontSize: 11,
+      textTransform: 'uppercase',
+      letterSpacing: '0.3px',
+      transition: 'color 0.15s',
+      zIndex: 10
+    },
+    thOvr: {
+      color: t.accent,
+      fontWeight: 700
+    },
+    
+    // Table rows - reduced padding for density
+    tableRow: {
+      borderBottom: `1px solid ${t.borderSubtle}`,
+      background: t.tableRowBg,
+      transition: 'background-color 0.1s'
+    },
+    
+    // Table cells - tight spacing
+    tdCenter: {
+      padding: '5px 8px',
+      textAlign: 'center',
+      fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+      fontSize: 12,
+      color: t.textPrimary
+    },
+    tdName: {
+      padding: '5px 8px',
+      fontWeight: 600,
+      whiteSpace: 'nowrap',
+      textAlign: 'left',
+      fontSize: 12,
+      color: t.textPrimary
+    },
+    tdOvr: {
+      fontWeight: 700,
+      fontSize: 13
+    },
+    
+    emptyTable: { 
+      padding: 40, 
+      textAlign: 'center', 
+      color: t.textMuted,
+      fontSize: 13
+    },
+    
+    // Modal
+    modalOverlay: { 
+      position: 'fixed', 
+      top: 0, 
+      left: 0, 
+      right: 0, 
+      bottom: 0, 
+      background: 'rgba(0,0,0,0.7)', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      zIndex: 1000 
+    },
+    modal: { 
+      background: t.cardBg, 
+      padding: 28, 
+      borderRadius: 8, 
+      border: `1px solid ${t.border}`, 
+      maxWidth: 400, 
+      width: '90%', 
+      boxShadow: '0 20px 40px rgba(0,0,0,0.4)' 
+    },
+    modalTitle: { 
+      margin: '0 0 8px', 
+      color: t.textPrimary, 
+      fontSize: 18, 
+      fontWeight: 700 
+    },
+    modalText: { 
+      margin: '0 0 20px', 
+      color: t.textSecondary, 
+      fontSize: 13,
+      lineHeight: 1.5
+    },
+    modalBtns: { 
+      display: 'flex', 
+      gap: 10, 
+      marginTop: 20 
+    },
+    authError: { 
+      color: t.error, 
+      fontSize: 12, 
+      margin: '0 0 12px', 
+      padding: '8px 12px', 
+      background: `${t.error}15`, 
+      borderRadius: 4,
+      fontWeight: 500
+    },
+    
+    // Page content
+    pageContent: { 
+      flex: 1, 
+      padding: '20px 24px', 
+      maxWidth: 1200, 
+      margin: '0 auto',
+      width: '100%'
+    },
+    pageHeader: { 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      marginBottom: 20, 
+      paddingBottom: 12, 
+      borderBottom: `1px solid ${t.border}` 
+    },
+    pageTitle: { 
+      margin: 0, 
+      fontSize: 24, 
+      color: t.textPrimary, 
+      fontWeight: 700,
+      letterSpacing: '-0.5px'
+    },
+    
+    // Info page
+    infoContent: { 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 20 
+    },
+    infoSection: { 
+      background: t.cardBg, 
+      padding: 20, 
+      borderRadius: 6, 
+      border: `1px solid ${t.border}` 
+    },
+    infoHeading: { 
+      margin: '0 0 10px', 
+      color: t.accent, 
+      fontSize: 18, 
+      fontWeight: 700 
+    },
+    infoBody: { 
+      margin: 0, 
+      color: t.textPrimary, 
+      fontSize: 13, 
+      lineHeight: 1.6 
+    },
+    
+    // Edit mode
+    editContainer: { 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 16 
+    },
+    editField: { 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 6 
+    },
+    editLabel: { 
+      color: t.textSecondary, 
+      fontWeight: 600, 
+      fontSize: 12 
+    },
+    editSection: { 
+      background: t.cardBg, 
+      padding: 16, 
+      borderRadius: 6, 
+      border: `1px solid ${t.border}` 
+    },
+    editSectionHeader: { 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      marginBottom: 12 
+    },
+    editSectionNum: { 
+      color: t.textMuted, 
+      fontSize: 11, 
+      fontWeight: 600,
+      textTransform: 'uppercase'
+    },
+    editSectionBtns: { 
+      display: 'flex', 
+      gap: 6 
+    },
+    moveBtn: { 
+      width: 28, 
+      height: 28, 
+      background: t.mainBg, 
+      color: t.textPrimary, 
+      border: `1px solid ${t.border}`, 
+      borderRadius: 4, 
+      cursor: 'pointer', 
+      fontSize: 13,
+      fontWeight: 700
+    },
+    removeBtn: { 
+      width: 28, 
+      height: 28, 
+      background: t.error, 
+      color: '#fff', 
+      border: 'none', 
+      borderRadius: 4, 
+      cursor: 'pointer', 
+      fontSize: 14 
+    },
+    addSectionBtn: { 
+      padding: '12px 20px', 
+      background: t.cardBg, 
+      color: t.accent, 
+      border: `1px dashed ${t.border}`, 
+      borderRadius: 6, 
+      cursor: 'pointer', 
+      fontWeight: 600, 
+      fontSize: 13,
+      transition: 'all 0.15s'
+    },
+    
+    // Markdown help
+    helpToggle: { 
+      background: t.cardBg, 
+      color: t.accent, 
+      border: `1px solid ${t.border}`, 
+      padding: '7px 14px', 
+      borderRadius: 4, 
+      cursor: 'pointer', 
+      fontSize: 12, 
+      fontWeight: 600, 
+      marginBottom: 12 
+    },
+    helpBox: { 
+      background: t.mainBg, 
+      border: `1px solid ${t.border}`, 
+      borderRadius: 6, 
+      padding: 14, 
+      marginBottom: 16 
+    },
+    helpTitle: { 
+      color: t.textSecondary, 
+      margin: '0 0 10px', 
+      fontWeight: 700,
+      fontSize: 12
+    },
+    helpCode: { 
+      display: 'block', 
+      background: t.cardBg, 
+      padding: '4px 8px', 
+      borderRadius: 3, 
+      marginBottom: 4, 
+      color: t.textPrimary, 
+      fontSize: 11, 
+      fontFamily: 'Consolas, Monaco, monospace' 
+    },
+    previewLabel: { 
+      color: t.textSecondary, 
+      fontSize: 11, 
+      fontWeight: 600, 
+      marginTop: 10, 
+      marginBottom: 4 
+    },
+    previewBox: { 
+      background: t.mainBg, 
+      border: `1px solid ${t.border}`, 
+      borderRadius: 6, 
+      padding: 14, 
+      minHeight: 60, 
+      color: t.textPrimary, 
+      fontSize: 13, 
+      lineHeight: 1.6 
+    },
+    
+    // Videos page
+    addVideoForm: { 
+      background: t.cardBg, 
+      padding: 20, 
+      borderRadius: 6, 
+      border: `1px solid ${t.border}`, 
+      marginBottom: 20 
+    },
+    formTitle: { 
+      margin: '0 0 14px', 
+      color: t.textPrimary, 
+      fontSize: 16, 
+      fontWeight: 700 
+    },
+    videoGrid: { 
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+      gap: 16 
+    },
+    videoCard: { 
+      background: t.cardBg, 
+      borderRadius: 6, 
+      border: `1px solid ${t.border}`, 
+      overflow: 'hidden', 
+      position: 'relative',
+      transition: 'border-color 0.15s'
+    },
+    thumbnailContainer: { 
+      position: 'relative', 
+      paddingTop: '56.25%', 
+      background: t.mainBg, 
+      cursor: 'pointer' 
+    },
+    thumbnail: { 
+      position: 'absolute', 
+      top: 0, 
+      left: 0, 
+      width: '100%', 
+      height: '100%', 
+      objectFit: 'cover' 
+    },
+    thumbnailPlaceholder: { 
+      position: 'absolute', 
+      top: '50%', 
+      left: '50%', 
+      transform: 'translate(-50%, -50%)', 
+      fontSize: 48, 
+      color: t.textMuted,
+      opacity: 0.4
+    },
+    playOverlay: { 
+      position: 'absolute', 
+      top: '50%', 
+      left: '50%', 
+      transform: 'translate(-50%, -50%)', 
+      width: 60, 
+      height: 60, 
+      background: `${t.accent}dd`, 
+      borderRadius: '50%', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      fontSize: 22, 
+      color: '#fff', 
+      opacity: 0, 
+      transition: 'opacity 0.2s',
+      paddingLeft: 4
+    },
+    videoInfo: { 
+      padding: 12 
+    },
+    videoTitle: { 
+      display: 'block', 
+      color: t.textPrimary, 
+      fontWeight: 600, 
+      fontSize: 13, 
+      marginBottom: 4 
+    },
+    videoPlatform: { 
+      color: t.textMuted, 
+      fontSize: 11 
+    },
+    removeVideoBtn: { 
+      position: 'absolute', 
+      top: 8, 
+      right: 8, 
+      width: 28, 
+      height: 28, 
+      background: `${t.error}dd`, 
+      color: '#fff', 
+      border: 'none', 
+      borderRadius: 4, 
+      cursor: 'pointer', 
+      fontSize: 14 
+    },
+    videoPlayerOverlay: { 
+      position: 'fixed', 
+      top: 0, 
+      left: 0, 
+      right: 0, 
+      bottom: 0, 
+      background: 'rgba(0,0,0,0.92)', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      zIndex: 1000 
+    },
+    videoPlayerContainer: { 
+      position: 'relative', 
+      width: '90%', 
+      maxWidth: 1000, 
+      aspectRatio: '16/9' 
+    },
+    videoPlayer: { 
+      width: '100%', 
+      height: '100%', 
+      borderRadius: 6 
+    },
+    closePlayerBtn: { 
+      position: 'absolute', 
+      top: -40, 
+      right: 0, 
+      background: 'transparent', 
+      color: '#fff', 
+      border: 'none', 
+      fontSize: 32, 
+      cursor: 'pointer',
+      opacity: 0.8,
+      transition: 'opacity 0.15s'
+    }
+  };
 }
 
-export default function App() {
-  return (<BrowserRouter><AuthProvider><Routes>
-    <Route path="/" element={<StatsPage />} />
-    <Route path="/info" element={<InfoPage />} />
-    <Route path="/videos" element={<VideosPage />} />
-  </Routes></AuthProvider></BrowserRouter>);
-}
-
-const styles = {
-  container: { minHeight: '100vh', background: '#0f172a', fontFamily: "'Courier New', monospace", color: '#f1f5f9' },
-  loading: { minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f1f5f9' },
-  notification: { position: 'fixed', top: 20, right: 20, padding: '12px 24px', borderRadius: 8, color: '#fff', fontWeight: 'bold', zIndex: 1000 },
-  header: { background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', borderBottom: '4px solid #fbbf24', padding: '20px 32px' },
-  headerContent: { maxWidth: 1800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
-  title: { margin: 0, fontSize: 28, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: 2 },
-  subtitle: { margin: '4px 0 0', fontSize: 14, color: '#e2e8f0' },
-  nav: { display: 'flex', gap: 8 },
-  navLink: { padding: '10px 20px', background: '#1e3a8a', color: '#e2e8f0', textDecoration: 'none', borderRadius: 6, fontWeight: 'bold', fontSize: 14, border: '2px solid transparent' },
-  navLinkActive: { background: '#fbbf24', color: '#1e3a8a', borderColor: '#fbbf24' },
-  main: { display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 120px)' },
-  sidebar: { width: 260, background: '#1e293b', borderRight: '2px solid #334155', padding: 16, flexShrink: 0 },
-  sidebarTabs: { display: 'flex', gap: 4, marginBottom: 16 },
-  sidebarTabBtn: { flex: 1, padding: '10px 8px', background: '#334155', color: '#94a3b8', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
-  sidebarTabActive: { background: '#475569', color: '#fbbf24' },
-  sidebarHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '2px solid #334155' },
-  sidebarTitle: { margin: 0, fontSize: 14, color: '#fbbf24', textTransform: 'uppercase', fontWeight: 'bold' },
-  addBtn: { padding: '6px 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
-  newForm: { marginBottom: 12, padding: 12, background: '#334155', borderRadius: 8 },
-  input: { width: '100%', padding: 10, background: '#1e293b', border: '2px solid #475569', borderRadius: 4, color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box', marginBottom: 8 },
-  textarea: { width: '100%', padding: 10, background: '#1e293b', border: '2px solid #475569', borderRadius: 4, color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' },
-  formBtns: { display: 'flex', gap: 8, marginTop: 10 },
-  saveBtn: { flex: 1, padding: 8, background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  cancelBtn: { flex: 1, padding: 8, background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' },
-  tournamentList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  emptyMsg: { color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: '20px 0' },
-  tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: '#334155', borderRadius: 6, cursor: 'pointer', border: '2px solid transparent' },
-  tournamentActive: { borderColor: '#fbbf24', background: '#475569' },
-  tournamentInfo: { display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' },
-  tournamentName: { fontWeight: 'bold', color: '#f1f5f9', fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  tournamentStats: { fontSize: 11, color: '#94a3b8' },
-  delBtn: { width: 24, height: 24, background: 'transparent', color: '#94a3b8', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 18 },
-  content: { flex: 1, padding: '24px 32px', overflow: 'auto' },
-  welcome: { textAlign: 'center', padding: '60px 40px' },
-  welcomeTitle: { fontSize: 32, color: '#fbbf24', marginBottom: 12 },
-  tournamentHeader: { marginBottom: 20, paddingBottom: 12, borderBottom: '2px solid #334155' },
-  tournamentTitle: { fontSize: 24, color: '#fbbf24', margin: 0 },
-  handednessContainer: { display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' },
-  handednessGroup: { display: 'flex', alignItems: 'center', gap: 12, background: '#334155', padding: '8px 16px', borderRadius: 6 },
-  handednessLabel: { color: '#fbbf24', fontWeight: 'bold', fontSize: 13 },
-  handednessValue: { color: '#f1f5f9', fontSize: 13, fontFamily: "'Courier New', monospace" },
-  uploadSection: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: 16, background: '#1e293b', borderRadius: 8, border: '2px dashed #475569', flexWrap: 'wrap' },
-  uploadBtn: { padding: '10px 20px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  uploadBtnLocked: { padding: '10px 20px', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  uploadHint: { color: '#94a3b8', fontSize: 12 },
-  tabs: { display: 'flex', gap: 8, marginBottom: 16 },
-  tab: { padding: '12px 24px', background: '#334155', color: '#e2e8f0', border: '2px solid #475569', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
-  tabActive: { background: '#475569', borderColor: '#fbbf24', color: '#fbbf24' },
-  filterBar: { display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' },
-  searchInput: { padding: '10px 16px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 14, width: 200 },
-  filterSelect: { padding: '10px 16px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 14, cursor: 'pointer' },
-  advancedFilterBtn: { padding: '10px 16px', background: '#334155', color: '#e2e8f0', border: '2px solid #475569', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 'bold' },
-  advancedFilterBtnActive: { borderColor: '#fbbf24', color: '#fbbf24' },
-  advancedFilterBtnHasFilters: { background: '#475569', color: '#38bdf8' },
-  resetBtn: { padding: '10px 16px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 },
-  advancedFilters: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', padding: 16, marginBottom: 16 },
-  filterGroup: { display: 'flex', gap: 24, flexWrap: 'wrap' },
-  statFilter: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 },
-  statFilterLabel: { display: 'flex', alignItems: 'center', gap: 8, color: '#f1f5f9', fontSize: 13, fontWeight: 'bold', cursor: 'pointer' },
-  checkbox: { width: 16, height: 16, cursor: 'pointer' },
-  statFilterControls: { display: 'flex', gap: 8 },
-  operatorSelect: { padding: '6px 10px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 13, cursor: 'pointer' },
-  valueInput: { padding: '6px 10px', background: '#334155', color: '#f1f5f9', border: '2px solid #475569', borderRadius: 4, fontSize: 13, width: 80 },
-  resultsCount: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
-  tableContainer: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'auto', maxHeight: 500 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
-  th: { padding: '10px 8px', background: '#334155', color: '#fbbf24', fontWeight: 'bold', textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '2px solid #475569', userSelect: 'none' },
-  tr: { borderBottom: '1px solid #334155' },
-  td: { padding: '8px 8px', color: '#e2e8f0', textAlign: 'center', fontFamily: "'Courier New', monospace" },
-  tdName: { padding: '8px 8px', color: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' },
-  tdStat: { padding: '8px 8px', color: '#38bdf8', textAlign: 'center', fontFamily: "'Courier New', monospace", fontWeight: 'bold' },
-  emptyTable: { padding: 40, textAlign: 'center', color: '#94a3b8' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: '#1e293b', padding: 32, borderRadius: 12, border: '2px solid #475569', maxWidth: 400, width: '90%' },
-  modalTitle: { margin: '0 0 12px', color: '#fbbf24', fontSize: 20 },
-  modalText: { margin: '0 0 20px', color: '#94a3b8', fontSize: 14 },
-  modalBtns: { display: 'flex', gap: 12, marginTop: 16 },
-  pageContent: { flex: 1, padding: '24px 32px', maxWidth: 1200, margin: '0 auto' },
-  pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid #334155' },
-  pageTitle: { margin: 0, fontSize: 28, color: '#fbbf24' },
-  editBtn: { padding: '10px 20px', background: '#475569', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' },
-  infoContent: { display: 'flex', flexDirection: 'column', gap: 24 },
-  infoSection: { background: '#1e293b', padding: 24, borderRadius: 8, border: '2px solid #334155' },
-  infoHeading: { margin: '0 0 12px', color: '#fbbf24', fontSize: 20 },
-  infoBody: { margin: 0, color: '#e2e8f0', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' },
-  editContainer: { display: 'flex', flexDirection: 'column', gap: 16 },
-  editField: { display: 'flex', flexDirection: 'column', gap: 8 },
-  editLabel: { color: '#fbbf24', fontWeight: 'bold', fontSize: 13 },
-  editSection: { background: '#1e293b', padding: 16, borderRadius: 8, border: '2px solid #334155' },
-  editSectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  editSectionNum: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
-  editSectionBtns: { display: 'flex', gap: 8 },
-  moveBtn: { width: 28, height: 28, background: '#475569', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-  removeBtn: { width: 28, height: 28, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-  addSectionBtn: { padding: '12px 24px', background: '#334155', color: '#fbbf24', border: '2px dashed #475569', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
-  editActions: { display: 'flex', gap: 12, marginTop: 16 },
-  addVideoForm: { background: '#1e293b', padding: 24, borderRadius: 8, border: '2px solid #334155', marginBottom: 24 },
-  formTitle: { margin: '0 0 16px', color: '#fbbf24', fontSize: 18 },
-  videoGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 },
-  videoCard: { background: '#1e293b', borderRadius: 8, border: '2px solid #334155', overflow: 'hidden', position: 'relative' },
-  thumbnailContainer: { position: 'relative', paddingTop: '56.25%', background: '#0f172a', cursor: 'pointer' },
-  thumbnail: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' },
-  thumbnailPlaceholder: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, color: '#475569' },
-  playOverlay: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 60, height: 60, background: 'rgba(251, 191, 36, 0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#1e293b', opacity: 0, transition: 'opacity 0.2s' },
-  videoInfo: { padding: 16 },
-  videoTitle: { display: 'block', color: '#f1f5f9', fontWeight: 'bold', fontSize: 14, marginBottom: 4 },
-  videoPlatform: { color: '#94a3b8', fontSize: 12 },
-  removeVideoBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, background: 'rgba(220, 38, 38, 0.9)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-  videoPlayerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  videoPlayerContainer: { position: 'relative', width: '90%', maxWidth: 1000, aspectRatio: '16/9' },
-  videoPlayer: { width: '100%', height: '100%', borderRadius: 8 },
-  closePlayerBtn: { position: 'absolute', top: -40, right: 0, background: 'transparent', color: '#fff', border: 'none', fontSize: 32, cursor: 'pointer' }
-};
+export default App;
