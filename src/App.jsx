@@ -497,9 +497,9 @@ function StatsPage() {
   // Helper to get CSV count for data quality indicator
   const getCsvCount = (t) => (t.uploadedHashes?.length || 0);
   const getDataQuality = (count) => {
-    if (count >= 31) return { label: 'HIGH DATA', color: '#22C55E', bg: '#22C55E20' };
-    if (count >= 21) return { label: 'MED DATA', color: '#F59E0B', bg: '#F59E0B20' };
-    return { label: 'LOW DATA', color: '#EF4444', bg: '#EF4444' };
+    if (count >= 31) return { label: 'HIGH DATA', color: '#FFFFFF', bg: '#22C55E' };
+    if (count >= 14) return { label: 'MED DATA', color: '#000000', bg: '#F59E0B' };
+    return { label: 'LOW DATA', color: '#FFFFFF', bg: '#EF4444' };
   };
 
   const filteredTournaments = tournaments
