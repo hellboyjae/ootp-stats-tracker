@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+mport React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
@@ -195,6 +195,7 @@ function StatsPage() {
   const [notification, setNotification] = useState(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('tournaments');
+  const [tournamentSearch, setTournamentSearch] = useState('');
 
   useEffect(() => { loadData(); }, []);
 
@@ -423,9 +424,6 @@ function StatsPage() {
 
   const passesFilter = (v, f) => { if (!f.enabled) return true; const nv = parseFloat(v) || 0, fv = parseFloat(f.value) || 0; return f.operator === '>' ? nv > fv : f.operator === '>=' ? nv >= fv : f.operator === '=' ? nv === fv : f.operator === '<=' ? nv <= fv : nv < fv; };
 
-  // Helper to calculate per-9 value for sorting
-  const calcPer9Value = (val, g) => { if (!g || g === 0) return 0; return (parseFloat(val || 0) / g * 9); };
-
   const getFilteredData = (data, type) => {
     if (!data) return [];
     let f = [...data];
@@ -435,14 +433,20 @@ function StatsPage() {
     if (type === 'batting') { f = f.filter(p => passesFilter(p.pa, filters.paFilter) && passesFilter(p.ab, filters.abFilter)); }
     else { f = f.filter(p => passesFilter(parseIP(p.ip), filters.ipFilter)); }
     
-    // Handle Per-9 sorting
+    // Handle Per-9 and Per-162 sorting
+    const calcPer9Value = (val, g) => (!g || g === 0) ? 0 : parseFloat(val || 0) / g * 9;
+    const calcPer162Value = (val, g) => (!g || g === 0) ? 0 : parseFloat(val || 0) / g * 162;
+    
     const per9Fields = {
-      warPer9: 'war',
       hrPer9Bat: 'hr',
       soPer9: 'so',
       gidpPer9: 'gidp',
-      wraaPer9: 'wraa',
-      bsrPer9: 'bsr'
+      wraaPer9: 'wraa'
+    };
+    
+    const per162Fields = {
+      warPer162: 'war',
+      bsrPer162: 'bsr'
     };
     
     f.sort((a, b) => {
@@ -452,6 +456,11 @@ function StatsPage() {
         const baseField = per9Fields[filters.sortBy];
         av = calcPer9Value(a[baseField], a.g);
         bv = calcPer9Value(b[baseField], b.g);
+      } else if (per162Fields[filters.sortBy]) {
+        // Sorting by a per-162 field
+        const baseField = per162Fields[filters.sortBy];
+        av = calcPer162Value(a[baseField], a.g);
+        bv = calcPer162Value(b[baseField], b.g);
       } else if (filters.sortBy === 'hrPer9' && type === 'batting') {
         // HR/9 for batting (different from pitching's existing hrPer9)
         av = calcPer9Value(a.hr, a.g);
@@ -485,7 +494,18 @@ function StatsPage() {
     return { L: ((counts.L / total) * 100).toFixed(0), S: ((counts.S / total) * 100).toFixed(0), R: ((counts.R / total) * 100).toFixed(0) };
   };
 
-  const filteredTournaments = tournaments.filter(t => (t.category || 'tournaments') === sidebarTab);
+  // Helper to get CSV count for data quality indicator
+  const getCsvCount = (t) => (t.uploadedHashes?.length || 0);
+  const getDataQuality = (count) => {
+    if (count >= 31) return { label: 'HIGH DATA', color: '#22C55E', bg: '#22C55E20' };
+    if (count >= 21) return { label: 'MED DATA', color: '#F59E0B', bg: '#F59E0B20' };
+    return { label: 'LOW DATA', color: '#EF4444', bg: '#EF4444' };
+  };
+
+  const filteredTournaments = tournaments
+    .filter(t => (t.category || 'tournaments') === sidebarTab)
+    .filter(t => !tournamentSearch || t.name.toLowerCase().includes(tournamentSearch.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
   const filteredData = selectedTournament ? getFilteredData(selectedTournament[activeTab], activeTab) : [];
   const totalData = selectedTournament ? selectedTournament[activeTab].length : 0;
@@ -502,16 +522,24 @@ function StatsPage() {
             <h2 style={styles.sidebarTitle}>{sidebarTab === 'drafts' ? 'Drafts' : 'Tournaments'}</h2>
             <button style={hasAccess('upload') ? styles.addBtn : styles.addBtnLocked} onClick={() => hasAccess('upload') ? setShowNewTournament(true) : requestAuth(() => setShowNewTournament(true), 'upload')}>{hasAccess('upload') ? '+ New' : '🔒 New'}</button>
           </div>
+          <input type="text" placeholder="Search tournaments..." value={tournamentSearch} onChange={(e) => setTournamentSearch(e.target.value)} style={{...styles.input, marginBottom: 12, width: '100%'}} />
           {showNewTournament && (<div style={styles.newForm}>
             <input type="text" placeholder="Name..." value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createTournament()} style={styles.input} autoFocus />
             <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => setShowNewTournament(false)} style={styles.cancelBtn}>Cancel</button></div>
           </div>)}
           <div style={styles.tournamentList}>
             {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
-              filteredTournaments.map(t => (<div key={t.id} style={{...styles.tournamentItem, ...(selectedTournament?.id === t.id ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
-                <div style={styles.tournamentInfo}><span style={styles.tournamentName}>{t.name}</span><span style={styles.tournamentStats}>{t.batting.length} bat · {t.pitching.length} pitch</span></div>
-                <button style={hasAccess('master') ? styles.delBtn : styles.delBtnLocked} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }} title={hasAccess('master') ? 'Delete' : 'Master password required'}>{hasAccess('master') ? '×' : '🔒'}</button>
-              </div>))}
+              filteredTournaments.map(t => {
+                const csvCount = getCsvCount(t);
+                const quality = getDataQuality(csvCount);
+                return (<div key={t.id} style={{...styles.tournamentItem, ...(selectedTournament?.id === t.id ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', flex: 1 }}>
+                    <div style={{ padding: '2px 6px', borderRadius: 4, background: quality.bg, color: quality.color, fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap' }}>{quality.label}</div>
+                    <div style={styles.tournamentInfo}><span style={styles.tournamentName}>{t.name}</span><span style={styles.tournamentStats}>{t.batting.length} bat · {t.pitching.length} pitch · {csvCount} CSVs</span></div>
+                  </div>
+                  <button style={hasAccess('master') ? styles.delBtn : styles.delBtnLocked} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }} title={hasAccess('master') ? 'Delete' : 'Master password required'}>{hasAccess('master') ? '×' : '🔒'}</button>
+                </div>);
+              })}
           </div>
         </aside>
         <div style={styles.content}>
@@ -537,14 +565,14 @@ function StatsPage() {
                 {(activeTab === 'pitching' ? pitchingPositions : battingPositions).map(pos => (<option key={pos} value={pos}>{pos === 'all' ? 'All Positions' : pos}</option>))}
               </select>
               <button style={{...styles.advancedFilterBtn, ...(showAdvancedFilters ? styles.advancedFilterBtnActive : {}), ...(getActiveFilterCount() > 0 ? styles.advancedFilterBtnHasFilters : {})}} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>🎚️ Filters {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}</button>
-              <button style={{...styles.per9Toggle, ...(showPer9 ? styles.per9ToggleActive : {})}} onClick={() => setShowPer9(!showPer9)} title="Show per-9 innings calculations (recommended)">📊 Per-9 {showPer9 ? 'ON' : 'OFF'}</button>
+              <button style={{...styles.per9Toggle, ...(showPer9 ? styles.per9ToggleActive : {})}} onClick={() => setShowPer9(!showPer9)} title="Show advanced per-162 game calculations">📊 Advanced Stats {showPer9 ? 'ON' : 'OFF'}</button>
               {getActiveFilterCount() > 0 && <button style={styles.resetBtn} onClick={resetFilters}>Reset All</button>}
             </div>
             {showAdvancedFilters && (<div style={styles.advancedFilters}><div style={styles.filterGroup}>
               <StatFilter label="Games (G)" filter={filters.gFilter} onChange={(u) => updateStatFilter('gFilter', u)} theme={theme} />
               {activeTab === 'batting' ? (<><StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} theme={theme} /><StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} theme={theme} /></>) : (<StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} theme={theme} />)}
             </div></div>)}
-            <div style={styles.resultsCount}>Showing {filteredData.length} of {totalData} players {showPer9 && <span style={styles.per9Hint}>• Per-9 stats enabled (recommended)</span>}</div>
+            <div style={styles.resultsCount}>Showing {filteredData.length} of {totalData} players {showPer9 && <span style={styles.per9Hint}>• Advanced stats enabled</span>}</div>
             <div style={styles.tableContainer}>
               {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} />}
             </div>
@@ -744,17 +772,17 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const SortHeaderPer9 = ({ field, children }) => (<th style={styles.thPer9} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const calcIPperG = (ip, g) => { if (!g) return '0.00'; const str = String(ip); let n = str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; return (n / g).toFixed(2); };
-  const calcPer9 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 9).toFixed(2); };
+  const calcPer162 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 162).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="hPer9">H/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer9">WAR/9</SortHeaderPer9>}<SortHeader field="siera">SIERA</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader><SortHeader field="bf">BF</SortHeader><SortHeader field="era">ERA</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="whip">WHIP</SortHeader><SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader><SortHeader field="hPer9">H/9</SortHeader><SortHeader field="bbPer9">BB/9</SortHeader><SortHeader field="kPer9">K/9</SortHeader><SortHeader field="lobPct">LOB%</SortHeader><SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer162">WAR/162</SortHeaderPer9>}<SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td>
       <td style={styles.td}>{p.vari}</td><td style={styles.td}>{p.g}</td><td style={styles.td}>{p.gs}</td><td style={styles.td}>{p.ip}</td><td style={styles.tdStat}>{calcIPperG(p.ip, p.g)}</td><td style={styles.td}>{p.bf}</td><td style={styles.tdStat}>{p.era}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.whip}</td><td style={styles.tdStat}>{p.braPer9}</td><td style={styles.tdStat}>{p.hrPer9}</td><td style={styles.tdStat}>{p.hPer9}</td><td style={styles.tdStat}>{p.bbPer9}</td><td style={styles.tdStat}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td><td style={styles.tdStat}>{p.eraPlus}</td><td style={styles.tdStat}>{p.fip}</td><td style={styles.tdStat}>{p.fipMinus}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
-      {showPer9 && <td style={styles.tdPer9}>{calcPer9(p.war, p.g)}</td>}
+      {showPer9 && <td style={styles.tdPer9}>{calcPer162(p.war, p.g)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.siera) < 3.90 ? '#22C55E' : parseFloat(p.siera) > 3.90 ? '#EF4444' : styles.tdStat.color}}>{p.siera}</td>
     </tr>))}
   </tbody></table>);
@@ -764,10 +792,11 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const SortHeaderPer9 = ({ field, children }) => (<th style={styles.thPer9} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
+  const calcPer162 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 162).toFixed(2); };
   const calcPer9 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 9).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader>{showPer9 && <SortHeaderPer9 field="hrPer9">HR/9</SortHeaderPer9>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader>{showPer9 && <SortHeaderPer9 field="soPer9">SO/9</SortHeaderPer9>}<SortHeader field="gidp">GIDP</SortHeader>{showPer9 && <SortHeaderPer9 field="gidpPer9">GIDP/9</SortHeaderPer9>}<SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeaderPer9 field="wraaPer9">wRAA/9</SortHeaderPer9>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer9">WAR/9</SortHeaderPer9>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeaderPer9 field="bsrPer9">BsR/9</SortHeaderPer9>}
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="g">G</SortHeader><SortHeader field="gs">GS</SortHeader><SortHeader field="pa">PA</SortHeader><SortHeader field="ab">AB</SortHeader><SortHeader field="h">H</SortHeader><SortHeader field="doubles">2B</SortHeader><SortHeader field="triples">3B</SortHeader><SortHeader field="hr">HR</SortHeader>{showPer9 && <SortHeaderPer9 field="hrPer9">HR/9</SortHeaderPer9>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader>{showPer9 && <SortHeaderPer9 field="soPer9">SO/9</SortHeaderPer9>}<SortHeader field="gidp">GIDP</SortHeader>{showPer9 && <SortHeaderPer9 field="gidpPer9">GIDP/9</SortHeaderPer9>}<SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeaderPer9 field="wraaPer9">wRAA/9</SortHeaderPer9>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer162">WAR/162</SortHeaderPer9>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeaderPer9 field="bsrPer162">BsR/162</SortHeaderPer9>}
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td>
@@ -776,8 +805,8 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9 }) {
       <td style={{...styles.tdStat, color: parseFloat(p.woba) > 0.320 ? '#22C55E' : parseFloat(p.woba) < 0.320 ? '#EF4444' : styles.tdStat.color}}>{p.woba}</td>
       <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.wraa, p.g)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
-      {showPer9 && <td style={styles.tdPer9}>{calcPer9(p.war, p.g)}</td>}
-      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.bsr, p.g)}</td>}
+      {showPer9 && <td style={styles.tdPer9}>{calcPer162(p.war, p.g)}</td>}
+      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer162(p.bsr, p.g)}</td>}
     </tr>))}
   </tbody></table>);
 }
