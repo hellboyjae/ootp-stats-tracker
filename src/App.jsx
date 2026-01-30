@@ -1,4 +1,4 @@
-mport React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
