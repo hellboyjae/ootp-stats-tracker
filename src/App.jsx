@@ -434,34 +434,23 @@ function StatsPage() {
     if (type === 'batting') { f = f.filter(p => passesFilter(p.pa, filters.paFilter) && passesFilter(p.ab, filters.abFilter)); }
     else { f = f.filter(p => passesFilter(parseIP(p.ip), filters.ipFilter)); }
     
-    // Handle Per-9 and advanced stats sorting
-    const calcPer9Value = (val, g) => (!g || g === 0) ? 0 : parseFloat(val || 0) / g * 9;
+    // Handle advanced stats sorting
     const calcPer600PA = (val, pa) => { const paNum = parseFloat(pa) || 0; return (!paNum || paNum === 0) ? 0 : parseFloat(val || 0) / paNum * 600; };
     const parseIPValue = (ip) => { const str = String(ip); return str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; };
     const calcWarPer200IP = (war, ip) => { const ipNum = parseIPValue(ip); return (!ipNum || ipNum === 0) ? 0 : parseFloat(war || 0) / ipNum * 200; };
     
-    const per9Fields = {
-      gidpPer9: 'gidp',
-      wraaPer9: 'wraa'
-    };
-    
     f.sort((a, b) => {
       let av, bv;
-      if (per9Fields[filters.sortBy]) {
-        // Sorting by a per-9 field
-        const baseField = per9Fields[filters.sortBy];
-        av = calcPer9Value(a[baseField], a.g);
-        bv = calcPer9Value(b[baseField], b.g);
-      } else if (filters.sortBy === 'warPer600PA' && type === 'batting') {
-        // WAR/600PA for batters
+      if (filters.sortBy === 'warPer600PA' && type === 'batting') {
         av = calcPer600PA(a.war, a.pa);
         bv = calcPer600PA(b.war, b.pa);
       } else if (filters.sortBy === 'bsrPer600PA' && type === 'batting') {
-        // BsR/600PA for batters
         av = calcPer600PA(a.bsr, a.pa);
         bv = calcPer600PA(b.bsr, b.pa);
+      } else if (filters.sortBy === 'wraaPer600PA' && type === 'batting') {
+        av = calcPer600PA(a.wraa, a.pa);
+        bv = calcPer600PA(b.wraa, b.pa);
       } else if (filters.sortBy === 'warPer200IP' && type === 'pitching') {
-        // WAR/200IP for pitchers
         av = calcWarPer200IP(a.war, a.ip);
         bv = calcWarPer200IP(b.war, b.ip);
       } else {
@@ -795,22 +784,20 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   const styles = getStyles(theme);
   const SortHeader = ({ field, children }) => (<th style={styles.th} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
   const SortHeaderPer9 = ({ field, children }) => (<th style={styles.thPer9} onClick={() => onSort(field)}>{children} {sortBy === field && (sortDir === 'asc' ? '↑' : '↓')}</th>);
-  const calcPer9 = (val, g) => { if (!g || g === 0) return '0.00'; return (parseFloat(val || 0) / g * 9).toFixed(2); };
-  const calcWarPer600PA = (war, pa) => { const paNum = parseFloat(pa) || 0; if (!paNum || paNum === 0) return '0.00'; return (parseFloat(war || 0) / paNum * 600).toFixed(2); };
-  const calcBsrPer600PA = (bsr, pa) => { const paNum = parseFloat(pa) || 0; if (!paNum || paNum === 0) return '0.00'; return (parseFloat(bsr || 0) / paNum * 600).toFixed(2); };
+  const calcPer600PA = (val, pa) => { const paNum = parseFloat(pa) || 0; if (!paNum || paNum === 0) return '0.00'; return (parseFloat(val || 0) / paNum * 600).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>{showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="pa">PA</SortHeader>{showTraditional && <SortHeader field="ab">AB</SortHeader>}{showTraditional && <SortHeader field="h">H</SortHeader>}{showTraditional && <SortHeader field="doubles">2B</SortHeader>}{showTraditional && <SortHeader field="triples">3B</SortHeader>}{showTraditional && <SortHeader field="hr">HR</SortHeader>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="gidp">GIDP</SortHeader>{showPer9 && <SortHeaderPer9 field="gidpPer9">GIDP/9</SortHeaderPer9>}<SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeaderPer9 field="wraaPer9">wRAA/9</SortHeaderPer9>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer600PA">WAR/600PA</SortHeaderPer9>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeaderPer9 field="bsrPer600PA">BsR/600PA</SortHeaderPer9>}
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>{showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="pa">PA</SortHeader>{showTraditional && <SortHeader field="ab">AB</SortHeader>}{showTraditional && <SortHeader field="h">H</SortHeader>}{showTraditional && <SortHeader field="doubles">2B</SortHeader>}{showTraditional && <SortHeader field="triples">3B</SortHeader>}{showTraditional && <SortHeader field="hr">HR</SortHeader>}<SortHeader field="bbPct">BB%</SortHeader><SortHeader field="so">SO</SortHeader><SortHeader field="gidp">GIDP</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader><SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader><SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeaderPer9 field="wraaPer600PA">wRAA/600PA</SortHeaderPer9>}<SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeaderPer9 field="warPer600PA">WAR/600PA</SortHeaderPer9>}<SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeaderPer9 field="bsrPer600PA">BsR/600PA</SortHeaderPer9>}
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
       <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td>
-      <td style={styles.td}>{p.vari}</td>{showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>{showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}{showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td><td style={styles.td}>{p.gidp}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.gidp, p.g)}</td>}<td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
+      <td style={styles.td}>{p.vari}</td>{showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>{showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}{showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td><td style={styles.td}>{p.so}</td><td style={styles.td}>{p.gidp}</td><td style={styles.tdStat}>{p.avg}</td><td style={styles.tdStat}>{p.obp}</td><td style={styles.tdStat}>{p.slg}</td>
       <td style={{...styles.tdStat, color: parseFloat(p.woba) > 0.320 ? '#22C55E' : parseFloat(p.woba) < 0.320 ? '#EF4444' : styles.tdStat.color}}>{p.woba}</td>
-      <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer9(p.wraa, p.g)}</td>}
+      <td style={styles.tdStat}>{p.ops}</td><td style={styles.tdStat}>{p.opsPlus}</td><td style={styles.tdStat}>{p.babip}</td><td style={styles.tdStat}>{p.wrcPlus}</td><td style={styles.tdStat}>{p.wraa}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer600PA(p.wraa, p.pa)}</td>}
       <td style={{...styles.tdStat, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444'}}>{p.war}</td>
-      {showPer9 && <td style={styles.tdPer9}>{calcWarPer600PA(p.war, p.pa)}</td>}
-      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcBsrPer600PA(p.bsr, p.pa)}</td>}
+      {showPer9 && <td style={styles.tdPer9}>{calcPer600PA(p.war, p.pa)}</td>}
+      <td style={styles.td}>{p.sbPct}</td><td style={styles.tdStat}>{p.bsr}</td>{showPer9 && <td style={styles.tdPer9}>{calcPer600PA(p.bsr, p.pa)}</td>}
     </tr>))}
   </tbody></table>);
 }
