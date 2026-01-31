@@ -141,6 +141,7 @@ function StatsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showNewTournament, setShowNewTournament] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState('');
+  const [newTournamentType, setNewTournamentType] = useState('daily');
   const [filters, setFilters] = useState({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
   const [showPer9, setShowPer9] = useState(false);
   const [showTraditional, setShowTraditional] = useState(true);
@@ -148,6 +149,9 @@ function StatsPage() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('tournaments');
   const [tournamentSearch, setTournamentSearch] = useState('');
+  const [showMissingData, setShowMissingData] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -156,7 +160,17 @@ function StatsPage() {
     try {
       const { data, error } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      const parsed = (data || []).map(t => ({ id: t.id, name: t.name, createdAt: t.created_at, category: t.category || 'tournaments', batting: t.batting || [], pitching: t.pitching || [], uploadedHashes: t.uploaded_hashes || [] }));
+      const parsed = (data || []).map(t => ({ 
+        id: t.id, 
+        name: t.name, 
+        createdAt: t.created_at, 
+        category: t.category || 'tournaments', 
+        batting: t.batting || [], 
+        pitching: t.pitching || [], 
+        uploadedHashes: t.uploaded_hashes || [],
+        eventType: t.event_type || 'daily',
+        uploadedDates: t.uploaded_dates || []
+      }));
       setTournaments(parsed);
       const lastSelectedId = localStorage.getItem('selectedTournamentId');
       if (lastSelectedId) { const found = parsed.find(t => t.id === lastSelectedId); if (found) { setSelectedTournament(found); setSidebarTab(found.category || 'tournaments'); } }
@@ -166,14 +180,25 @@ function StatsPage() {
 
   const saveTournament = async (tournament) => {
     try { 
-      const payload = { id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching };
+      const payload = { 
+        id: tournament.id, 
+        name: tournament.name, 
+        created_at: tournament.createdAt, 
+        category: tournament.category, 
+        batting: tournament.batting, 
+        pitching: tournament.pitching,
+        event_type: tournament.eventType || 'daily',
+        uploaded_dates: tournament.uploadedDates || []
+      };
       if (tournament.uploadedHashes !== undefined) payload.uploaded_hashes = tournament.uploadedHashes;
       const { error } = await supabase.from('tournaments').upsert(payload);
       if (error) {
-        if (error.message?.includes('uploaded_hashes')) {
-          const { error: retryError } = await supabase.from('tournaments').upsert({ id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching });
-          if (retryError) showNotif('Save failed', 'error');
-        } else showNotif('Save failed', 'error');
+        console.error('Save error:', error);
+        // Fallback without new columns if they don't exist yet
+        const fallbackPayload = { id: tournament.id, name: tournament.name, created_at: tournament.createdAt, category: tournament.category, batting: tournament.batting, pitching: tournament.pitching };
+        if (tournament.uploadedHashes !== undefined) fallbackPayload.uploaded_hashes = tournament.uploadedHashes;
+        const { error: retryError } = await supabase.from('tournaments').upsert(fallbackPayload);
+        if (retryError) showNotif('Save failed', 'error');
       }
     } catch (e) { showNotif('Save failed', 'error'); }
   };
@@ -183,9 +208,26 @@ function StatsPage() {
   const createTournament = () => {
     if (!newTournamentName.trim()) return;
     requestAuth(async () => {
-      const newT = { id: crypto.randomUUID(), name: newTournamentName.trim(), createdAt: new Date().toISOString(), category: sidebarTab, batting: [], pitching: [], uploadedHashes: [] };
-      await saveTournament(newT); setTournaments([newT, ...tournaments]); setSelectedTournament(newT);
-      localStorage.setItem('selectedTournamentId', newT.id); setNewTournamentName(''); setShowNewTournament(false);
+      const typeLabel = newTournamentType === 'daily' ? '[Daily]' : '[Weekly]';
+      const fullName = `${typeLabel} ${newTournamentName.trim()}`;
+      const newT = { 
+        id: crypto.randomUUID(), 
+        name: fullName, 
+        createdAt: new Date().toISOString(), 
+        category: sidebarTab, 
+        batting: [], 
+        pitching: [], 
+        uploadedHashes: [],
+        eventType: newTournamentType,
+        uploadedDates: []
+      };
+      await saveTournament(newT); 
+      setTournaments([newT, ...tournaments]); 
+      setSelectedTournament(newT);
+      localStorage.setItem('selectedTournamentId', newT.id); 
+      setNewTournamentName(''); 
+      setNewTournamentType('daily');
+      setShowNewTournament(false);
       showNotif('Created!');
     }, 'upload');
   };
@@ -311,12 +353,23 @@ function StatsPage() {
       if (file.size > MAX_FILE_SIZE) { showNotif('File too large', 'error'); event.target.value = ''; return; }
       if (!file.name.toLowerCase().endsWith('.csv')) { showNotif('Not a CSV', 'error'); event.target.value = ''; return; }
     }
+    // Store files and show date picker
+    setPendingUploadFiles(files);
+    setShowDatePicker(true);
+    event.target.value = '';
+  };
+
+  const processUploadWithDate = async (selectedDate) => {
+    if (!pendingUploadFiles || !selectedTournament) return;
+    
     requestAuth(async () => {
       try {
         let currentTournament = { ...selectedTournament };
         let uploadedHashes = [...(currentTournament.uploadedHashes || [])];
+        let uploadedDates = [...(currentTournament.uploadedDates || [])];
         let totalBatting = 0, totalPitching = 0, skippedDupes = 0;
-        for (const file of files) {
+        
+        for (const file of pendingUploadFiles) {
           const fileContent = await file.text();
           const fileHash = await hashContent(fileContent);
           if (uploadedHashes.includes(fileHash)) { skippedDupes++; continue; }
@@ -333,7 +386,14 @@ function StatsPage() {
           if (validation.type === 'batting') totalBatting += processed.length;
           else totalPitching += processed.length;
         }
+        
+        // Add the selected date to uploadedDates if not already present
+        if (selectedDate && !uploadedDates.includes(selectedDate)) {
+          uploadedDates.push(selectedDate);
+        }
+        
         currentTournament.uploadedHashes = uploadedHashes;
+        currentTournament.uploadedDates = uploadedDates;
         await saveTournament(currentTournament);
         setTournaments(tournaments.map(t => t.id === selectedTournament.id ? currentTournament : t));
         setSelectedTournament(currentTournament);
@@ -341,9 +401,52 @@ function StatsPage() {
         if (skippedDupes) msg += ` (${skippedDupes} dupes skipped)`;
         showNotif(msg, (!totalBatting && !totalPitching) ? 'error' : undefined);
       } catch (e) { showNotif('Upload error', 'error'); }
-      event.target.value = '';
+      setPendingUploadFiles(null);
+      setShowDatePicker(false);
     });
-    event.target.value = '';
+  };
+
+  // Helper to get Pacific Time date
+  const getPacificDate = (date = new Date()) => {
+    return new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  };
+
+  // Generate 21-day calendar starting from today (Pacific Time)
+  const generate21DayCalendar = () => {
+    const today = getPacificDate();
+    today.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 0; i < 21; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      days.push({
+        date: date,
+        dateStr: date.toISOString().split('T')[0],
+        dayOfMonth: date.getDate(),
+        dayOfWeek: date.getDay(),
+        weekNum: Math.floor(i / 7)
+      });
+    }
+    return days;
+  };
+
+  // Check if a date has data uploaded
+  const hasDataForDate = (dateStr, uploadedDates, eventType) => {
+    if (!uploadedDates || uploadedDates.length === 0) return false;
+    if (eventType === 'weekly') {
+      // For weekly events, check if any date in the same week has been uploaded
+      const targetDate = new Date(dateStr);
+      const targetWeekStart = new Date(targetDate);
+      targetWeekStart.setDate(targetDate.getDate() - targetDate.getDay());
+      
+      return uploadedDates.some(ud => {
+        const uploadDate = new Date(ud);
+        const uploadWeekStart = new Date(uploadDate);
+        uploadWeekStart.setDate(uploadDate.getDate() - uploadDate.getDay());
+        return uploadWeekStart.toISOString().split('T')[0] === targetWeekStart.toISOString().split('T')[0];
+      });
+    }
+    return uploadedDates.includes(dateStr);
   };
 
   const passesFilter = (v, f) => { if (!f.enabled) return true; const nv = parseFloat(v) || 0, fv = parseFloat(f.value) || 0; return f.operator === '>' ? nv > fv : f.operator === '>=' ? nv >= fv : f.operator === '=' ? nv === fv : f.operator === '<=' ? nv <= fv : nv < fv; };
@@ -408,8 +511,18 @@ function StatsPage() {
           </div>
           <input type="text" placeholder="Search..." value={tournamentSearch} onChange={(e) => setTournamentSearch(e.target.value)} style={styles.sidebarSearch} />
           {showNewTournament && (<div style={styles.newForm}>
-            <input type="text" placeholder="Name..." value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createTournament()} style={styles.input} autoFocus />
-            <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => setShowNewTournament(false)} style={styles.cancelBtn}>Cancel</button></div>
+            <input type="text" placeholder="Event name..." value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createTournament()} style={styles.input} autoFocus />
+            <div style={styles.eventTypeSelector}>
+              <button 
+                style={{...styles.eventTypeBtn, ...(newTournamentType === 'daily' ? styles.eventTypeBtnActive : {})}} 
+                onClick={() => setNewTournamentType('daily')}
+              >Daily</button>
+              <button 
+                style={{...styles.eventTypeBtn, ...(newTournamentType === 'weekly' ? styles.eventTypeBtnActive : {})}} 
+                onClick={() => setNewTournamentType('weekly')}
+              >Weekly</button>
+            </div>
+            <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => { setShowNewTournament(false); setNewTournamentType('daily'); }} style={styles.cancelBtn}>Cancel</button></div>
           </div>)}
           <div style={styles.tournamentList}>
             {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
@@ -439,8 +552,97 @@ function StatsPage() {
                   </div>
                 )}
               </div>
-              <label style={styles.uploadBtn}><span>{hasAccess('upload') ? '↑ Upload CSV' : '🔒 Upload'}</span><input type="file" accept=".csv" multiple onChange={handleFileUpload} style={{display:'none'}} /></label>
+              <div style={styles.headerActions}>
+                <button style={styles.missingDataBtn} onClick={() => setShowMissingData(true)} title="View missing data calendar">📅 Missing Data</button>
+                <label style={styles.uploadBtn}><span>{hasAccess('upload') ? '↑ Upload CSV' : '🔒 Upload'}</span><input type="file" accept=".csv" multiple onChange={handleFileUpload} style={{display:'none'}} /></label>
+              </div>
             </div>
+            
+            {/* Date Picker Modal */}
+            {showDatePicker && (
+              <div style={styles.modalOverlay}>
+                <div style={styles.datePickerModal}>
+                  <h3 style={styles.modalTitle}>Select Data Date</h3>
+                  <p style={styles.modalText}>What date is this CSV data for?</p>
+                  <div style={styles.datePickerGrid}>
+                    {generate21DayCalendar().map((day, idx) => {
+                      const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
+                      return (
+                        <button 
+                          key={idx} 
+                          style={{
+                            ...styles.datePickerDay,
+                            ...(day.dayOfWeek === 0 ? styles.datePickerSunday : {}),
+                            ...(isUploaded ? styles.datePickerDayUploaded : {})
+                          }}
+                          onClick={() => processUploadWithDate(day.dateStr)}
+                        >
+                          <span style={styles.datePickerDayNum}>{day.dayOfMonth}</span>
+                          <span style={styles.datePickerDayLabel}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day.dayOfWeek]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={styles.modalBtns}>
+                    <button onClick={() => { setShowDatePicker(false); setPendingUploadFiles(null); }} style={styles.cancelBtn}>Cancel</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Missing Data Calendar Modal */}
+            {showMissingData && (
+              <div style={styles.modalOverlay}>
+                <div style={styles.missingDataModal}>
+                  <h3 style={styles.modalTitle}>📅 Missing Data Calendar</h3>
+                  <p style={styles.modalText}>
+                    {selectedTournament.eventType === 'weekly' ? 'Weekly event - one upload covers entire week' : 'Daily event - one upload per day'}
+                  </p>
+                  <div style={styles.calendarContainer}>
+                    <div style={styles.calendarHeader}>
+                      <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                    </div>
+                    <div style={styles.calendarGrid}>
+                      {(() => {
+                        const days = generate21DayCalendar();
+                        // Pad beginning to align with day of week
+                        const firstDayOfWeek = days[0].dayOfWeek;
+                        const paddedDays = [...Array(firstDayOfWeek).fill(null), ...days];
+                        
+                        return paddedDays.map((day, idx) => {
+                          if (!day) return <div key={idx} style={styles.calendarDayEmpty}></div>;
+                          
+                          const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
+                          const isWeeklyFirstDay = selectedTournament.eventType === 'weekly' && day.dayOfWeek === 0;
+                          
+                          return (
+                            <div 
+                              key={idx} 
+                              style={{
+                                ...styles.calendarDay,
+                                ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
+                                ...(isWeeklyFirstDay ? styles.calendarWeekStart : {})
+                              }}
+                              title={isUploaded ? 'Data uploaded' : "Missing this day's data. Please submit a CSV if you have history for this event."}
+                            >
+                              <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
+                              <span style={styles.calendarDayStatus}>{isUploaded ? '✓' : '??'}</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                  <div style={styles.calendarLegend}>
+                    <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.success}}/> Uploaded</span>
+                    <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.warning}}/> Missing</span>
+                  </div>
+                  <div style={styles.modalBtns}>
+                    <button onClick={() => setShowMissingData(false)} style={styles.saveBtn}>Close</button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={styles.tabRow}>
               <div style={styles.tabs}>
                 <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching.length}</span></button>
@@ -838,5 +1040,39 @@ function getStyles(t) {
     videoPlayerContainer: { position: 'relative', width: '90%', maxWidth: 1000, aspectRatio: '16/9' },
     videoPlayer: { width: '100%', height: '100%', borderRadius: 6 },
     closePlayerBtn: { position: 'absolute', top: -40, right: 0, background: 'transparent', color: '#fff', border: 'none', fontSize: 32, cursor: 'pointer' },
+    
+    // Event type selector
+    eventTypeSelector: { display: 'flex', gap: 8, marginBottom: 10 },
+    eventTypeBtn: { flex: 1, padding: '8px 12px', background: t.inputBg, color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12, transition: 'all 0.15s' },
+    eventTypeBtnActive: { background: t.accent, color: '#fff', borderColor: t.accent },
+    
+    // Header actions
+    headerActions: { display: 'flex', gap: 10, alignItems: 'center' },
+    missingDataBtn: { padding: '8px 14px', background: t.panelBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 },
+    
+    // Date picker modal
+    datePickerModal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.border}`, maxWidth: 500, width: '95%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
+    datePickerGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 20 },
+    datePickerDay: { padding: '12px 8px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' },
+    datePickerDayUploaded: { background: `${t.success}20`, borderColor: t.success },
+    datePickerSunday: { borderLeft: `3px solid ${t.accent}` },
+    datePickerDayNum: { display: 'block', fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    datePickerDayLabel: { display: 'block', fontSize: 10, color: t.textDim, marginTop: 2 },
+    
+    // Missing data modal
+    missingDataModal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.border}`, maxWidth: 450, width: '95%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
+    calendarContainer: { marginBottom: 20 },
+    calendarHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8, textAlign: 'center', fontSize: 11, fontWeight: 600, color: t.textDim, textTransform: 'uppercase' },
+    calendarGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 },
+    calendarDay: { aspectRatio: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'default', transition: 'all 0.15s' },
+    calendarDayEmpty: { aspectRatio: '1' },
+    calendarDayComplete: { background: `${t.success}20`, border: `1px solid ${t.success}` },
+    calendarDayMissing: { background: `${t.warning}20`, border: `1px solid ${t.warning}` },
+    calendarWeekStart: { borderLeft: `3px solid ${t.accent}` },
+    calendarDayNum: { fontSize: 14, fontWeight: 600, color: t.textPrimary },
+    calendarDayStatus: { fontSize: 12, marginTop: 2 },
+    calendarLegend: { display: 'flex', gap: 20, justifyContent: 'center', marginBottom: 16 },
+    legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.textSecondary },
+    legendDot: { width: 12, height: 12, borderRadius: '50%' },
   };
 }
