@@ -411,7 +411,7 @@ function StatsPage() {
     return new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   };
 
-  // Generate 21-day calendar starting from today (Pacific Time)
+  // Generate 21-day calendar starting from today (Pacific Time) - exactly 3 weeks
   const generate21DayCalendar = () => {
     const today = getPacificDate();
     today.setHours(0, 0, 0, 0);
@@ -419,12 +419,18 @@ function StatsPage() {
     for (let i = 0; i < 21; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
+      // Format date string in Pacific timezone to avoid UTC conversion issues
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       days.push({
         date: date,
-        dateStr: date.toISOString().split('T')[0],
+        dateStr: dateStr,
         dayOfMonth: date.getDate(),
         dayOfWeek: date.getDay(),
-        weekNum: Math.floor(i / 7)
+        weekNum: Math.floor(i / 7),
+        isToday: i === 0
       });
     }
     return days;
@@ -435,18 +441,40 @@ function StatsPage() {
     if (!uploadedDates || uploadedDates.length === 0) return false;
     if (eventType === 'weekly') {
       // For weekly events, check if any date in the same week has been uploaded
-      const targetDate = new Date(dateStr);
+      const targetDate = new Date(dateStr + 'T12:00:00');
       const targetWeekStart = new Date(targetDate);
       targetWeekStart.setDate(targetDate.getDate() - targetDate.getDay());
       
       return uploadedDates.some(ud => {
-        const uploadDate = new Date(ud);
+        const uploadDate = new Date(ud + 'T12:00:00');
         const uploadWeekStart = new Date(uploadDate);
         uploadWeekStart.setDate(uploadDate.getDate() - uploadDate.getDay());
-        return uploadWeekStart.toISOString().split('T')[0] === targetWeekStart.toISOString().split('T')[0];
+        return uploadWeekStart.toDateString() === targetWeekStart.toDateString();
       });
     }
     return uploadedDates.includes(dateStr);
+  };
+
+  // Admin function to toggle date status
+  const toggleDateStatus = async (dateStr) => {
+    if (!hasAccess('master')) return;
+    
+    let currentTournament = { ...selectedTournament };
+    let uploadedDates = [...(currentTournament.uploadedDates || [])];
+    
+    if (uploadedDates.includes(dateStr)) {
+      // Remove the date
+      uploadedDates = uploadedDates.filter(d => d !== dateStr);
+    } else {
+      // Add the date
+      uploadedDates.push(dateStr);
+    }
+    
+    currentTournament.uploadedDates = uploadedDates;
+    await saveTournament(currentTournament);
+    setTournaments(tournaments.map(t => t.id === selectedTournament.id ? currentTournament : t));
+    setSelectedTournament(currentTournament);
+    showNotif(uploadedDates.includes(dateStr) ? 'Date marked as uploaded' : 'Date marked as missing');
   };
 
   const passesFilter = (v, f) => { if (!f.enabled) return true; const nv = parseFloat(v) || 0, fv = parseFloat(f.value) || 0; return f.operator === '>' ? nv > fv : f.operator === '>=' ? nv >= fv : f.operator === '=' ? nv === fv : f.operator === '<=' ? nv <= fv : nv < fv; };
@@ -597,36 +625,105 @@ function StatsPage() {
                   <h3 style={styles.modalTitle}>📅 Missing Data Calendar</h3>
                   <p style={styles.modalText}>
                     {selectedTournament.eventType === 'weekly' ? 'Weekly event - one upload covers entire week' : 'Daily event - one upload per day'}
+                    {hasAccess('master') && <span style={styles.adminHint}> • Click dates to toggle status</span>}
                   </p>
                   <div style={styles.calendarContainer}>
                     <div style={styles.calendarHeader}>
                       <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                     </div>
+                    {/* Week 1 */}
+                    <div style={styles.weekLabel}>Week 1 (Current)</div>
                     <div style={styles.calendarGrid}>
                       {(() => {
                         const days = generate21DayCalendar();
-                        // Pad beginning to align with day of week
-                        const firstDayOfWeek = days[0].dayOfWeek;
-                        const paddedDays = [...Array(firstDayOfWeek).fill(null), ...days];
+                        const week1 = days.slice(0, 7);
+                        const firstDayOfWeek = week1[0].dayOfWeek;
+                        const paddedWeek1 = [...Array(firstDayOfWeek).fill(null), ...week1];
+                        // Pad end to complete the row
+                        while (paddedWeek1.length < 7) paddedWeek1.push(null);
                         
-                        return paddedDays.map((day, idx) => {
-                          if (!day) return <div key={idx} style={styles.calendarDayEmpty}></div>;
-                          
+                        return paddedWeek1.slice(0, 7).map((day, idx) => {
+                          if (!day) return <div key={`w1-${idx}`} style={styles.calendarDayEmpty}></div>;
                           const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
-                          const isWeeklyFirstDay = selectedTournament.eventType === 'weekly' && day.dayOfWeek === 0;
-                          
                           return (
                             <div 
-                              key={idx} 
+                              key={`w1-${idx}`} 
                               style={{
                                 ...styles.calendarDay,
                                 ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
-                                ...(isWeeklyFirstDay ? styles.calendarWeekStart : {})
+                                ...(day.isToday ? styles.calendarDayToday : {}),
+                                ...(hasAccess('master') ? styles.calendarDayClickable : {})
                               }}
-                              title={isUploaded ? 'Data uploaded' : "Missing this day's data. Please submit a CSV if you have history for this event."}
+                              title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
+                              onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
                             >
                               <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
-                              <span style={styles.calendarDayStatus}>{isUploaded ? '✓' : '??'}</span>
+                              <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                    {/* Week 2 */}
+                    <div style={styles.weekLabel}>Week 2</div>
+                    <div style={styles.calendarGrid}>
+                      {(() => {
+                        const days = generate21DayCalendar();
+                        // Get days 7-13, but we need to figure out alignment
+                        const week1FirstDay = days[0].dayOfWeek;
+                        const daysInWeek1Grid = 7 - week1FirstDay;
+                        const week2Start = daysInWeek1Grid;
+                        const week2Days = days.slice(week2Start, week2Start + 7);
+                        
+                        return week2Days.map((day, idx) => {
+                          if (!day) return <div key={`w2-${idx}`} style={styles.calendarDayEmpty}></div>;
+                          const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
+                          return (
+                            <div 
+                              key={`w2-${idx}`} 
+                              style={{
+                                ...styles.calendarDay,
+                                ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
+                                ...(hasAccess('master') ? styles.calendarDayClickable : {})
+                              }}
+                              title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
+                              onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
+                            >
+                              <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
+                              <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                    {/* Week 3 */}
+                    <div style={styles.weekLabel}>Week 3</div>
+                    <div style={styles.calendarGrid}>
+                      {(() => {
+                        const days = generate21DayCalendar();
+                        const week1FirstDay = days[0].dayOfWeek;
+                        const daysInWeek1Grid = 7 - week1FirstDay;
+                        const week3Start = daysInWeek1Grid + 7;
+                        const week3Days = days.slice(week3Start, week3Start + 7);
+                        // Pad if needed
+                        while (week3Days.length < 7) week3Days.push(null);
+                        
+                        return week3Days.map((day, idx) => {
+                          if (!day) return <div key={`w3-${idx}`} style={styles.calendarDayEmpty}></div>;
+                          const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
+                          return (
+                            <div 
+                              key={`w3-${idx}`} 
+                              style={{
+                                ...styles.calendarDay,
+                                ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
+                                ...(hasAccess('master') ? styles.calendarDayClickable : {})
+                              }}
+                              title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
+                              onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
+                            >
+                              <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
+                              <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
                             </div>
                           );
                         });
@@ -636,6 +733,7 @@ function StatsPage() {
                   <div style={styles.calendarLegend}>
                     <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.success}}/> Uploaded</span>
                     <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.warning}}/> Missing</span>
+                    {hasAccess('master') && <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.accent}}/> Today</span>}
                   </div>
                   <div style={styles.modalBtns}>
                     <button onClick={() => setShowMissingData(false)} style={styles.saveBtn}>Close</button>
@@ -1060,19 +1158,23 @@ function getStyles(t) {
     datePickerDayLabel: { display: 'block', fontSize: 10, color: t.textDim, marginTop: 2 },
     
     // Missing data modal
-    missingDataModal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.border}`, maxWidth: 450, width: '95%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
+    missingDataModal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.border}`, maxWidth: 500, width: '95%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
     calendarContainer: { marginBottom: 20 },
     calendarHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8, textAlign: 'center', fontSize: 11, fontWeight: 600, color: t.textDim, textTransform: 'uppercase' },
-    calendarGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 },
-    calendarDay: { aspectRatio: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'default', transition: 'all 0.15s' },
+    calendarGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 12 },
+    weekLabel: { fontSize: 11, fontWeight: 600, color: t.textMuted, marginBottom: 6, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' },
+    calendarDay: { aspectRatio: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 6, transition: 'all 0.15s' },
     calendarDayEmpty: { aspectRatio: '1' },
-    calendarDayComplete: { background: `${t.success}20`, border: `1px solid ${t.success}` },
-    calendarDayMissing: { background: `${t.warning}20`, border: `1px solid ${t.warning}` },
+    calendarDayComplete: { background: `${t.success}20`, border: `2px solid ${t.success}` },
+    calendarDayMissing: { background: `${t.warning}15`, border: `2px solid ${t.warning}` },
+    calendarDayToday: { boxShadow: `0 0 0 2px ${t.accent}, 0 0 8px ${t.accent}50` },
+    calendarDayClickable: { cursor: 'pointer' },
     calendarWeekStart: { borderLeft: `3px solid ${t.accent}` },
-    calendarDayNum: { fontSize: 14, fontWeight: 600, color: t.textPrimary },
-    calendarDayStatus: { fontSize: 12, marginTop: 2 },
-    calendarLegend: { display: 'flex', gap: 20, justifyContent: 'center', marginBottom: 16 },
+    calendarDayNum: { fontSize: 15, fontWeight: 700, color: t.textPrimary },
+    calendarDayStatus: { fontSize: 13, marginTop: 2, fontWeight: 600 },
+    calendarLegend: { display: 'flex', gap: 20, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' },
     legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.textSecondary },
     legendDot: { width: 12, height: 12, borderRadius: '50%' },
+    adminHint: { color: t.accent, fontStyle: 'italic', fontSize: 12 },
   };
 }
