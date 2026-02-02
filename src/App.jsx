@@ -411,14 +411,15 @@ function StatsPage() {
     return new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   };
 
-  // Generate 21-day calendar starting from today (Pacific Time) - exactly 3 weeks
+  // Generate 21-day calendar going BACKWARDS from today (Pacific Time) - exactly 3 weeks
   const generate21DayCalendar = () => {
     const today = getPacificDate();
     today.setHours(0, 0, 0, 0);
     const days = [];
-    for (let i = 0; i < 21; i++) {
+    // Start from 20 days ago and go forward to today
+    for (let i = 20; i >= 0; i--) {
       const date = new Date(today);
-      date.setDate(today.getDate() + i);
+      date.setDate(today.getDate() - i);
       // Format date string in Pacific timezone to avoid UTC conversion issues
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -429,7 +430,7 @@ function StatsPage() {
         dateStr: dateStr,
         dayOfMonth: date.getDate(),
         dayOfWeek: date.getDay(),
-        weekNum: Math.floor(i / 7),
+        weekNum: Math.floor((20 - i) / 7),
         isToday: i === 0
       });
     }
@@ -632,7 +633,7 @@ function StatsPage() {
                       <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                     </div>
                     {/* Week 1 */}
-                    <div style={styles.weekLabel}>Week 1 (Current)</div>
+                    <div style={styles.weekLabel}>3 Weeks Ago</div>
                     <div style={styles.calendarGrid}>
                       {(() => {
                         const days = generate21DayCalendar();
@@ -665,7 +666,7 @@ function StatsPage() {
                       })()}
                     </div>
                     {/* Week 2 */}
-                    <div style={styles.weekLabel}>Week 2</div>
+                    <div style={styles.weekLabel}>2 Weeks Ago</div>
                     <div style={styles.calendarGrid}>
                       {(() => {
                         const days = generate21DayCalendar();
@@ -684,6 +685,7 @@ function StatsPage() {
                               style={{
                                 ...styles.calendarDay,
                                 ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
+                                ...(day.isToday ? styles.calendarDayToday : {}),
                                 ...(hasAccess('master') ? styles.calendarDayClickable : {})
                               }}
                               title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
@@ -697,7 +699,7 @@ function StatsPage() {
                       })()}
                     </div>
                     {/* Week 3 */}
-                    <div style={styles.weekLabel}>Week 3</div>
+                    <div style={styles.weekLabel}>This Week (Current)</div>
                     <div style={styles.calendarGrid}>
                       {(() => {
                         const days = generate21DayCalendar();
@@ -717,6 +719,7 @@ function StatsPage() {
                               style={{
                                 ...styles.calendarDay,
                                 ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
+                                ...(day.isToday ? styles.calendarDayToday : {}),
                                 ...(hasAccess('master') ? styles.calendarDayClickable : {})
                               }}
                               title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
