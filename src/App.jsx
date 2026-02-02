@@ -408,23 +408,34 @@ function StatsPage() {
 
   // Helper to get Pacific Time date
   const getPacificDate = (date = new Date()) => {
-    return new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    // Get current time in Pacific timezone
+    const pacificTime = new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    return pacificTime;
   };
 
   // Generate 21-day calendar going BACKWARDS from today (Pacific Time) - exactly 3 weeks
   const generate21DayCalendar = () => {
-    const today = getPacificDate();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    // Get today's date in Pacific timezone
+    const pacificNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const todayYear = pacificNow.getFullYear();
+    const todayMonth = pacificNow.getMonth();
+    const todayDate = pacificNow.getDate();
+    
+    // Create a date object for today at midnight Pacific
+    const today = new Date(todayYear, todayMonth, todayDate);
+    
     const days = [];
-    // Start from 20 days ago and go forward to today
+    // Start from 20 days ago and go forward to today (21 days total)
     for (let i = 20; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
-      // Format date string in Pacific timezone to avoid UTC conversion issues
+      
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
+      
       days.push({
         date: date,
         dateStr: dateStr,
