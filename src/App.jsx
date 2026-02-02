@@ -643,111 +643,60 @@ function StatsPage() {
                     <div style={styles.calendarHeader}>
                       <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                     </div>
-                    {/* Week 1 */}
-                    <div style={styles.weekLabel}>3 Weeks Ago</div>
-                    <div style={styles.calendarGrid}>
-                      {(() => {
-                        const days = generate21DayCalendar();
-                        const week1 = days.slice(0, 7);
-                        const firstDayOfWeek = week1[0].dayOfWeek;
-                        const paddedWeek1 = [...Array(firstDayOfWeek).fill(null), ...week1];
-                        // Pad end to complete the row
-                        while (paddedWeek1.length < 7) paddedWeek1.push(null);
-                        
-                        return paddedWeek1.slice(0, 7).map((day, idx) => {
-                          if (!day) return <div key={`w1-${idx}`} style={styles.calendarDayEmpty}></div>;
-                          const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
-                          return (
-                            <div 
-                              key={`w1-${idx}`} 
-                              style={{
-                                ...styles.calendarDay,
-                                ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
-                                ...(day.isToday ? styles.calendarDayToday : {}),
-                                ...(hasAccess('master') ? styles.calendarDayClickable : {})
-                              }}
-                              title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
-                              onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
-                            >
-                              <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
-                              <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                    {/* Week 2 */}
-                    <div style={styles.weekLabel}>2 Weeks Ago</div>
-                    <div style={styles.calendarGrid}>
-                      {(() => {
-                        const days = generate21DayCalendar();
-                        // Get days 7-13, but we need to figure out alignment
-                        const week1FirstDay = days[0].dayOfWeek;
-                        const daysInWeek1Grid = 7 - week1FirstDay;
-                        const week2Start = daysInWeek1Grid;
-                        const week2Days = days.slice(week2Start, week2Start + 7);
-                        
-                        return week2Days.map((day, idx) => {
-                          if (!day) return <div key={`w2-${idx}`} style={styles.calendarDayEmpty}></div>;
-                          const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
-                          return (
-                            <div 
-                              key={`w2-${idx}`} 
-                              style={{
-                                ...styles.calendarDay,
-                                ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
-                                ...(day.isToday ? styles.calendarDayToday : {}),
-                                ...(hasAccess('master') ? styles.calendarDayClickable : {})
-                              }}
-                              title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
-                              onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
-                            >
-                              <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
-                              <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                    {/* Week 3 */}
-                    <div style={styles.weekLabel}>This Week (Current)</div>
-                    <div style={styles.calendarGrid}>
-                      {(() => {
-                        const days = generate21DayCalendar();
-                        const week1FirstDay = days[0].dayOfWeek;
-                        const daysInWeek1Grid = 7 - week1FirstDay;
-                        const week3Start = daysInWeek1Grid + 7;
-                        const week3Days = days.slice(week3Start, week3Start + 7);
-                        // Pad if needed
-                        while (week3Days.length < 7) week3Days.push(null);
-                        
-                        return week3Days.map((day, idx) => {
-                          if (!day) return <div key={`w3-${idx}`} style={styles.calendarDayEmpty}></div>;
-                          const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
-                          return (
-                            <div 
-                              key={`w3-${idx}`} 
-                              style={{
-                                ...styles.calendarDay,
-                                ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
-                                ...(day.isToday ? styles.calendarDayToday : {}),
-                                ...(hasAccess('master') ? styles.calendarDayClickable : {})
-                              }}
-                              title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
-                              onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
-                            >
-                              <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
-                              <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
+                    {(() => {
+                      const days = generate21DayCalendar();
+                      const firstDayOfWeek = days[0].dayOfWeek;
+                      
+                      // Pad beginning with empty slots to align with day of week
+                      const paddedDays = [...Array(firstDayOfWeek).fill(null), ...days];
+                      
+                      // Split into weeks (rows of 7)
+                      const weeks = [];
+                      for (let i = 0; i < paddedDays.length; i += 7) {
+                        weeks.push(paddedDays.slice(i, i + 7));
+                      }
+                      // Pad last week if needed
+                      const lastWeek = weeks[weeks.length - 1];
+                      while (lastWeek.length < 7) lastWeek.push(null);
+                      
+                      const weekLabels = ['3 Weeks Ago', '2 Weeks Ago', 'Last Week', 'This Week'];
+                      
+                      return weeks.map((week, weekIdx) => (
+                        <div key={`week-${weekIdx}`}>
+                          <div style={styles.weekLabel}>
+                            {weekLabels[Math.max(0, weekLabels.length - weeks.length + weekIdx)]}
+                            {weekIdx === weeks.length - 1 && ' (Current)'}
+                          </div>
+                          <div style={styles.calendarGrid}>
+                            {week.map((day, dayIdx) => {
+                              if (!day) return <div key={`w${weekIdx}-${dayIdx}`} style={styles.calendarDayEmpty}></div>;
+                              const isUploaded = hasDataForDate(day.dateStr, selectedTournament.uploadedDates, selectedTournament.eventType);
+                              return (
+                                <div 
+                                  key={`w${weekIdx}-${dayIdx}`} 
+                                  style={{
+                                    ...styles.calendarDay,
+                                    ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
+                                    ...(day.isToday ? styles.calendarDayToday : {}),
+                                    ...(hasAccess('master') ? styles.calendarDayClickable : {})
+                                  }}
+                                  title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
+                                  onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
+                                >
+                                  <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
+                                  <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ));
+                    })()}
                   </div>
                   <div style={styles.calendarLegend}>
                     <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.success}}/> Uploaded</span>
                     <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.warning}}/> Missing</span>
-                    {hasAccess('master') && <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.accent}}/> Today</span>}
+                    <span style={styles.legendItem}><span style={{...styles.legendDot, background: theme.accent}}/> Today</span>
                   </div>
                   <div style={styles.modalBtns}>
                     <button onClick={() => setShowMissingData(false)} style={styles.saveBtn}>Close</button>
