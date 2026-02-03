@@ -109,8 +109,9 @@ function getOvrColor(ovr) {
   return '#FFFFFF';
 }
 
-function Layout({ children, notification }) {
+function Layout({ children, notification, pendingCount = 0 }) {
   const { isDark, toggle, theme } = useTheme();
+  const { hasAccess } = useAuth();
   const styles = getStyles(theme);
   return (
     <div style={styles.container}>
@@ -122,6 +123,12 @@ function Layout({ children, notification }) {
             <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
+            <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
+            {hasAccess('master') && (
+              <NavLink to="/review" style={({isActive}) => ({...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})})}>
+                Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
+              </NavLink>
+            )}
           </nav>
           <button onClick={toggle} style={styles.themeToggle} title={isDark ? 'Light' : 'Dark'}>{isDark ? '☀' : '☾'}</button>
         </div>
@@ -240,6 +247,26 @@ function StatsPage() {
         if (selectedTournament?.id === id) { setSelectedTournament(null); localStorage.removeItem('selectedTournamentId'); }
         showNotif('Deleted');
       } catch (e) { showNotif('Delete failed', 'error'); }
+    }, 'master');
+  };
+
+  const toggleLegacy = (tournament) => {
+    requestAuth(async () => {
+      const isCurrentlyLegacy = tournament.category === 'legacy';
+      // If moving FROM legacy, we need to determine if it was originally a tournament or draft
+      // We'll check the name for [Daily] or [Weekly] prefix - drafts typically don't have these
+      const originalCategory = isCurrentlyLegacy 
+        ? (tournament.name.includes('[Daily]') || tournament.name.includes('[Weekly]') ? 'tournaments' : 'drafts')
+        : 'legacy';
+      
+      const updatedTournament = { ...tournament, category: originalCategory };
+      await saveTournament(updatedTournament);
+      setTournaments(tournaments.map(t => t.id === tournament.id ? updatedTournament : t));
+      if (selectedTournament?.id === tournament.id) {
+        setSelectedTournament(updatedTournament);
+      }
+      setSidebarTab(originalCategory);
+      showNotif(isCurrentlyLegacy ? 'Restored from Legacy' : 'Moved to Legacy');
     }, 'master');
   };
 
@@ -548,6 +575,7 @@ function StatsPage() {
           <div style={styles.sidebarTabs}>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('tournaments')}>Tournaments</button>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'drafts' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('drafts')}>Drafts</button>
+            <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'legacy' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('legacy')}>Legacy</button>
           </div>
           <input type="text" placeholder="Search..." value={tournamentSearch} onChange={(e) => setTournamentSearch(e.target.value)} style={styles.sidebarSearch} />
           {showNewTournament && (<div style={styles.newForm}>
@@ -569,16 +597,28 @@ function StatsPage() {
               filteredTournaments.map(t => {
                 const quality = getDataQuality(getCsvCount(t));
                 const isSelected = selectedTournament?.id === t.id;
+                const isLegacy = t.category === 'legacy';
                 return (<div key={t.id} style={{...styles.tournamentItem, ...(isSelected ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
                   <div style={styles.tournamentInfo}>
                     <span style={{...styles.tournamentName, ...(isSelected ? styles.tournamentNameActive : {})}}>{t.name}</span>
                     <span style={styles.tournamentStats}><span style={{color: quality.color, fontWeight: 600}}>{quality.label}</span> · {t.batting.length}B / {t.pitching.length}P</span>
                   </div>
-                  <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>{hasAccess('master') ? '×' : '🔒'}</button>
+                  <div style={styles.tournamentActions}>
+                    <button 
+                      style={styles.legacyBtn} 
+                      onClick={(e) => { e.stopPropagation(); toggleLegacy(t); }}
+                      title={isLegacy ? 'Restore from Legacy' : 'Move to Legacy'}
+                    >
+                      {hasAccess('master') ? (isLegacy ? '↩' : '📦') : '🔒'}
+                    </button>
+                    <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>{hasAccess('master') ? '×' : '🔒'}</button>
+                  </div>
                 </div>);
               })}
           </div>
-          <button style={styles.newTournamentBtn} onClick={() => hasAccess('upload') ? setShowNewTournament(true) : requestAuth(() => setShowNewTournament(true), 'upload')}>{hasAccess('upload') ? '+ New' : '🔒 New'}</button>
+          {sidebarTab !== 'legacy' && (
+            <button style={styles.newTournamentBtn} onClick={() => hasAccess('upload') ? setShowNewTournament(true) : requestAuth(() => setShowNewTournament(true), 'upload')}>{hasAccess('upload') ? '+ New' : '🔒 New'}</button>
+          )}
         </aside>
         <div style={styles.content}>
           {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : (<>
@@ -952,11 +992,976 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   </tbody></table></div>);
 }
 
+// CSV Validation Logic
+function validateCSV(content, filename) {
+  const issues = [];
+  const stats = { rows: 0, players: 0, type: 'unknown' };
+  
+  const parsed = Papa.parse(content, { header: true, skipEmptyLines: true });
+  
+  if (parsed.errors.length > 0) {
+    issues.push({ type: 'critical', title: 'CSV Parse Errors', details: 'The file has structural issues.', data: parsed.errors.map(e => `Row ${e.row}: ${e.message}`).join('\n') });
+  }
+  
+  const headers = parsed.meta.fields || [];
+  const rows = parsed.data || [];
+  stats.rows = rows.length;
+  
+  const battingHeaders = ['PA', 'AB', 'H', '2B', '3B', 'HR', 'wOBA', 'wRC+', 'OPS'];
+  const pitchingHeaders = ['IP', 'ERA', 'WHIP', 'FIP', 'K/9', 'BB/9', 'SIERA'];
+  
+  const hasBatting = battingHeaders.filter(h => headers.includes(h)).length >= 4;
+  const hasPitching = pitchingHeaders.filter(h => headers.includes(h)).length >= 4;
+  
+  if (hasBatting && hasPitching) {
+    issues.push({ type: 'critical', title: 'Mixed Data Type', details: 'File contains both batting AND pitching headers.' });
+    stats.type = 'mixed';
+  } else if (hasBatting) {
+    stats.type = 'batting';
+  } else if (hasPitching) {
+    stats.type = 'pitching';
+  } else {
+    issues.push({ type: 'critical', title: 'Unrecognized Format', details: 'Could not identify as batting or pitching CSV.', data: `Headers: ${headers.join(', ')}` });
+  }
+  
+  const requiredHeaders = ['Name', 'OVR', 'POS'];
+  const missingRequired = requiredHeaders.filter(h => !headers.includes(h));
+  if (missingRequired.length > 0) {
+    issues.push({ type: 'critical', title: 'Missing Required Headers', details: `Missing: ${missingRequired.join(', ')}` });
+  }
+  
+  const cleanRows = [];
+  const removedRows = [];
+  
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 2;
+    const name = (row.Name || '').trim();
+    const ovr = parseInt(row.OVR) || 0;
+    
+    if (!name) return;
+    stats.players++;
+    
+    const rowIssues = [];
+    
+    // OVR validation
+    if (ovr < 1 || ovr > 125) {
+      rowIssues.push(`Invalid OVR: ${ovr}`);
+    }
+    
+    if (stats.type === 'batting') {
+      const pa = parseInt(row.PA) || 0, ab = parseInt(row.AB) || 0, h = parseInt(row.H) || 0;
+      const hr = parseInt(row.HR) || 0, doubles = parseInt(row['2B']) || 0, triples = parseInt(row['3B']) || 0;
+      const avg = parseFloat(row.AVG) || 0, obp = parseFloat(row.OBP) || 0, slg = parseFloat(row.SLG) || 0;
+      const wrcPlus = parseInt(row['wRC+']) || 0, war = parseFloat(row.WAR) || 0;
+      
+      if (h > ab && ab > 0) rowIssues.push(`H > AB (${h} > ${ab})`);
+      if (hr > h && h > 0) rowIssues.push(`HR > H (${hr} > ${h})`);
+      if (doubles + triples + hr > h) rowIssues.push(`XBH > H`);
+      if (ab > pa) rowIssues.push(`AB > PA (${ab} > ${pa})`);
+      if (avg > 0.500 && pa > 100) rowIssues.push(`AVG too high: ${avg}`);
+      if (obp > 0.600 && pa > 100) rowIssues.push(`OBP too high: ${obp}`);
+      if (slg > 1.000 && pa > 100) rowIssues.push(`SLG too high: ${slg}`);
+      if (wrcPlus > 250 && pa > 100) rowIssues.push(`wRC+ too high: ${wrcPlus}`);
+      if (war > 15 || war < -5) rowIssues.push(`WAR unrealistic: ${war}`);
+      if (obp < avg && pa > 50) rowIssues.push(`OBP < AVG (impossible)`);
+    } else if (stats.type === 'pitching') {
+      const ip = parseFloat(row.IP) || 0, era = parseFloat(row.ERA) || 0, whip = parseFloat(row.WHIP) || 0;
+      const kPer9 = parseFloat(row['K/9']) || 0, bbPer9 = parseFloat(row['BB/9']) || 0;
+      const war = parseFloat(row.WAR) || 0, g = parseInt(row.G) || 0, gs = parseInt(row.GS) || 0;
+      
+      if (era < 0) rowIssues.push(`Negative ERA: ${era}`);
+      if (era > 20 && ip > 20) rowIssues.push(`ERA too high: ${era}`);
+      if (whip < 0) rowIssues.push(`Negative WHIP: ${whip}`);
+      if (whip > 3.0 && ip > 20) rowIssues.push(`WHIP too high: ${whip}`);
+      if (kPer9 > 18) rowIssues.push(`K/9 impossible: ${kPer9}`);
+      if (bbPer9 > 15 && ip > 20) rowIssues.push(`BB/9 too high: ${bbPer9}`);
+      if (war > 12 || war < -4) rowIssues.push(`WAR unrealistic: ${war}`);
+      if (gs > g) rowIssues.push(`GS > G (impossible)`);
+    }
+    
+    if (rowIssues.length > 0) {
+      removedRows.push({ row: rowNum, name, ovr, reasons: rowIssues, data: row });
+    } else {
+      cleanRows.push(row);
+    }
+  });
+  
+  // Check wrong file type
+  if (stats.type === 'batting') {
+    const pitcherPositions = rows.filter(r => ['SP', 'RP', 'CL', 'MR'].includes((r.POS || '').toUpperCase())).length;
+    if (pitcherPositions / stats.players > 0.5) {
+      issues.push({ type: 'critical', title: 'Wrong File Type?', details: `${Math.round(pitcherPositions / stats.players * 100)}% pitcher positions in batting file.` });
+    }
+  }
+  
+  const hasCritical = issues.some(i => i.type === 'critical');
+  
+  return { issues, stats, headers, cleanRows, removedRows, hasCritical, rawRows: rows };
+}
+
+function calculatePlayerMatch(csvRows, tournamentPlayers, fileType) {
+  if (!tournamentPlayers || tournamentPlayers.length === 0) return 0;
+  if (!csvRows || csvRows.length === 0) return 0;
+  
+  const tournamentNames = new Set(tournamentPlayers.map(p => `${p.name}|${p.ovr}`));
+  let matches = 0;
+  
+  csvRows.forEach(row => {
+    const name = (row.Name || '').trim();
+    const ovr = parseInt(row.OVR) || 0;
+    if (tournamentNames.has(`${name}|${ovr}`)) matches++;
+  });
+  
+  return Math.round((matches / csvRows.length) * 100);
+}
+
+function SubmitDataPage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const [tournaments, setTournaments] = useState([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState('');
+  const [suggestNewEvent, setSuggestNewEvent] = useState(false);
+  const [newEventName, setNewEventName] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [userNotes, setUserNotes] = useState('');
+  const [file, setFile] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
+  const [notification, setNotification] = useState(null);
+
+  useEffect(() => {
+    loadTournaments();
+  }, []);
+
+  const loadTournaments = async () => {
+    const { data } = await supabase.from('tournaments').select('id, name, category').order('name');
+    setTournaments(data || []);
+  };
+
+  const showNotif = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const getPacificDate = () => {
+    const now = new Date();
+    const pacific = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    return pacific;
+  };
+
+  const generate21DayCalendar = () => {
+    const today = getPacificDate();
+    const days = [];
+    for (let i = 20; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      days.push({ dateStr: `${year}-${month}-${day}`, dayOfMonth: date.getDate(), dayOfWeek: date.getDay(), isToday: i === 0 });
+    }
+    return days;
+  };
+
+  const handleFileChange = (e) => {
+    const f = e.target.files[0];
+    if (f && f.name.endsWith('.csv')) {
+      setFile(f);
+      setSubmitResult(null);
+    } else {
+      showNotif('Please select a CSV file', 'error');
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!file) { showNotif('Please select a file', 'error'); return; }
+    if (!selectedDate) { showNotif('Please select a date', 'error'); return; }
+    if (!selectedTournamentId && !suggestNewEvent) { showNotif('Please select a tournament or suggest a new event', 'error'); return; }
+    if (suggestNewEvent && !newEventName.trim()) { showNotif('Please enter a name for the new event', 'error'); return; }
+
+    setIsSubmitting(true);
+    try {
+      const content = await file.text();
+      const validation = validateCSV(content, file.name);
+      
+      // Get tournament for player matching
+      let matchPercent = 0;
+      let selectedTournament = null;
+      if (selectedTournamentId) {
+        const { data: tournamentData } = await supabase.from('tournaments').select('*').eq('id', selectedTournamentId).single();
+        if (tournamentData) {
+          selectedTournament = tournamentData;
+          const playersToMatch = validation.stats.type === 'batting' ? tournamentData.batting : tournamentData.pitching;
+          matchPercent = calculatePlayerMatch(validation.rawRows, playersToMatch, validation.stats.type);
+        }
+      }
+
+      // Check if date already has data
+      let dateAlreadyUploaded = false;
+      if (selectedTournament?.uploaded_dates?.includes(selectedDate)) {
+        dateAlreadyUploaded = true;
+      }
+
+      // Save to pending_uploads
+      const { error } = await supabase.from('pending_uploads').insert({
+        suggested_tournament_id: selectedTournamentId || null,
+        suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
+        suggested_date: selectedDate,
+        user_notes: userNotes.trim() || null,
+        file_type: validation.stats.type,
+        file_name: file.name,
+        raw_data: validation.rawRows,
+        clean_data: validation.cleanRows,
+        removed_rows: validation.removedRows,
+        validation_issues: validation.issues,
+        player_match_percent: matchPercent,
+        date_already_uploaded: dateAlreadyUploaded,
+        has_critical_issues: validation.hasCritical,
+        status: 'pending'
+      });
+
+      if (error) throw error;
+
+      setSubmitResult({
+        success: true,
+        type: validation.stats.type,
+        playerCount: validation.cleanRows.length,
+        removedCount: validation.removedRows.length,
+        hasCritical: validation.hasCritical
+      });
+
+      // Reset form
+      setFile(null);
+      setSelectedDate('');
+      setUserNotes('');
+      setSelectedTournamentId('');
+      setSuggestNewEvent(false);
+      setNewEventName('');
+      
+    } catch (e) {
+      console.error('Submit error:', e);
+      showNotif('Failed to submit', 'error');
+    }
+    setIsSubmitting(false);
+  };
+
+  const groupedTournaments = {
+    tournaments: tournaments.filter(t => t.category === 'tournaments' || !t.category),
+    drafts: tournaments.filter(t => t.category === 'drafts'),
+    legacy: tournaments.filter(t => t.category === 'legacy')
+  };
+
+  return (
+    <Layout notification={notification}>
+      <div style={styles.submitPage}>
+        <div style={styles.submitContainer}>
+          <h2 style={styles.submitTitle}>📤 Submit CSV Data</h2>
+          <p style={styles.submitSubtitle}>Upload your CSV file for admin review and approval.</p>
+
+          {submitResult ? (
+            <div style={{...styles.submitResult, borderColor: submitResult.hasCritical ? theme.warning : theme.success}}>
+              <div style={styles.submitResultIcon}>{submitResult.hasCritical ? '⚠️' : '✅'}</div>
+              <div style={styles.submitResultTitle}>
+                {submitResult.hasCritical ? 'Submitted with Issues' : 'Submitted Successfully!'}
+              </div>
+              <div style={styles.submitResultDetails}>
+                Detected: <strong>{submitResult.type?.toUpperCase()}</strong> • {submitResult.playerCount} players
+                {submitResult.removedCount > 0 && ` • ${submitResult.removedCount} rows flagged`}
+              </div>
+              <p style={styles.submitResultNote}>An admin will review and approve your submission shortly.</p>
+              <button style={styles.submitAnotherBtn} onClick={() => setSubmitResult(null)}>Submit Another</button>
+            </div>
+          ) : (
+            <div style={styles.submitForm}>
+              {/* File Upload */}
+              <div style={styles.formSection}>
+                <label style={styles.formLabel}>CSV File *</label>
+                <label style={styles.fileDropzone}>
+                  <input type="file" accept=".csv" onChange={handleFileChange} style={{display:'none'}} />
+                  {file ? (
+                    <div style={styles.fileSelected}>📄 {file.name} <span style={styles.fileSize}>({(file.size/1024).toFixed(1)} KB)</span></div>
+                  ) : (
+                    <div style={styles.filePrompt}><span style={styles.fileIcon}>📁</span>Click to select or drag CSV file</div>
+                  )}
+                </label>
+              </div>
+
+              {/* Tournament Selection */}
+              <div style={styles.formSection}>
+                <label style={styles.formLabel}>Tournament / Draft *</label>
+                <div style={styles.tournamentOptions}>
+                  <label style={styles.radioOption}>
+                    <input type="radio" checked={!suggestNewEvent} onChange={() => setSuggestNewEvent(false)} />
+                    <span>Select Existing</span>
+                  </label>
+                  <label style={styles.radioOption}>
+                    <input type="radio" checked={suggestNewEvent} onChange={() => setSuggestNewEvent(true)} />
+                    <span>Suggest New Event</span>
+                  </label>
+                </div>
+                
+                {!suggestNewEvent ? (
+                  <select value={selectedTournamentId} onChange={(e) => setSelectedTournamentId(e.target.value)} style={styles.formSelect}>
+                    <option value="">-- Select Tournament --</option>
+                    {groupedTournaments.tournaments.length > 0 && (
+                      <optgroup label="Tournaments">
+                        {groupedTournaments.tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </optgroup>
+                    )}
+                    {groupedTournaments.drafts.length > 0 && (
+                      <optgroup label="Drafts">
+                        {groupedTournaments.drafts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
+                ) : (
+                  <div>
+                    <input 
+                      type="text" 
+                      value={newEventName} 
+                      onChange={(e) => setNewEventName(e.target.value)} 
+                      placeholder="e.g., Tournament Daily Spring League 2025"
+                      style={styles.formInput}
+                    />
+                    <p style={styles.formHint}>Include: Tournament/Draft, Daily/Weekly, and event name</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Date Selection */}
+              <div style={styles.formSection}>
+                <label style={styles.formLabel}>Data Date *</label>
+                <p style={styles.formHint}>What date is this CSV data for?</p>
+                <div style={styles.dateGrid}>
+                  {generate21DayCalendar().map((day, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      style={{
+                        ...styles.dateBtn,
+                        ...(selectedDate === day.dateStr ? styles.dateBtnSelected : {}),
+                        ...(day.isToday ? styles.dateBtnToday : {})
+                      }}
+                      onClick={() => setSelectedDate(day.dateStr)}
+                    >
+                      <span style={styles.dateBtnDay}>{day.dayOfMonth}</span>
+                      <span style={styles.dateBtnLabel}>{['S','M','T','W','T','F','S'][day.dayOfWeek]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div style={styles.formSection}>
+                <label style={styles.formLabel}>Notes (optional)</label>
+                <textarea
+                  value={userNotes}
+                  onChange={(e) => setUserNotes(e.target.value)}
+                  placeholder="Any context for the admin (e.g., 'Week 3 Monday game')"
+                  style={styles.formTextarea}
+                  rows={3}
+                />
+              </div>
+
+              {/* Submit Button */}
+              <button 
+                onClick={handleSubmit} 
+                disabled={isSubmitting}
+                style={{...styles.submitBtn, ...(isSubmitting ? styles.submitBtnDisabled : {})}}
+              >
+                {isSubmitting ? 'Processing...' : '📤 Submit for Review'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+function ReviewQueuePage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const { hasAccess, requestAuth } = useAuth();
+  const [activeTab, setActiveTab] = useState('pending');
+  const [pendingUploads, setPendingUploads] = useState([]);
+  const [criticalUploads, setCriticalUploads] = useState([]);
+  const [uploadHistory, setUploadHistory] = useState([]);
+  const [tournaments, setTournaments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notification, setNotification] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
+  
+  // New event creation state
+  const [creatingNewFor, setCreatingNewFor] = useState(null);
+  const [newEventName, setNewEventName] = useState('');
+  const [newEventType, setNewEventType] = useState('daily');
+  const [newEventCategory, setNewEventCategory] = useState('tournaments');
+
+  useEffect(() => {
+    if (hasAccess('master')) {
+      loadData();
+    }
+  }, [hasAccess]);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // Load pending uploads
+      const { data: pending } = await supabase
+        .from('pending_uploads')
+        .select('*')
+        .eq('status', 'pending')
+        .eq('has_critical_issues', false)
+        .order('created_at', { ascending: false });
+      setPendingUploads(pending || []);
+
+      // Load critical uploads
+      const { data: critical } = await supabase
+        .from('pending_uploads')
+        .select('*')
+        .eq('status', 'pending')
+        .eq('has_critical_issues', true)
+        .order('created_at', { ascending: false });
+      setCriticalUploads(critical || []);
+
+      // Load upload history (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const { data: history } = await supabase
+        .from('upload_history')
+        .select('*')
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .order('created_at', { ascending: false });
+      setUploadHistory(history || []);
+
+      // Load tournaments for dropdown
+      const { data: tourns } = await supabase.from('tournaments').select('*').order('name');
+      setTournaments(tourns || []);
+    } catch (e) {
+      console.error('Load error:', e);
+    }
+    setIsLoading(false);
+  };
+
+  const showNotif = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const getMatchColor = (percent) => {
+    if (percent >= 80) return theme.success;
+    if (percent >= 40) return theme.warning;
+    return theme.error;
+  };
+
+  const getMatchLabel = (percent) => {
+    if (percent >= 80) return 'Good';
+    if (percent >= 40) return 'Check';
+    return 'Low';
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const timeAgo = (dateStr) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  const handleApprove = async (upload, assignedTournamentId, assignedDate) => {
+    if (!assignedTournamentId) {
+      showNotif('Please select a tournament', 'error');
+      return;
+    }
+    if (!assignedDate) {
+      showNotif('Please select a date', 'error');
+      return;
+    }
+
+    try {
+      // Get the tournament
+      const { data: tournament } = await supabase.from('tournaments').select('*').eq('id', assignedTournamentId).single();
+      if (!tournament) throw new Error('Tournament not found');
+
+      // Add the clean data to the tournament
+      const existingData = upload.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
+      const newData = upload.clean_data || [];
+      
+      // Combine data (merge players by name+ovr)
+      const playerMap = new Map();
+      existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+      
+      newData.forEach(row => {
+        const name = (row.Name || '').trim();
+        const ovr = parseInt(row.OVR) || 0;
+        const key = `${name}|${ovr}`;
+        
+        // Normalize the row data
+        const normalized = upload.file_type === 'batting' ? {
+          id: crypto.randomUUID(),
+          name, ovr, pos: row.POS || '', bats: row.Bats || '',
+          g: row.G || 0, gs: row.GS || 0, pa: row.PA || 0, ab: row.AB || 0,
+          h: row.H || 0, doubles: row['2B'] || 0, triples: row['3B'] || 0, hr: row.HR || 0,
+          bbPct: row['BB%'] || '', so: row.SO || 0, gidp: row.GIDP || 0,
+          avg: row.AVG || '', obp: row.OBP || '', slg: row.SLG || '', woba: row.wOBA || '',
+          ops: row.OPS || '', opsPlus: row['OPS+'] || '', babip: row.BABIP || '',
+          wrcPlus: row['wRC+'] || '', wraa: row.wRAA || '', war: row.WAR || '',
+          sbPct: row['SB%'] || '', bsr: row.BsR || '', vari: row.VARI || ''
+        } : {
+          id: crypto.randomUUID(),
+          name, ovr, pos: row.POS || '', throws: row.Throws || '',
+          g: row.G || 0, gs: row.GS || 0, ip: row.IP || 0, bf: row.BF || 0,
+          era: row.ERA || '', whip: row.WHIP || '', kPer9: row['K/9'] || '', bbPer9: row['BB/9'] || '',
+          hrPer9: row['HR/9'] || '', babip: row.BABIP || '', fip: row.FIP || '', siera: row.SIERA || '',
+          war: row.WAR || '', hPer9: row['H/9'] || '', avg: row.AVG || '', obp: row.OBP || '', vari: row.VARI || ''
+        };
+        
+        if (playerMap.has(key)) {
+          // Merge stats - for now just keep the newer data
+          playerMap.set(key, { ...playerMap.get(key), ...normalized, id: playerMap.get(key).id });
+        } else {
+          playerMap.set(key, normalized);
+        }
+      });
+
+      const updatedData = Array.from(playerMap.values());
+      
+      // Update uploaded_dates
+      const uploadedDates = [...(tournament.uploaded_dates || [])];
+      if (!uploadedDates.includes(assignedDate)) {
+        uploadedDates.push(assignedDate);
+      }
+
+      // Save tournament
+      const updatePayload = upload.file_type === 'batting' 
+        ? { batting: updatedData, uploaded_dates: uploadedDates }
+        : { pitching: updatedData, uploaded_dates: uploadedDates };
+      
+      const { error: updateError } = await supabase.from('tournaments').update(updatePayload).eq('id', assignedTournamentId);
+      if (updateError) throw updateError;
+
+      // Save to upload history
+      await supabase.from('upload_history').insert({
+        tournament_id: assignedTournamentId,
+        tournament_name: tournament.name,
+        file_type: upload.file_type,
+        upload_date: assignedDate,
+        player_count: newData.length,
+        player_data: newData
+      });
+
+      // Mark upload as approved
+      await supabase.from('pending_uploads').update({
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        assigned_tournament_id: assignedTournamentId,
+        assigned_date: assignedDate
+      }).eq('id', upload.id);
+
+      showNotif(`✓ Approved! Added ${newData.length} ${upload.file_type} to ${tournament.name}`);
+      loadData();
+    } catch (e) {
+      console.error('Approve error:', e);
+      showNotif('Failed to approve', 'error');
+    }
+  };
+
+  const handleReject = async (uploadId) => {
+    if (!confirm('Reject this submission?')) return;
+    try {
+      await supabase.from('pending_uploads').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', uploadId);
+      showNotif('Submission rejected');
+      loadData();
+    } catch (e) {
+      showNotif('Failed to reject', 'error');
+    }
+  };
+
+  const handleUndo = async (historyItem) => {
+    if (!confirm(`Undo this upload? This will remove ${historyItem.player_count} ${historyItem.file_type} from ${historyItem.tournament_name}.`)) return;
+    
+    try {
+      // Get tournament
+      const { data: tournament } = await supabase.from('tournaments').select('*').eq('id', historyItem.tournament_id).single();
+      if (!tournament) throw new Error('Tournament not found');
+
+      // Remove the players that were added
+      const existingData = historyItem.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
+      const addedPlayerKeys = new Set((historyItem.player_data || []).map(p => `${p.Name}|${p.OVR}`));
+      const filteredData = existingData.filter(p => !addedPlayerKeys.has(`${p.name}|${p.ovr}`));
+
+      // Remove date from uploaded_dates
+      const uploadedDates = (tournament.uploaded_dates || []).filter(d => d !== historyItem.upload_date);
+
+      // Update tournament
+      const updatePayload = historyItem.file_type === 'batting'
+        ? { batting: filteredData, uploaded_dates: uploadedDates }
+        : { pitching: filteredData, uploaded_dates: uploadedDates };
+      
+      await supabase.from('tournaments').update(updatePayload).eq('id', historyItem.tournament_id);
+
+      // Mark history as undone
+      await supabase.from('upload_history').update({ undone: true, undone_at: new Date().toISOString() }).eq('id', historyItem.id);
+
+      showNotif(`Undone! Removed ${historyItem.player_count} ${historyItem.file_type}`);
+      loadData();
+    } catch (e) {
+      console.error('Undo error:', e);
+      showNotif('Failed to undo', 'error');
+    }
+  };
+
+  const handleCreateAndApprove = async (upload) => {
+    if (!newEventName.trim()) {
+      showNotif('Please enter event name', 'error');
+      return;
+    }
+
+    try {
+      const typeLabel = newEventType === 'daily' ? '[Daily]' : '[Weekly]';
+      const fullName = `${typeLabel} ${newEventName.trim()}`;
+      
+      // Create new tournament
+      const newTournament = {
+        id: crypto.randomUUID(),
+        name: fullName,
+        created_at: new Date().toISOString(),
+        category: newEventCategory,
+        batting: [],
+        pitching: [],
+        uploaded_hashes: [],
+        event_type: newEventType,
+        uploaded_dates: []
+      };
+
+      const { error: createError } = await supabase.from('tournaments').insert(newTournament);
+      if (createError) throw createError;
+
+      // Now approve with the new tournament
+      await handleApprove(upload, newTournament.id, upload.suggested_date);
+      
+      setCreatingNewFor(null);
+      setNewEventName('');
+      setNewEventType('daily');
+      setNewEventCategory('tournaments');
+    } catch (e) {
+      console.error('Create error:', e);
+      showNotif('Failed to create event', 'error');
+    }
+  };
+
+  if (!hasAccess('master')) {
+    return (
+      <Layout notification={notification}>
+        <div style={styles.submitPage}>
+          <div style={styles.submitContainer}>
+            <h2 style={styles.submitTitle}>🔒 Admin Access Required</h2>
+            <p style={styles.submitSubtitle}>You need master access to view the review queue.</p>
+            <button style={styles.submitBtn} onClick={() => requestAuth(() => loadData(), 'master')}>Enter Password</button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const pendingCount = pendingUploads.length + criticalUploads.length;
+
+  return (
+    <Layout notification={notification} pendingCount={pendingCount}>
+      <div style={styles.reviewPage}>
+        <div style={styles.reviewContainer}>
+          <h2 style={styles.reviewTitle}>📋 Review Queue</h2>
+          
+          <div style={styles.reviewTabs}>
+            <button 
+              style={{...styles.reviewTab, ...(activeTab === 'pending' ? styles.reviewTabActive : {})}}
+              onClick={() => setActiveTab('pending')}
+            >
+              Pending Review {pendingUploads.length > 0 && <span style={styles.reviewTabBadge}>{pendingUploads.length}</span>}
+            </button>
+            <button 
+              style={{...styles.reviewTab, ...(activeTab === 'critical' ? styles.reviewTabActive : {}), ...(criticalUploads.length > 0 ? {color: theme.error} : {})}}
+              onClick={() => setActiveTab('critical')}
+            >
+              Needs Attention {criticalUploads.length > 0 && <span style={{...styles.reviewTabBadge, background: theme.error}}>{criticalUploads.length}</span>}
+            </button>
+            <button 
+              style={{...styles.reviewTab, ...(activeTab === 'history' ? styles.reviewTabActive : {})}}
+              onClick={() => setActiveTab('history')}
+            >
+              Upload History
+            </button>
+          </div>
+
+          {isLoading ? (
+            <div style={styles.loading}>Loading...</div>
+          ) : (
+            <>
+              {/* Pending Tab */}
+              {activeTab === 'pending' && (
+                <div style={styles.reviewList}>
+                  {pendingUploads.length === 0 ? (
+                    <div style={styles.emptyState}>✓ No pending submissions</div>
+                  ) : pendingUploads.map(upload => (
+                    <div key={upload.id} style={styles.reviewCard}>
+                      <div style={styles.reviewCardHeader}>
+                        <span style={styles.reviewCardFile}>📄 {upload.file_name}</span>
+                        <span style={styles.reviewCardTime}>{timeAgo(upload.created_at)}</span>
+                      </div>
+                      
+                      <div style={styles.reviewCardBody}>
+                        <div style={styles.reviewCardRow}>
+                          <span style={styles.reviewCardLabel}>Type:</span>
+                          <span style={styles.reviewCardValue}>{upload.file_type?.toUpperCase()} ({(upload.clean_data || []).length} players)</span>
+                        </div>
+                        <div style={styles.reviewCardRow}>
+                          <span style={styles.reviewCardLabel}>User Selected:</span>
+                          <span style={styles.reviewCardValue}>{upload.suggested_tournament_name || 'New Event'}</span>
+                        </div>
+                        <div style={styles.reviewCardRow}>
+                          <span style={styles.reviewCardLabel}>Date:</span>
+                          <span style={styles.reviewCardValue}>{formatDate(upload.suggested_date)}</span>
+                        </div>
+                        {upload.user_notes && (
+                          <div style={styles.reviewCardRow}>
+                            <span style={styles.reviewCardLabel}>Notes:</span>
+                            <span style={styles.reviewCardValue}>"{upload.user_notes}"</span>
+                          </div>
+                        )}
+                        
+                        {/* Player Match */}
+                        {upload.suggested_tournament_id && (
+                          <div style={styles.reviewCardRow}>
+                            <span style={styles.reviewCardLabel}>Player Match:</span>
+                            <span style={{...styles.reviewCardMatch, color: getMatchColor(upload.player_match_percent)}}>
+                              {upload.player_match_percent}% - {getMatchLabel(upload.player_match_percent)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Warnings */}
+                        {(upload.removed_rows?.length > 0 || upload.date_already_uploaded) && (
+                          <div style={styles.reviewCardWarnings}>
+                            {upload.date_already_uploaded && (
+                              <div style={styles.warningItem}>⚠️ Date already has data for this tournament</div>
+                            )}
+                            {upload.removed_rows?.length > 0 && (
+                              <div style={styles.warningItem} onClick={() => setExpandedId(expandedId === upload.id ? null : upload.id)}>
+                                ⚠️ {upload.removed_rows.length} rows auto-removed (click to view)
+                              </div>
+                            )}
+                            {expandedId === upload.id && upload.removed_rows?.length > 0 && (
+                              <div style={styles.removedRowsList}>
+                                {upload.removed_rows.map((r, i) => (
+                                  <div key={i} style={styles.removedRow}>Row {r.row}: {r.name} - {r.reasons.join(', ')}</div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div style={styles.reviewCardActions}>
+                        {upload.suggested_tournament_id ? (
+                          <>
+                            <select 
+                              defaultValue={upload.suggested_tournament_id}
+                              style={styles.reviewSelect}
+                              id={`tournament-${upload.id}`}
+                            >
+                              {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                            <button 
+                              style={styles.approveBtn}
+                              onClick={() => handleApprove(upload, document.getElementById(`tournament-${upload.id}`).value, upload.suggested_date)}
+                            >✓ Approve</button>
+                          </>
+                        ) : (
+                          <>
+                            {creatingNewFor === upload.id ? (
+                              <div style={styles.newEventForm}>
+                                <input 
+                                  type="text" 
+                                  value={newEventName} 
+                                  onChange={(e) => setNewEventName(e.target.value)}
+                                  placeholder="Event name..."
+                                  style={styles.newEventInput}
+                                />
+                                <select value={newEventType} onChange={(e) => setNewEventType(e.target.value)} style={styles.newEventSelect}>
+                                  <option value="daily">Daily</option>
+                                  <option value="weekly">Weekly</option>
+                                </select>
+                                <select value={newEventCategory} onChange={(e) => setNewEventCategory(e.target.value)} style={styles.newEventSelect}>
+                                  <option value="tournaments">Tournament</option>
+                                  <option value="drafts">Draft</option>
+                                </select>
+                                <button style={styles.approveBtn} onClick={() => handleCreateAndApprove(upload)}>Create & Approve</button>
+                                <button style={styles.cancelSmallBtn} onClick={() => setCreatingNewFor(null)}>Cancel</button>
+                              </div>
+                            ) : (
+                              <>
+                                <select style={styles.reviewSelect} id={`tournament-${upload.id}`}>
+                                  <option value="">-- Select Existing --</option>
+                                  {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                                <button 
+                                  style={styles.approveBtn}
+                                  onClick={() => {
+                                    const selected = document.getElementById(`tournament-${upload.id}`).value;
+                                    if (selected) {
+                                      handleApprove(upload, selected, upload.suggested_date);
+                                    } else {
+                                      setCreatingNewFor(upload.id);
+                                      setNewEventName(upload.suggested_tournament_name || '');
+                                    }
+                                  }}
+                                >✓ Approve</button>
+                                <button style={styles.newEventBtn} onClick={() => { setCreatingNewFor(upload.id); setNewEventName(upload.suggested_tournament_name || ''); }}>+ New Event</button>
+                              </>
+                            )}
+                          </>
+                        )}
+                        <button style={styles.previewBtn} onClick={() => setPreviewId(previewId === upload.id ? null : upload.id)}>👁 Preview</button>
+                        <button style={styles.rejectBtn} onClick={() => handleReject(upload.id)}>✗</button>
+                      </div>
+
+                      {/* Preview */}
+                      {previewId === upload.id && (
+                        <div style={styles.previewTable}>
+                          <table style={{width:'100%', fontSize: 11, borderCollapse: 'collapse'}}>
+                            <thead>
+                              <tr>{Object.keys((upload.clean_data || [])[0] || {}).slice(0, 10).map(h => <th key={h} style={{padding: '4px 6px', background: theme.panelBg, textAlign: 'left'}}>{h}</th>)}</tr>
+                            </thead>
+                            <tbody>
+                              {(upload.clean_data || []).slice(0, 10).map((row, i) => (
+                                <tr key={i}>{Object.values(row).slice(0, 10).map((v, j) => <td key={j} style={{padding: '4px 6px', borderTop: `1px solid ${theme.border}`}}>{v}</td>)}</tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {(upload.clean_data || []).length > 10 && <div style={{padding: 8, color: theme.textMuted}}>... and {upload.clean_data.length - 10} more rows</div>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Critical Tab */}
+              {activeTab === 'critical' && (
+                <div style={styles.reviewList}>
+                  {criticalUploads.length === 0 ? (
+                    <div style={styles.emptyState}>✓ No critical issues</div>
+                  ) : criticalUploads.map(upload => (
+                    <div key={upload.id} style={{...styles.reviewCard, borderColor: theme.error}}>
+                      <div style={styles.reviewCardHeader}>
+                        <span style={styles.reviewCardFile}>🚨 {upload.file_name}</span>
+                        <span style={styles.reviewCardTime}>{timeAgo(upload.created_at)}</span>
+                      </div>
+                      
+                      <div style={styles.criticalIssues}>
+                        <div style={styles.criticalTitle}>Critical Issues:</div>
+                        {(upload.validation_issues || []).filter(i => i.type === 'critical').map((issue, i) => (
+                          <div key={i} style={styles.criticalItem}>• {issue.title}: {issue.details}</div>
+                        ))}
+                      </div>
+
+                      <div style={styles.reviewCardBody}>
+                        <div style={styles.reviewCardRow}>
+                          <span style={styles.reviewCardLabel}>User Selected:</span>
+                          <span style={styles.reviewCardValue}>{upload.suggested_tournament_name || 'New Event'}</span>
+                        </div>
+                        <div style={styles.reviewCardRow}>
+                          <span style={styles.reviewCardLabel}>Date:</span>
+                          <span style={styles.reviewCardValue}>{formatDate(upload.suggested_date)}</span>
+                        </div>
+                        {upload.user_notes && (
+                          <div style={styles.reviewCardRow}>
+                            <span style={styles.reviewCardLabel}>Notes:</span>
+                            <span style={styles.reviewCardValue}>"{upload.user_notes}"</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={styles.reviewCardActions}>
+                        <button style={styles.previewBtn} onClick={() => setPreviewId(previewId === upload.id ? null : upload.id)}>👁 View Raw Data</button>
+                        <button style={styles.rejectBtn} onClick={() => handleReject(upload.id)}>✗ Reject</button>
+                      </div>
+
+                      {previewId === upload.id && (
+                        <div style={styles.previewTable}>
+                          <pre style={{fontSize: 10, overflow: 'auto', maxHeight: 200}}>{JSON.stringify(upload.raw_data?.slice(0, 5), null, 2)}</pre>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* History Tab */}
+              {activeTab === 'history' && (
+                <div style={styles.reviewList}>
+                  {uploadHistory.length === 0 ? (
+                    <div style={styles.emptyState}>No upload history (last 30 days)</div>
+                  ) : (
+                    <table style={styles.historyTable}>
+                      <thead>
+                        <tr>
+                          <th style={styles.historyTh}>Date</th>
+                          <th style={styles.historyTh}>Tournament</th>
+                          <th style={styles.historyTh}>Type</th>
+                          <th style={styles.historyTh}>Players</th>
+                          <th style={styles.historyTh}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uploadHistory.map(h => (
+                          <tr key={h.id} style={h.undone ? {opacity: 0.5} : {}}>
+                            <td style={styles.historyTd}>{formatDate(h.upload_date)}</td>
+                            <td style={styles.historyTd}>{h.tournament_name}</td>
+                            <td style={styles.historyTd}>{h.file_type}</td>
+                            <td style={styles.historyTd}>{h.player_count}</td>
+                            <td style={styles.historyTd}>
+                              {h.undone ? (
+                                <span style={{color: theme.textMuted}}>UNDONE</span>
+                              ) : (
+                                <button style={styles.undoBtn} onClick={() => handleUndo(h)}>↶ Undo</button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><Routes>
     <Route path="/" element={<StatsPage />} />
     <Route path="/info" element={<InfoPage />} />
     <Route path="/videos" element={<VideosPage />} />
+    <Route path="/submit" element={<SubmitDataPage />} />
+    <Route path="/review" element={<ReviewQueuePage />} />
   </Routes></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
@@ -994,8 +1999,8 @@ function getStyles(t) {
     themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
     main: { display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
     sidebar: { width: 240, background: t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
-    sidebarTabs: { display: 'flex', gap: 4, marginBottom: 12 },
-    sidebarTabBtn: { flex: 1, padding: '8px 10px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
+    sidebarTabs: { display: 'flex', gap: 2, marginBottom: 12 },
+    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11 },
     sidebarTabActive: { background: t.panelBg, color: t.textPrimary },
     sidebarSearch: { width: '100%', padding: '9px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
     tournamentList: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflow: 'auto' },
@@ -1006,6 +2011,8 @@ function getStyles(t) {
     tournamentName: { fontWeight: 500, color: t.textSecondary, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     tournamentNameActive: { color: t.textPrimary, fontWeight: 600 },
     tournamentStats: { fontSize: 11, color: t.textDim },
+    tournamentActions: { display: 'flex', gap: 4, alignItems: 'center' },
+    legacyBtn: { width: 24, height: 24, background: 'transparent', color: t.textDim, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 14, opacity: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     delBtn: { width: 24, height: 24, background: 'transparent', color: t.textDim, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 16, opacity: 0.5 },
     newTournamentBtn: { marginTop: 10, padding: 10, background: t.panelBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
     content: { flex: 1, padding: '20px 24px', overflow: 'auto', background: t.mainBg },
@@ -1139,5 +2146,85 @@ function getStyles(t) {
     legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.textSecondary },
     legendDot: { width: 12, height: 12, borderRadius: '50%' },
     adminHint: { color: t.accent, fontStyle: 'italic', fontSize: 12 },
+    
+    // Nav badge for review queue
+    navLinkReview: { display: 'flex', alignItems: 'center', gap: 6 },
+    navBadge: { background: t.error, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
+    
+    // Submit Data Page
+    submitPage: { minHeight: 'calc(100vh - 60px)', display: 'flex', justifyContent: 'center', padding: '40px 20px' },
+    submitContainer: { width: '100%', maxWidth: 600 },
+    submitTitle: { fontSize: 24, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
+    submitSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 32 },
+    submitForm: { display: 'flex', flexDirection: 'column', gap: 24 },
+    formSection: { display: 'flex', flexDirection: 'column', gap: 8 },
+    formLabel: { fontSize: 14, fontWeight: 600, color: t.textPrimary },
+    formHint: { fontSize: 12, color: t.textMuted, marginTop: -4 },
+    formInput: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, outline: 'none' },
+    formSelect: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer', outline: 'none' },
+    formTextarea: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit' },
+    fileDropzone: { padding: '32px 20px', background: t.inputBg, border: `2px dashed ${t.border}`, borderRadius: 8, cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s' },
+    filePrompt: { color: t.textMuted, fontSize: 14 },
+    fileIcon: { display: 'block', fontSize: 32, marginBottom: 8 },
+    fileSelected: { color: t.textPrimary, fontWeight: 500 },
+    fileSize: { color: t.textMuted, fontWeight: 400 },
+    tournamentOptions: { display: 'flex', gap: 16, marginBottom: 8 },
+    radioOption: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: t.textSecondary },
+    dateGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 },
+    dateBtn: { padding: '10px 4px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' },
+    dateBtnSelected: { background: t.accent, borderColor: t.accent, color: '#fff' },
+    dateBtnToday: { boxShadow: `0 0 0 2px ${t.accent}` },
+    dateBtnDay: { display: 'block', fontSize: 14, fontWeight: 600 },
+    dateBtnLabel: { display: 'block', fontSize: 10, color: t.textMuted, marginTop: 2 },
+    submitBtn: { padding: '14px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'all 0.2s' },
+    submitBtnDisabled: { opacity: 0.6, cursor: 'not-allowed' },
+    submitResult: { textAlign: 'center', padding: '40px 24px', background: t.panelBg, borderRadius: 12, border: `2px solid ${t.success}` },
+    submitResultIcon: { fontSize: 48, marginBottom: 12 },
+    submitResultTitle: { fontSize: 20, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
+    submitResultDetails: { fontSize: 14, color: t.textSecondary, marginBottom: 16 },
+    submitResultNote: { fontSize: 13, color: t.textMuted, marginBottom: 20 },
+    submitAnotherBtn: { padding: '10px 20px', background: 'transparent', color: t.accent, border: `1px solid ${t.accent}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 },
+    
+    // Review Queue Page
+    reviewPage: { minHeight: 'calc(100vh - 60px)', padding: '24px' },
+    reviewContainer: { maxWidth: 1000, margin: '0 auto' },
+    reviewTitle: { fontSize: 24, fontWeight: 700, color: t.textPrimary, marginBottom: 20 },
+    reviewTabs: { display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
+    reviewTab: { padding: '10px 16px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 },
+    reviewTabActive: { background: t.panelBg, color: t.textPrimary },
+    reviewTabBadge: { background: t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
+    reviewList: { display: 'flex', flexDirection: 'column', gap: 16 },
+    emptyState: { textAlign: 'center', padding: '48px 24px', color: t.textMuted, fontSize: 16 },
+    reviewCard: { background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 8, overflow: 'hidden' },
+    reviewCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: t.panelBg, borderBottom: `1px solid ${t.border}` },
+    reviewCardFile: { fontWeight: 600, color: t.textPrimary },
+    reviewCardTime: { fontSize: 12, color: t.textMuted },
+    reviewCardBody: { padding: 16 },
+    reviewCardRow: { display: 'flex', gap: 12, marginBottom: 8, fontSize: 14 },
+    reviewCardLabel: { color: t.textMuted, minWidth: 100 },
+    reviewCardValue: { color: t.textPrimary },
+    reviewCardMatch: { fontWeight: 600 },
+    reviewCardWarnings: { marginTop: 12, padding: 12, background: `${t.warning}10`, borderRadius: 6, border: `1px solid ${t.warning}30` },
+    warningItem: { color: t.warning, fontSize: 13, marginBottom: 4, cursor: 'pointer' },
+    removedRowsList: { marginTop: 8, padding: 8, background: t.inputBg, borderRadius: 4, maxHeight: 150, overflow: 'auto' },
+    removedRow: { fontSize: 12, color: t.textSecondary, padding: '4px 0', borderBottom: `1px solid ${t.border}` },
+    reviewCardActions: { display: 'flex', gap: 8, padding: 16, borderTop: `1px solid ${t.border}`, flexWrap: 'wrap', alignItems: 'center' },
+    reviewSelect: { flex: 1, minWidth: 150, padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
+    approveBtn: { padding: '8px 16px', background: t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
+    rejectBtn: { padding: '8px 12px', background: t.error, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
+    previewBtn: { padding: '8px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    newEventBtn: { padding: '8px 12px', background: 'transparent', color: t.accent, border: `1px solid ${t.accent}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    newEventForm: { display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%', alignItems: 'center' },
+    newEventInput: { flex: 1, minWidth: 150, padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
+    newEventSelect: { padding: '8px 10px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
+    cancelSmallBtn: { padding: '8px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    previewTable: { padding: 16, background: t.inputBg, borderTop: `1px solid ${t.border}`, overflow: 'auto' },
+    criticalIssues: { padding: 16, background: `${t.error}15`, borderBottom: `1px solid ${t.error}30` },
+    criticalTitle: { fontWeight: 600, color: t.error, marginBottom: 8 },
+    criticalItem: { color: t.textSecondary, fontSize: 13, marginBottom: 4 },
+    historyTable: { width: '100%', borderCollapse: 'collapse', background: t.cardBg, borderRadius: 8, overflow: 'hidden' },
+    historyTh: { padding: '12px 16px', background: t.panelBg, textAlign: 'left', fontWeight: 600, fontSize: 13, color: t.textMuted, borderBottom: `1px solid ${t.border}` },
+    historyTd: { padding: '12px 16px', borderBottom: `1px solid ${t.border}`, fontSize: 14, color: t.textPrimary },
+    undoBtn: { padding: '6px 12px', background: 'transparent', color: t.warning, border: `1px solid ${t.warning}`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500 },
   };
 }
