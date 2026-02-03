@@ -77,9 +77,14 @@ function AuthProvider({ children }) {
     } catch (e) { setAuthError('Authentication failed'); setPasswordInput(''); }
   };
 
+  const logout = () => {
+    setAuthLevel('none');
+    sessionStorage.removeItem('authLevel');
+  };
+
   const styles = getStyles(theme);
   return (
-    <AuthContext.Provider value={{ authLevel, hasAccess, requestAuth }}>
+    <AuthContext.Provider value={{ authLevel, hasAccess, requestAuth, logout }}>
       {children}
       {showPasswordModal && (
         <div style={styles.modalOverlay}><div style={styles.modal}>
@@ -604,20 +609,24 @@ function StatsPage() {
                     <span style={styles.tournamentStats}><span style={{color: quality.color, fontWeight: 600}}>{quality.label}</span> · {t.batting.length}B / {t.pitching.length}P</span>
                   </div>
                   <div style={styles.tournamentActions}>
+                    {hasAccess('master') && (
                     <button 
                       style={styles.legacyBtn} 
                       onClick={(e) => { e.stopPropagation(); toggleLegacy(t); }}
                       title={isLegacy ? 'Restore from Legacy' : 'Move to Legacy'}
                     >
-                      {hasAccess('master') ? (isLegacy ? '↩' : '📦') : '🔒'}
+                      {isLegacy ? '↩' : '📦'}
                     </button>
-                    <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>{hasAccess('master') ? '×' : '🔒'}</button>
+                  )}
+                    {hasAccess('master') && <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>×</button>}
                   </div>
                 </div>);
               })}
           </div>
           {sidebarTab !== 'legacy' && (
-            <button style={styles.newTournamentBtn} onClick={() => hasAccess('upload') ? setShowNewTournament(true) : requestAuth(() => setShowNewTournament(true), 'upload')}>{hasAccess('upload') ? '+ New' : '🔒 New'}</button>
+            {hasAccess('upload') && (
+            <button style={styles.newTournamentBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
+          )}
           )}
         </aside>
         <div style={styles.content}>
@@ -634,7 +643,9 @@ function StatsPage() {
               </div>
               <div style={styles.headerActions}>
                 <button style={styles.missingDataBtn} onClick={() => setShowMissingData(true)} title="View missing data calendar">📅 Missing Data</button>
-                <label style={styles.uploadBtn}><span>{hasAccess('upload') ? '↑ Upload CSV' : '🔒 Upload'}</span><input type="file" accept=".csv" multiple onChange={handleFileUpload} style={{display:'none'}} /></label>
+                {hasAccess('upload') && (
+                <label style={styles.uploadBtn}><span>↑ Upload CSV</span><input type="file" accept=".csv" multiple onChange={handleFileUpload} style={{display:'none'}} /></label>
+                )}
               </div>
             </div>
             
@@ -795,7 +806,7 @@ function parseMarkdown(text) {
 function InfoPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth } = useAuth();
+  const { hasAccess, requestAuth, logout } = useAuth();
   const [content, setContent] = useState({ title: 'Info & FAQ', sections: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -819,7 +830,7 @@ function InfoPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>{isEditing ? 'Edit Info' : content.title}</h2>
-          {!isEditing && <button onClick={startEditing} style={styles.editBtn}>{hasAccess('master') ? 'Edit' : '🔒 Edit'}</button>}
+          {!isEditing && hasAccess('master') && <button onClick={startEditing} style={styles.editBtn}>Edit</button>}
         </div>
         {isEditing ? (<div style={styles.editContainer}>
           <div style={styles.editField}><label style={styles.editLabel}>Title</label><input type="text" value={editContent.title} onChange={(e) => setEditContent(c => ({ ...c, title: e.target.value }))} style={styles.input} /></div>
@@ -836,6 +847,28 @@ function InfoPage() {
           {content.sections.length === 0 ? <p style={styles.emptyMsg}>No content yet.</p> :
             content.sections.map((s, i) => <div key={i} style={styles.infoSection}><h3 style={styles.infoHeading}>{s.heading}</h3><div style={styles.infoBody} dangerouslySetInnerHTML={{ __html: parseMarkdown(s.body) }} /></div>)}
         </div>)}
+        
+        {/* Admin Login Section */}
+        <div style={styles.adminLoginSection}>
+          <h3 style={styles.adminLoginTitle}>🔐 Admin Access</h3>
+          {hasAccess('master') ? (
+            <div style={styles.adminLoginStatus}>
+              <span style={styles.adminLoginBadge}>✓ Logged in as Admin</span>
+              <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
+            </div>
+          ) : hasAccess('upload') ? (
+            <div style={styles.adminLoginStatus}>
+              <span style={{...styles.adminLoginBadge, background: theme.warning}}>✓ Upload Access</span>
+              <button onClick={() => requestAuth(() => {}, 'master')} style={styles.adminUpgradeBtn}>Upgrade to Admin</button>
+              <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
+            </div>
+          ) : (
+            <div style={styles.adminLoginPrompt}>
+              <p style={styles.adminLoginText}>Admins can log in here to access additional features.</p>
+              <button onClick={() => requestAuth(() => {}, 'master')} style={styles.adminLoginBtn}>Admin Login</button>
+            </div>
+          )}
+        </div>
       </div>
     </Layout>
   );
@@ -878,7 +911,7 @@ function VideosPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>Videos</h2>
-          <button onClick={() => requestAuth(() => setShowAddForm(true), 'master')} style={styles.addBtn}>{hasAccess('master') ? '+ Add' : '🔒 Add'}</button>
+          {hasAccess('master') && <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add</button>}
         </div>
         {showAddForm && (<div style={styles.addVideoForm}>
           <input type="text" placeholder="Title" value={newVideoTitle} onChange={(e) => setNewVideoTitle(e.target.value)} style={styles.input} />
@@ -1483,10 +1516,8 @@ function SubmitDataPage() {
         <div style={styles.submitInfoPanel}>
           <div style={styles.infoPanelHeader}>
             <h3 style={styles.infoPanelTitle}>📋 Submission Guidelines</h3>
-            {!isEditingInfo && (
-              <button onClick={startEditingInfo} style={styles.infoPanelEditBtn}>
-                {hasAccess('master') ? '✎ Edit' : '🔒'}
-              </button>
+            {!isEditingInfo && hasAccess('master') && (
+              <button onClick={startEditingInfo} style={styles.infoPanelEditBtn}>✎ Edit</button>
             )}
           </div>
           
@@ -2257,6 +2288,18 @@ function getStyles(t) {
     infoSection: { background: t.panelBg, padding: 24, borderRadius: 6 },
     infoHeading: { margin: '0 0 12px', color: t.textPrimary, fontSize: 18, fontWeight: 600 },
     infoBody: { margin: 0, color: t.textSecondary, fontSize: 14, lineHeight: 1.7 },
+    
+    // Admin Login Section
+    adminLoginSection: { marginTop: 40, padding: 24, background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}` },
+    adminLoginTitle: { margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    adminLoginStatus: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+    adminLoginBadge: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: t.success, color: '#fff', borderRadius: 4, fontSize: 13, fontWeight: 600 },
+    adminLogoutBtn: { padding: '6px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    adminUpgradeBtn: { padding: '6px 14px', background: t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    adminLoginPrompt: { display: 'flex', flexDirection: 'column', gap: 12 },
+    adminLoginText: { margin: 0, color: t.textMuted, fontSize: 14 },
+    adminLoginBtn: { padding: '10px 20px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: 'fit-content' },
+    
     editContainer: { display: 'flex', flexDirection: 'column', gap: 14 },
     editField: { display: 'flex', flexDirection: 'column', gap: 8 },
     editLabel: { color: t.textSecondary, fontWeight: 500, fontSize: 13 },
@@ -2351,7 +2394,7 @@ function getStyles(t) {
     dateBtn: { padding: '10px 4px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' },
     dateBtnSelected: { background: t.accent, borderColor: t.accent, color: '#fff' },
     dateBtnToday: { boxShadow: `0 0 0 2px ${t.accent}` },
-    dateBtnDay: { display: 'block', fontSize: 14, fontWeight: 600 },
+    dateBtnDay: { display: 'block', fontSize: 14, fontWeight: 600, color: t.textPrimary },
     dateBtnLabel: { display: 'block', fontSize: 10, color: t.textMuted, marginTop: 2 },
     submitBtn: { padding: '14px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'all 0.2s' },
     submitBtnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
