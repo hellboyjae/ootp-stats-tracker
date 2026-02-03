@@ -1118,24 +1118,57 @@ function calculatePlayerMatch(csvRows, tournamentPlayers, fileType) {
 function SubmitDataPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
+  const { hasAccess, requestAuth } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState('');
   const [suggestNewEvent, setSuggestNewEvent] = useState(false);
   const [newEventName, setNewEventName] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [userNotes, setUserNotes] = useState('');
-  const [file, setFile] = useState(null);
+  const [pitchingFile, setPitchingFile] = useState(null);
+  const [battingFile, setBattingFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Info panel state
+  const [infoContent, setInfoContent] = useState({ sections: [] });
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [editInfoContent, setEditInfoContent] = useState({ sections: [] });
 
   useEffect(() => {
     loadTournaments();
+    loadInfoContent();
   }, []);
 
   const loadTournaments = async () => {
     const { data } = await supabase.from('tournaments').select('id, name, category').order('name');
     setTournaments(data || []);
+  };
+
+  const loadInfoContent = async () => {
+    try {
+      const { data } = await supabase.from('site_content').select('*').eq('id', 'submit_info').single();
+      if (data?.content) setInfoContent(data.content);
+    } catch (e) {}
+  };
+
+  const saveInfoContent = async () => {
+    try {
+      await supabase.from('site_content').upsert({ id: 'submit_info', content: editInfoContent, updated_at: new Date().toISOString() });
+      setInfoContent(editInfoContent);
+      setIsEditingInfo(false);
+      showNotif('Info saved!');
+    } catch (e) {
+      showNotif('Failed to save', 'error');
+    }
+  };
+
+  const startEditingInfo = () => {
+    requestAuth(() => {
+      setEditInfoContent(JSON.parse(JSON.stringify(infoContent)));
+      setIsEditingInfo(true);
+    }, 'master');
   };
 
   const showNotif = (message, type = 'success') => {
@@ -1163,37 +1196,41 @@ function SubmitDataPage() {
     return days;
   };
 
-  const handleFileChange = (e) => {
+  const handlePitchingFileChange = (e) => {
     const f = e.target.files[0];
     if (f && f.name.endsWith('.csv')) {
-      setFile(f);
+      setPitchingFile(f);
       setSubmitResult(null);
-    } else {
+    } else if (f) {
+      showNotif('Please select a CSV file', 'error');
+    }
+  };
+
+  const handleBattingFileChange = (e) => {
+    const f = e.target.files[0];
+    if (f && f.name.endsWith('.csv')) {
+      setBattingFile(f);
+      setSubmitResult(null);
+    } else if (f) {
       showNotif('Please select a CSV file', 'error');
     }
   };
 
   const handleSubmit = async () => {
-    if (!file) { showNotif('Please select a file', 'error'); return; }
+    if (!pitchingFile && !battingFile) { showNotif('Please select at least one CSV file', 'error'); return; }
     if (!selectedDate) { showNotif('Please select a date', 'error'); return; }
     if (!selectedTournamentId && !suggestNewEvent) { showNotif('Please select a tournament or suggest a new event', 'error'); return; }
     if (suggestNewEvent && !newEventName.trim()) { showNotif('Please enter a name for the new event', 'error'); return; }
 
     setIsSubmitting(true);
+    const results = { pitching: null, batting: null };
+    
     try {
-      const content = await file.text();
-      const validation = validateCSV(content, file.name);
-      
       // Get tournament for player matching
-      let matchPercent = 0;
       let selectedTournament = null;
       if (selectedTournamentId) {
         const { data: tournamentData } = await supabase.from('tournaments').select('*').eq('id', selectedTournamentId).single();
-        if (tournamentData) {
-          selectedTournament = tournamentData;
-          const playersToMatch = validation.stats.type === 'batting' ? tournamentData.batting : tournamentData.pitching;
-          matchPercent = calculatePlayerMatch(validation.rawRows, playersToMatch, validation.stats.type);
-        }
+        if (tournamentData) selectedTournament = tournamentData;
       }
 
       // Check if date already has data
@@ -1202,36 +1239,78 @@ function SubmitDataPage() {
         dateAlreadyUploaded = true;
       }
 
-      // Save to pending_uploads
-      const { error } = await supabase.from('pending_uploads').insert({
-        suggested_tournament_id: selectedTournamentId || null,
-        suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
-        suggested_date: selectedDate,
-        user_notes: userNotes.trim() || null,
-        file_type: validation.stats.type,
-        file_name: file.name,
-        raw_data: validation.rawRows,
-        clean_data: validation.cleanRows,
-        removed_rows: validation.removedRows,
-        validation_issues: validation.issues,
-        player_match_percent: matchPercent,
-        date_already_uploaded: dateAlreadyUploaded,
-        has_critical_issues: validation.hasCritical,
-        status: 'pending'
-      });
+      // Process pitching file
+      if (pitchingFile) {
+        const content = await pitchingFile.text();
+        const validation = validateCSV(content, pitchingFile.name);
+        
+        let matchPercent = 0;
+        if (selectedTournament) {
+          matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.pitching, 'pitching');
+        }
 
-      if (error) throw error;
+        const { error } = await supabase.from('pending_uploads').insert({
+          suggested_tournament_id: selectedTournamentId || null,
+          suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
+          suggested_date: selectedDate,
+          user_notes: userNotes.trim() || null,
+          file_type: 'pitching',
+          file_name: pitchingFile.name,
+          raw_data: validation.rawRows,
+          clean_data: validation.cleanRows,
+          removed_rows: validation.removedRows,
+          validation_issues: validation.issues,
+          player_match_percent: matchPercent,
+          date_already_uploaded: dateAlreadyUploaded,
+          has_critical_issues: validation.hasCritical,
+          status: 'pending'
+        });
+
+        if (error) throw error;
+        results.pitching = { playerCount: validation.cleanRows.length, removedCount: validation.removedRows.length, hasCritical: validation.hasCritical };
+      }
+
+      // Process batting file
+      if (battingFile) {
+        const content = await battingFile.text();
+        const validation = validateCSV(content, battingFile.name);
+        
+        let matchPercent = 0;
+        if (selectedTournament) {
+          matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.batting, 'batting');
+        }
+
+        const { error } = await supabase.from('pending_uploads').insert({
+          suggested_tournament_id: selectedTournamentId || null,
+          suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
+          suggested_date: selectedDate,
+          user_notes: userNotes.trim() || null,
+          file_type: 'batting',
+          file_name: battingFile.name,
+          raw_data: validation.rawRows,
+          clean_data: validation.cleanRows,
+          removed_rows: validation.removedRows,
+          validation_issues: validation.issues,
+          player_match_percent: matchPercent,
+          date_already_uploaded: dateAlreadyUploaded,
+          has_critical_issues: validation.hasCritical,
+          status: 'pending'
+        });
+
+        if (error) throw error;
+        results.batting = { playerCount: validation.cleanRows.length, removedCount: validation.removedRows.length, hasCritical: validation.hasCritical };
+      }
 
       setSubmitResult({
         success: true,
-        type: validation.stats.type,
-        playerCount: validation.cleanRows.length,
-        removedCount: validation.removedRows.length,
-        hasCritical: validation.hasCritical
+        pitching: results.pitching,
+        batting: results.batting,
+        hasCritical: (results.pitching?.hasCritical || results.batting?.hasCritical)
       });
 
       // Reset form
-      setFile(null);
+      setPitchingFile(null);
+      setBattingFile(null);
       setSelectedDate('');
       setUserNotes('');
       setSelectedTournamentId('');
@@ -1247,16 +1326,16 @@ function SubmitDataPage() {
 
   const groupedTournaments = {
     tournaments: tournaments.filter(t => t.category === 'tournaments' || !t.category),
-    drafts: tournaments.filter(t => t.category === 'drafts'),
-    legacy: tournaments.filter(t => t.category === 'legacy')
+    drafts: tournaments.filter(t => t.category === 'drafts')
   };
 
   return (
     <Layout notification={notification}>
-      <div style={styles.submitPage}>
-        <div style={styles.submitContainer}>
+      <div style={styles.submitPageLayout}>
+        {/* Left: Upload Form */}
+        <div style={styles.submitFormPanel}>
           <h2 style={styles.submitTitle}>📤 Submit CSV Data</h2>
-          <p style={styles.submitSubtitle}>Upload your CSV file for admin review and approval.</p>
+          <p style={styles.submitSubtitle}>Submit <strong>one event at a time</strong> — include both Pitching and Batting CSVs for that event.</p>
 
           {submitResult ? (
             <div style={{...styles.submitResult, borderColor: submitResult.hasCritical ? theme.warning : theme.success}}>
@@ -1265,23 +1344,48 @@ function SubmitDataPage() {
                 {submitResult.hasCritical ? 'Submitted with Issues' : 'Submitted Successfully!'}
               </div>
               <div style={styles.submitResultDetails}>
-                Detected: <strong>{submitResult.type?.toUpperCase()}</strong> • {submitResult.playerCount} players
-                {submitResult.removedCount > 0 && ` • ${submitResult.removedCount} rows flagged`}
+                {submitResult.pitching && (
+                  <div>Pitching: {submitResult.pitching.playerCount} players{submitResult.pitching.removedCount > 0 && ` (${submitResult.pitching.removedCount} flagged)`}</div>
+                )}
+                {submitResult.batting && (
+                  <div>Batting: {submitResult.batting.playerCount} players{submitResult.batting.removedCount > 0 && ` (${submitResult.batting.removedCount} flagged)`}</div>
+                )}
               </div>
               <p style={styles.submitResultNote}>An admin will review and approve your submission shortly.</p>
-              <button style={styles.submitAnotherBtn} onClick={() => setSubmitResult(null)}>Submit Another</button>
+              <button style={styles.submitAnotherBtn} onClick={() => setSubmitResult(null)}>Submit Another Event</button>
             </div>
           ) : (
             <div style={styles.submitForm}>
-              {/* File Upload */}
+              {/* Pitching File Upload */}
               <div style={styles.formSection}>
-                <label style={styles.formLabel}>CSV File *</label>
+                <label style={styles.formLabel}>Pitching CSV</label>
                 <label style={styles.fileDropzone}>
-                  <input type="file" accept=".csv" onChange={handleFileChange} style={{display:'none'}} />
-                  {file ? (
-                    <div style={styles.fileSelected}>📄 {file.name} <span style={styles.fileSize}>({(file.size/1024).toFixed(1)} KB)</span></div>
+                  <input type="file" accept=".csv" onChange={handlePitchingFileChange} style={{display:'none'}} />
+                  {pitchingFile ? (
+                    <div style={styles.fileSelected}>
+                      <span style={styles.fileTypeTag}>PITCHING</span>
+                      📄 {pitchingFile.name} <span style={styles.fileSize}>({(pitchingFile.size/1024).toFixed(1)} KB)</span>
+                      <button style={styles.fileClearBtn} onClick={(e) => { e.preventDefault(); setPitchingFile(null); }}>✕</button>
+                    </div>
                   ) : (
-                    <div style={styles.filePrompt}><span style={styles.fileIcon}>📁</span>Click to select or drag CSV file</div>
+                    <div style={styles.filePrompt}><span style={styles.fileIcon}>⚾</span>Click to upload Pitching CSV</div>
+                  )}
+                </label>
+              </div>
+
+              {/* Batting File Upload */}
+              <div style={styles.formSection}>
+                <label style={styles.formLabel}>Batting CSV</label>
+                <label style={styles.fileDropzone}>
+                  <input type="file" accept=".csv" onChange={handleBattingFileChange} style={{display:'none'}} />
+                  {battingFile ? (
+                    <div style={styles.fileSelected}>
+                      <span style={{...styles.fileTypeTag, background: theme.success}}>BATTING</span>
+                      📄 {battingFile.name} <span style={styles.fileSize}>({(battingFile.size/1024).toFixed(1)} KB)</span>
+                      <button style={styles.fileClearBtn} onClick={(e) => { e.preventDefault(); setBattingFile(null); }}>✕</button>
+                    </div>
+                  ) : (
+                    <div style={styles.filePrompt}><span style={styles.fileIcon}>🏏</span>Click to upload Batting CSV</div>
                   )}
                 </label>
               </div>
@@ -1359,18 +1463,88 @@ function SubmitDataPage() {
                   onChange={(e) => setUserNotes(e.target.value)}
                   placeholder="Any context for the admin (e.g., 'Week 3 Monday game')"
                   style={styles.formTextarea}
-                  rows={3}
+                  rows={2}
                 />
               </div>
 
               {/* Submit Button */}
               <button 
                 onClick={handleSubmit} 
-                disabled={isSubmitting}
-                style={{...styles.submitBtn, ...(isSubmitting ? styles.submitBtnDisabled : {})}}
+                disabled={isSubmitting || (!pitchingFile && !battingFile)}
+                style={{...styles.submitBtn, ...(isSubmitting || (!pitchingFile && !battingFile) ? styles.submitBtnDisabled : {})}}
               >
                 {isSubmitting ? 'Processing...' : '📤 Submit for Review'}
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Info Panel */}
+        <div style={styles.submitInfoPanel}>
+          <div style={styles.infoPanelHeader}>
+            <h3 style={styles.infoPanelTitle}>📋 Submission Guidelines</h3>
+            {!isEditingInfo && (
+              <button onClick={startEditingInfo} style={styles.infoPanelEditBtn}>
+                {hasAccess('master') ? '✎ Edit' : '🔒'}
+              </button>
+            )}
+          </div>
+          
+          {isEditingInfo ? (
+            <div style={styles.infoPanelEdit}>
+              {editInfoContent.sections.map((section, i) => (
+                <div key={i} style={styles.infoPanelEditSection}>
+                  <div style={styles.infoPanelEditHeader}>
+                    <input 
+                      type="text" 
+                      value={section.heading} 
+                      onChange={(e) => {
+                        const newSections = [...editInfoContent.sections];
+                        newSections[i] = { ...newSections[i], heading: e.target.value };
+                        setEditInfoContent({ ...editInfoContent, sections: newSections });
+                      }}
+                      style={styles.infoPanelEditInput}
+                      placeholder="Section heading..."
+                    />
+                    <button 
+                      onClick={() => setEditInfoContent({ ...editInfoContent, sections: editInfoContent.sections.filter((_, idx) => idx !== i) })}
+                      style={styles.infoPanelRemoveBtn}
+                    >✕</button>
+                  </div>
+                  <textarea
+                    value={section.body}
+                    onChange={(e) => {
+                      const newSections = [...editInfoContent.sections];
+                      newSections[i] = { ...newSections[i], body: e.target.value };
+                      setEditInfoContent({ ...editInfoContent, sections: newSections });
+                    }}
+                    style={styles.infoPanelEditTextarea}
+                    rows={4}
+                    placeholder="Content (supports **bold**, *italic*, [links](url))..."
+                  />
+                </div>
+              ))}
+              <button 
+                onClick={() => setEditInfoContent({ ...editInfoContent, sections: [...editInfoContent.sections, { heading: '', body: '' }] })}
+                style={styles.infoPanelAddBtn}
+              >+ Add Section</button>
+              <div style={styles.infoPanelEditActions}>
+                <button onClick={saveInfoContent} style={styles.saveBtn}>Save</button>
+                <button onClick={() => setIsEditingInfo(false)} style={styles.cancelBtn}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div style={styles.infoPanelContent}>
+              {infoContent.sections.length === 0 ? (
+                <p style={styles.infoPanelEmpty}>No guidelines added yet. {hasAccess('master') && 'Click Edit to add content.'}</p>
+              ) : (
+                infoContent.sections.map((section, i) => (
+                  <div key={i} style={styles.infoPanelSection}>
+                    {section.heading && <h4 style={styles.infoPanelHeading}>{section.heading}</h4>}
+                    <div style={styles.infoPanelBody} dangerouslySetInnerHTML={{ __html: parseMarkdown(section.body) }} />
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -2152,22 +2326,25 @@ function getStyles(t) {
     navBadge: { background: t.error, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
     
     // Submit Data Page
-    submitPage: { minHeight: 'calc(100vh - 60px)', display: 'flex', justifyContent: 'center', padding: '40px 20px' },
-    submitContainer: { width: '100%', maxWidth: 600 },
-    submitTitle: { fontSize: 24, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
-    submitSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 32 },
-    submitForm: { display: 'flex', flexDirection: 'column', gap: 24 },
+    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24, padding: '24px', maxWidth: 1200, margin: '0 auto' },
+    submitFormPanel: { background: t.cardBg, borderRadius: 8, padding: 24, border: `1px solid ${t.border}` },
+    submitInfoPanel: { background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', height: 'fit-content', position: 'sticky', top: 24 },
+    submitTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
+    submitSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
+    submitForm: { display: 'flex', flexDirection: 'column', gap: 20 },
     formSection: { display: 'flex', flexDirection: 'column', gap: 8 },
     formLabel: { fontSize: 14, fontWeight: 600, color: t.textPrimary },
     formHint: { fontSize: 12, color: t.textMuted, marginTop: -4 },
     formInput: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, outline: 'none' },
     formSelect: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer', outline: 'none' },
     formTextarea: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit' },
-    fileDropzone: { padding: '32px 20px', background: t.inputBg, border: `2px dashed ${t.border}`, borderRadius: 8, cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s' },
+    fileDropzone: { padding: '24px 20px', background: t.inputBg, border: `2px dashed ${t.border}`, borderRadius: 8, cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s' },
     filePrompt: { color: t.textMuted, fontSize: 14 },
-    fileIcon: { display: 'block', fontSize: 32, marginBottom: 8 },
-    fileSelected: { color: t.textPrimary, fontWeight: 500 },
+    fileIcon: { display: 'block', fontSize: 28, marginBottom: 6 },
+    fileSelected: { color: t.textPrimary, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
     fileSize: { color: t.textMuted, fontWeight: 400 },
+    fileTypeTag: { background: t.accent, color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 },
+    fileClearBtn: { background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 14, padding: '2px 6px', borderRadius: 4 },
     tournamentOptions: { display: 'flex', gap: 16, marginBottom: 8 },
     radioOption: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: t.textSecondary },
     dateGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 },
@@ -2177,13 +2354,31 @@ function getStyles(t) {
     dateBtnDay: { display: 'block', fontSize: 14, fontWeight: 600 },
     dateBtnLabel: { display: 'block', fontSize: 10, color: t.textMuted, marginTop: 2 },
     submitBtn: { padding: '14px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'all 0.2s' },
-    submitBtnDisabled: { opacity: 0.6, cursor: 'not-allowed' },
-    submitResult: { textAlign: 'center', padding: '40px 24px', background: t.panelBg, borderRadius: 12, border: `2px solid ${t.success}` },
+    submitBtnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
+    submitResult: { textAlign: 'center', padding: '32px 24px', background: t.panelBg, borderRadius: 12, border: `2px solid ${t.success}` },
     submitResultIcon: { fontSize: 48, marginBottom: 12 },
     submitResultTitle: { fontSize: 20, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
     submitResultDetails: { fontSize: 14, color: t.textSecondary, marginBottom: 16 },
     submitResultNote: { fontSize: 13, color: t.textMuted, marginBottom: 20 },
     submitAnotherBtn: { padding: '10px 20px', background: 'transparent', color: t.accent, border: `1px solid ${t.accent}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 },
+    
+    // Info Panel (right side)
+    infoPanelHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: `1px solid ${t.border}`, background: t.cardBg },
+    infoPanelTitle: { fontSize: 15, fontWeight: 600, color: t.textPrimary, margin: 0 },
+    infoPanelEditBtn: { background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 13, padding: '4px 8px' },
+    infoPanelContent: { padding: 20, maxHeight: 'calc(100vh - 200px)', overflow: 'auto' },
+    infoPanelSection: { marginBottom: 20 },
+    infoPanelHeading: { fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 8 },
+    infoPanelBody: { fontSize: 13, color: t.textSecondary, lineHeight: 1.6 },
+    infoPanelEmpty: { color: t.textMuted, fontSize: 13, fontStyle: 'italic' },
+    infoPanelEdit: { padding: 16 },
+    infoPanelEditSection: { marginBottom: 16, padding: 12, background: t.inputBg, borderRadius: 6 },
+    infoPanelEditHeader: { display: 'flex', gap: 8, marginBottom: 8 },
+    infoPanelEditInput: { flex: 1, padding: '8px 10px', background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
+    infoPanelRemoveBtn: { background: t.error, color: '#fff', border: 'none', borderRadius: 4, width: 28, cursor: 'pointer', fontSize: 12 },
+    infoPanelEditTextarea: { width: '100%', padding: '8px 10px', background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' },
+    infoPanelAddBtn: { width: '100%', padding: '10px', background: 'transparent', color: t.accent, border: `1px dashed ${t.accent}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, marginBottom: 16 },
+    infoPanelEditActions: { display: 'flex', gap: 8 },
     
     // Review Queue Page
     reviewPage: { minHeight: 'calc(100vh - 60px)', padding: '24px' },
