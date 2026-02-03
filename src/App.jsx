@@ -623,10 +623,8 @@ function StatsPage() {
                 </div>);
               })}
           </div>
-          {sidebarTab !== 'legacy' && (
-            {hasAccess('upload') && (
+          {sidebarTab !== 'legacy' && hasAccess('upload') && (
             <button style={styles.newTournamentBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
-          )}
           )}
         </aside>
         <div style={styles.content}>
