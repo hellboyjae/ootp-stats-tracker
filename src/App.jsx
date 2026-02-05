@@ -1134,13 +1134,13 @@ function calculatePlayerMatch(csvRows, tournamentPlayers, fileType) {
   if (!tournamentPlayers || tournamentPlayers.length === 0) return 0;
   if (!csvRows || csvRows.length === 0) return 0;
   
-  const tournamentNames = new Set(tournamentPlayers.map(p => `${p.name}|${p.ovr}`));
+  // Create set of tournament player names (lowercase for case-insensitive matching)
+  const tournamentNames = new Set(tournamentPlayers.map(p => (p.name || '').toLowerCase().trim()));
   let matches = 0;
   
   csvRows.forEach(row => {
-    const name = (row.Name || '').trim();
-    const ovr = parseInt(row.OVR) || 0;
-    if (tournamentNames.has(`${name}|${ovr}`)) matches++;
+    const name = (row.Name || '').toLowerCase().trim();
+    if (name && tournamentNames.has(name)) matches++;
   });
   
   return Math.round((matches / csvRows.length) * 100);
