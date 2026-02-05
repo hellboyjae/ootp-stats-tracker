@@ -1702,33 +1702,77 @@ function ReviewQueuePage() {
       const existingData = upload.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
       const newData = upload.clean_data || [];
       
+      // Helper functions for parsing
+      const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+      const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
+      
       // Combine data (merge players by name+ovr)
       const playerMap = new Map();
       existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
       
       newData.forEach(row => {
         const name = (row.Name || '').trim();
-        const ovr = parseInt(row.OVR) || 0;
+        const ovr = parseNum(row.OVR);
         const key = `${name}|${ovr}`;
         
-        // Normalize the row data
+        // Normalize the row data - MUST match normalizePlayerData exactly
         const normalized = upload.file_type === 'batting' ? {
           id: crypto.randomUUID(),
-          name, ovr, pos: row.POS || '', bats: row.Bats || '',
-          g: row.G || 0, gs: row.GS || 0, pa: row.PA || 0, ab: row.AB || 0,
-          h: row.H || 0, doubles: row['2B'] || 0, triples: row['3B'] || 0, hr: row.HR || 0,
-          bbPct: row['BB%'] || '', so: row.SO || 0, gidp: row.GIDP || 0,
-          avg: row.AVG || '', obp: row.OBP || '', slg: row.SLG || '', woba: row.wOBA || '',
-          ops: row.OPS || '', opsPlus: row['OPS+'] || '', babip: row.BABIP || '',
-          wrcPlus: row['wRC+'] || '', wraa: row.wRAA || '', war: row.WAR || '',
-          sbPct: row['SB%'] || '', bsr: row.BsR || '', vari: row.VARI || ''
+          name: row.Name?.trim() || 'Unknown',
+          pos: row.POS?.trim() || '',
+          bats: row.B || '',
+          ovr: parseNum(row.OVR),
+          vari: parseNum(row.VAR),
+          g: parseNum(row.G),
+          gs: parseNum(row.GS),
+          pa: parseNum(row.PA),
+          ab: parseNum(row.AB),
+          h: parseNum(row.H),
+          doubles: parseNum(row['2B']),
+          triples: parseNum(row['3B']),
+          hr: parseNum(row.HR),
+          bbPct: parsePct(row['BB%']),
+          so: parseNum(row.SO),
+          gidp: parseNum(row.GIDP),
+          avg: row.AVG || '.000',
+          obp: row.OBP || '.000',
+          slg: row.SLG || '.000',
+          woba: row.wOBA || '.000',
+          ops: row.OPS || '.000',
+          opsPlus: parseNum(row['OPS+']),
+          babip: row.BABIP || '.000',
+          wrcPlus: parseNum(row['wRC+']),
+          wraa: row.wRAA || '0.0',
+          war: row.WAR || '0.0',
+          sbPct: parsePct(row['SB%']),
+          bsr: row.BsR || '0.0'
         } : {
           id: crypto.randomUUID(),
-          name, ovr, pos: row.POS || '', throws: row.Throws || '',
-          g: row.G || 0, gs: row.GS || 0, ip: row.IP || 0, bf: row.BF || 0,
-          era: row.ERA || '', whip: row.WHIP || '', kPer9: row['K/9'] || '', bbPer9: row['BB/9'] || '',
-          hrPer9: row['HR/9'] || '', babip: row.BABIP || '', fip: row.FIP || '', siera: row.SIERA || '',
-          war: row.WAR || '', hPer9: row['H/9'] || '', avg: row.AVG || '', obp: row.OBP || '', vari: row.VARI || ''
+          name: row.Name?.trim() || 'Unknown',
+          pos: row.POS?.trim() || '',
+          throws: row.T || '',
+          ovr: parseNum(row.OVR),
+          vari: parseNum(row.VAR),
+          g: parseNum(row.G),
+          gs: parseNum(row.GS),
+          ip: row.IP || '0',
+          bf: parseNum(row.BF),
+          era: row.ERA || '0.00',
+          avg: row.AVG || '.000',
+          obp: row.OBP || '.000',
+          babip: row.BABIP || '.000',
+          whip: row.WHIP || '0.00',
+          braPer9: row['BRA/9'] || '0.00',
+          hrPer9: row['HR/9'] || '0.00',
+          hPer9: row['H/9'] || '0.00',
+          bbPer9: row['BB/9'] || '0.00',
+          kPer9: row['K/9'] || '0.00',
+          lobPct: parsePct(row['LOB%']),
+          eraPlus: parseNum(row['ERA+']),
+          fip: row.FIP || '0.00',
+          fipMinus: parseNum(row['FIP-']),
+          war: row.WAR || '0.0',
+          siera: row.SIERA || '0.00'
         };
         
         if (playerMap.has(key)) {
