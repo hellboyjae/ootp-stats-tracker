@@ -2510,7 +2510,7 @@ function LeaderboardsPage() {
           {activeTab === 'weekly' && (
             <>
               <div style={styles.weekSelectorCentered}>
-                <label style={styles.weekLabel}>Week of:</label>
+                <label style={styles.leaderboardWeekLabel}>Week of:</label>
                 <select 
                   value={selectedWeek} 
                   onChange={(e) => setSelectedWeek(e.target.value)}
@@ -2874,7 +2874,7 @@ function getStyles(t) {
     leaderboardCardTitle: { margin: 0, padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 16, fontWeight: 600, color: t.textPrimary },
     weekSelector: { display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${t.border}`, background: t.panelBg },
     weekSelectorCentered: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 24 },
-    weekLabel: { fontSize: 14, fontWeight: 600, color: t.textSecondary },
+    leaderboardWeekLabel: { fontSize: 14, fontWeight: 600, color: t.textSecondary },
     weekSelect: { padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer' },
     leaderboardTableWrapper: { overflowX: 'auto', maxHeight: 600, overflowY: 'auto' },
     leaderboardTable: { width: '100%', borderCollapse: 'collapse' },
