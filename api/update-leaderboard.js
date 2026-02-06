@@ -6,8 +6,8 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Excluded tournaments from the bookmarklet
-const EXCLUDED_TOURNAMENTS = [
+// Excluded tournaments for DAILY drafts (from the bookmarklet)
+const EXCLUDED_DAILY_TOURNAMENTS = [
   '*1*Daily Low Iron',
   '*3*Daily Low Diamond',
   '*3*Daily Open Low Cap',
@@ -31,18 +31,9 @@ const EXCLUDED_TOURNAMENTS = [
   'Tuesday Rocking Chair'
 ];
 
-// Star calculation based on tournament size and placement
-function getStarsForPosition(size, pos) {
-  if (size === 256) {
-    if (pos === 0) return 550;
-    if (pos === 1) return 350;
-    if (pos === 2 || pos === 3) return 200;
-    if (pos >= 4 && pos <= 7) return 100;
-    if (pos >= 8 && pos <= 15) return 50;
-    if (pos >= 16 && pos <= 31) return 25;
-    if (pos >= 32 && pos <= 63) return 10;
-    return 0;
-  } else if (size === 128) {
+// Star calculation for DAILY drafts (max 128 players)
+function getDailyStarsForPosition(size, pos) {
+  if (size === 128) {
     if (pos === 0) return 130;
     if (pos === 1) return 90;
     if (pos === 2 || pos === 3) return 60;
@@ -55,6 +46,42 @@ function getStarsForPosition(size, pos) {
     if (pos === 1) return 60;
     if (pos === 2 || pos === 3) return 30;
     if (pos >= 4 && pos <= 7) return 15;
+    if (pos >= 8 && pos <= 15) return 10;
+    return 0;
+  } else if (size === 32) {
+    if (pos === 0) return 70;
+    if (pos === 1) return 40;
+    if (pos === 2 || pos === 3) return 10;
+    if (pos >= 4 && pos <= 7) return 5;
+    return 0;
+  }
+  return 0;
+}
+
+// Star calculation for WEEKLY drafts (up to 256 players)
+function getWeeklyStarsForPosition(size, pos) {
+  if (size === 256) {
+    if (pos === 0) return 550;
+    if (pos === 1) return 350;
+    if (pos === 2 || pos === 3) return 200;
+    if (pos >= 4 && pos <= 7) return 100;
+    if (pos >= 8 && pos <= 15) return 50;
+    if (pos >= 16 && pos <= 31) return 25;
+    if (pos >= 32 && pos <= 63) return 10;
+    return 0;
+  } else if (size === 128) {
+    if (pos === 0) return 400;
+    if (pos === 1) return 300;
+    if (pos === 2 || pos === 3) return 150;
+    if (pos >= 4 && pos <= 7) return 75;
+    if (pos >= 8 && pos <= 15) return 25;
+    if (pos >= 16 && pos <= 31) return 10;
+    return 0;
+  } else if (size === 64) {
+    if (pos === 0) return 250;
+    if (pos === 1) return 150;
+    if (pos === 2 || pos === 3) return 75;
+    if (pos >= 4 && pos <= 7) return 25;
     if (pos >= 8 && pos <= 15) return 10;
     return 0;
   } else if (size === 32) {
@@ -142,6 +169,79 @@ async function fetchDraftCSVUrl() {
   throw new Error('Could not find draft CSV link on page');
 }
 
+// Process leaderboard for a specific type (daily or weekly)
+function processLeaderboardType(rows, isDaily) {
+  // Group by tournament title
+  const grouped = {};
+  rows.forEach(row => {
+    if (!row || !row.title) return;
+    const title = row.title.trim();
+    
+    // Filter based on type
+    const titleIsDaily = /daily/i.test(title);
+    if (isDaily && !titleIsDaily) return; // Want daily, but this isn't
+    if (!isDaily && titleIsDaily) return; // Want weekly, but this is daily
+    
+    // Exclude specific tournaments (only for daily)
+    if (isDaily && EXCLUDED_DAILY_TOURNAMENTS.includes(title)) return;
+    
+    if (!grouped[title]) grouped[title] = [];
+    grouped[title].push(row);
+  });
+  
+  // Process each tournament group
+  const finalResults = [];
+  Object.entries(grouped).forEach(([title, tournamentRows]) => {
+    // Sort by num descending (most recent instances first)
+    tournamentRows.sort((a, b) => (b.num || 0) - (a.num || 0));
+    
+    // For daily tournaments, take last 7 instances; for weekly, take 1
+    const countNeeded = isDaily ? 7 : 1;
+    const chosen = tournamentRows.slice(0, countNeeded);
+    
+    // Get max placement size
+    const size = chosen.reduce((max, r) => {
+      const len = Array.isArray(r.placements) ? r.placements.length : 0;
+      return Math.max(max, len);
+    }, 0);
+    
+    finalResults.push({
+      title,
+      size,
+      instances: chosen
+    });
+  });
+  
+  // Calculate stars per user
+  const userStars = {};
+  const getStars = isDaily ? getDailyStarsForPosition : getWeeklyStarsForPosition;
+  
+  finalResults.forEach(tournament => {
+    const size = tournament.size;
+    
+    tournament.instances.forEach(instance => {
+      if (!Array.isArray(instance.placements)) return;
+      
+      instance.placements.forEach((user, idx) => {
+        if (!user) return;
+        const username = String(user).trim();
+        if (!username) return;
+        
+        const stars = getStars(size, idx);
+        if (stars === 0) return;
+        
+        if (!userStars[username]) userStars[username] = 0;
+        userStars[username] += stars;
+      });
+    });
+  });
+  
+  // Sort by stars
+  return Object.entries(userStars)
+    .map(([username, stars]) => ({ username, stars }))
+    .sort((a, b) => b.stars - a.stars);
+}
+
 // Main processing function
 async function processLeaderboard() {
   console.log('Starting leaderboard update...');
@@ -180,76 +280,15 @@ async function processLeaderboard() {
   );
   console.log('Filtered rows (recent):', filteredRows.length);
   
-  // Group by tournament title, filter to ONLY daily drafts
-  const grouped = {};
-  filteredRows.forEach(row => {
-    if (!row || !row.title) return;
-    const title = row.title.trim();
-    
-    // ONLY include daily drafts
-    if (!/daily/i.test(title)) return;
-    
-    // Exclude specific tournaments
-    if (EXCLUDED_TOURNAMENTS.includes(title)) return;
-    
-    if (!grouped[title]) grouped[title] = [];
-    grouped[title].push(row);
-  });
+  // Process DAILY drafts
+  const dailyUsers = processLeaderboardType(filteredRows, true);
+  console.log('Daily users with stars:', dailyUsers.length);
+  console.log('Daily Top 5:', dailyUsers.slice(0, 5));
   
-  console.log('Daily draft tournaments found:', Object.keys(grouped).length);
-  
-  // Process each tournament group
-  const finalResults = [];
-  Object.entries(grouped).forEach(([title, tournamentRows]) => {
-    // Sort by num descending (most recent instances first)
-    tournamentRows.sort((a, b) => (b.num || 0) - (a.num || 0));
-    
-    // For daily tournaments, take last 7 instances
-    const countNeeded = 7;
-    const chosen = tournamentRows.slice(0, countNeeded);
-    
-    // Get max placement size
-    const size = chosen.reduce((max, r) => {
-      const len = Array.isArray(r.placements) ? r.placements.length : 0;
-      return Math.max(max, len);
-    }, 0);
-    
-    finalResults.push({
-      title,
-      size,
-      instances: chosen
-    });
-  });
-  
-  // Calculate stars per user
-  const userStars = {};
-  finalResults.forEach(tournament => {
-    const size = tournament.size;
-    
-    tournament.instances.forEach(instance => {
-      if (!Array.isArray(instance.placements)) return;
-      
-      instance.placements.forEach((user, idx) => {
-        if (!user) return;
-        const username = String(user).trim();
-        if (!username) return;
-        
-        const stars = getStarsForPosition(size, idx);
-        if (stars === 0) return;
-        
-        if (!userStars[username]) userStars[username] = 0;
-        userStars[username] += stars;
-      });
-    });
-  });
-  
-  // Sort by stars
-  const sortedUsers = Object.entries(userStars)
-    .map(([username, stars]) => ({ username, stars }))
-    .sort((a, b) => b.stars - a.stars);
-  
-  console.log('Users with stars:', sortedUsers.length);
-  console.log('Top 5:', sortedUsers.slice(0, 5));
+  // Process WEEKLY drafts
+  const weeklyUsers = processLeaderboardType(filteredRows, false);
+  console.log('Weekly users with stars:', weeklyUsers.length);
+  console.log('Weekly Top 5:', weeklyUsers.slice(0, 5));
   
   // Calculate week_of date (the Tuesday of this week)
   const now = new Date();
@@ -262,54 +301,53 @@ async function processLeaderboard() {
   
   console.log('Week of:', weekOfStr);
   
-  // Check if we already have data for this week
-  const { data: existingWeek } = await supabase
+  // ============ SAVE DAILY DATA ============
+  
+  // Check if we already have daily data for this week
+  const { data: existingDailyWeek } = await supabase
     .from('weekly_draft_leaderboard')
     .select('id')
     .eq('week_of', weekOfStr)
     .limit(1);
   
-  if (existingWeek && existingWeek.length > 0) {
-    // Delete existing data for this week (we're updating it)
+  if (existingDailyWeek && existingDailyWeek.length > 0) {
     await supabase
       .from('weekly_draft_leaderboard')
       .delete()
       .eq('week_of', weekOfStr);
-    console.log('Deleted existing data for week:', weekOfStr);
+    console.log('Deleted existing daily data for week:', weekOfStr);
   }
   
-  // Insert new weekly leaderboard data
-  const leaderboardRows = sortedUsers.map((user, idx) => ({
+  // Insert daily leaderboard data
+  const dailyLeaderboardRows = dailyUsers.map((user, idx) => ({
     week_of: weekOfStr,
     username: user.username,
     stars: user.stars,
     rank: idx + 1
   }));
   
-  if (leaderboardRows.length > 0) {
-    // Insert in batches of 100
-    for (let i = 0; i < leaderboardRows.length; i += 100) {
-      const batch = leaderboardRows.slice(i, i + 100);
+  if (dailyLeaderboardRows.length > 0) {
+    for (let i = 0; i < dailyLeaderboardRows.length; i += 100) {
+      const batch = dailyLeaderboardRows.slice(i, i + 100);
       const { error } = await supabase
         .from('weekly_draft_leaderboard')
         .insert(batch);
       
       if (error) {
-        console.error('Error inserting leaderboard batch:', error);
+        console.error('Error inserting daily leaderboard batch:', error);
         throw error;
       }
     }
-    console.log('Inserted weekly leaderboard rows:', leaderboardRows.length);
+    console.log('Inserted daily leaderboard rows:', dailyLeaderboardRows.length);
   }
   
-  // Update all-time points for top 20
-  const top20 = sortedUsers.slice(0, 20);
-  for (let i = 0; i < top20.length; i++) {
-    const user = top20[i];
-    const points = 20 - i; // 1st = 20pts, 2nd = 19pts, ..., 20th = 1pt
+  // Update daily all-time points for top 20
+  const dailyTop20 = dailyUsers.slice(0, 20);
+  for (let i = 0; i < dailyTop20.length; i++) {
+    const user = dailyTop20[i];
+    const points = 20 - i;
     const rank = i + 1;
     
-    // Upsert all-time points
     const { data: existing } = await supabase
       .from('alltime_drafter_points')
       .select('*')
@@ -317,7 +355,6 @@ async function processLeaderboard() {
       .single();
     
     if (existing) {
-      // Update existing
       const newBestFinish = existing.best_finish ? Math.min(existing.best_finish, rank) : rank;
       await supabase
         .from('alltime_drafter_points')
@@ -329,7 +366,6 @@ async function processLeaderboard() {
         })
         .eq('username', user.username);
     } else {
-      // Insert new
       await supabase
         .from('alltime_drafter_points')
         .insert({
@@ -341,14 +377,97 @@ async function processLeaderboard() {
         });
     }
   }
+  console.log('Updated daily all-time points for top 20');
   
-  console.log('Updated all-time points for top 20');
+  // ============ SAVE WEEKLY DATA ============
+  
+  // Check if we already have weekly data for this week
+  const { data: existingWeeklyWeek } = await supabase
+    .from('weekly_draft_leaderboard_weekly')
+    .select('id')
+    .eq('week_of', weekOfStr)
+    .limit(1);
+  
+  if (existingWeeklyWeek && existingWeeklyWeek.length > 0) {
+    await supabase
+      .from('weekly_draft_leaderboard_weekly')
+      .delete()
+      .eq('week_of', weekOfStr);
+    console.log('Deleted existing weekly data for week:', weekOfStr);
+  }
+  
+  // Insert weekly leaderboard data
+  const weeklyLeaderboardRows = weeklyUsers.map((user, idx) => ({
+    week_of: weekOfStr,
+    username: user.username,
+    stars: user.stars,
+    rank: idx + 1
+  }));
+  
+  if (weeklyLeaderboardRows.length > 0) {
+    for (let i = 0; i < weeklyLeaderboardRows.length; i += 100) {
+      const batch = weeklyLeaderboardRows.slice(i, i + 100);
+      const { error } = await supabase
+        .from('weekly_draft_leaderboard_weekly')
+        .insert(batch);
+      
+      if (error) {
+        console.error('Error inserting weekly leaderboard batch:', error);
+        throw error;
+      }
+    }
+    console.log('Inserted weekly leaderboard rows:', weeklyLeaderboardRows.length);
+  }
+  
+  // Update weekly all-time points for top 20
+  const weeklyTop20 = weeklyUsers.slice(0, 20);
+  for (let i = 0; i < weeklyTop20.length; i++) {
+    const user = weeklyTop20[i];
+    const points = 20 - i;
+    const rank = i + 1;
+    
+    const { data: existing } = await supabase
+      .from('alltime_drafter_points_weekly')
+      .select('*')
+      .eq('username', user.username)
+      .single();
+    
+    if (existing) {
+      const newBestFinish = existing.best_finish ? Math.min(existing.best_finish, rank) : rank;
+      await supabase
+        .from('alltime_drafter_points_weekly')
+        .update({
+          total_points: existing.total_points + points,
+          weeks_participated: existing.weeks_participated + 1,
+          best_finish: newBestFinish,
+          last_updated: new Date().toISOString()
+        })
+        .eq('username', user.username);
+    } else {
+      await supabase
+        .from('alltime_drafter_points_weekly')
+        .insert({
+          username: user.username,
+          total_points: points,
+          weeks_participated: 1,
+          best_finish: rank,
+          last_updated: new Date().toISOString()
+        });
+    }
+  }
+  console.log('Updated weekly all-time points for top 20');
   
   return {
     success: true,
     weekOf: weekOfStr,
-    totalUsers: sortedUsers.length,
-    top5: sortedUsers.slice(0, 5)
+    daily: {
+      totalUsers: dailyUsers.length,
+      top5: dailyUsers.slice(0, 5)
+    },
+    weekly: {
+      totalUsers: weeklyUsers.length,
+      top5: weeklyUsers.slice(0, 5)
+    }
   };
 }
 
