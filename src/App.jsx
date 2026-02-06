@@ -10,6 +10,23 @@ function ThemeProvider({ children }) {
     const saved = localStorage.getItem('theme');
     return saved ? saved === 'dark' : true;
   });
+  
+  // Inject keyframes for news banner animation
+  useEffect(() => {
+    const styleId = 'news-banner-keyframes';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        @keyframes scrollBanner {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+  
   useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
   const toggle = () => setIsDark(!isDark);
   const theme = isDark ? darkTheme : lightTheme;
@@ -114,6 +131,76 @@ function getOvrColor(ovr) {
   return '#FFFFFF';
 }
 
+function NewsBanner({ theme, styles }) {
+  const { hasAccess, requestAuth } = useAuth();
+  const [bannerText, setBannerText] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
+
+  useEffect(() => {
+    loadBanner();
+  }, []);
+
+  const loadBanner = async () => {
+    try {
+      const { data } = await supabase.from('site_content').select('*').eq('id', 'news_banner').single();
+      if (data?.content?.text) setBannerText(data.content.text);
+      else setBannerText("Try our live draft assistant and get early access when OOTP 27 releases! Reach out to hellboyjae98 on discord to get started!");
+    } catch (e) {
+      setBannerText("Try our live draft assistant and get early access when OOTP 27 releases! Reach out to hellboyjae98 on discord to get started!");
+    }
+  };
+
+  const saveBanner = async () => {
+    try {
+      await supabase.from('site_content').upsert({ id: 'news_banner', content: { text: editText }, updated_at: new Date().toISOString() });
+      setBannerText(editText);
+      setIsEditing(false);
+    } catch (e) {
+      console.error('Failed to save banner', e);
+    }
+  };
+
+  const startEditing = () => {
+    requestAuth(() => {
+      setEditText(bannerText);
+      setIsEditing(true);
+    }, 'master');
+  };
+
+  if (!bannerText && !isEditing) return null;
+
+  return (
+    <div style={styles.newsBannerContainer}>
+      {isEditing ? (
+        <div style={styles.newsBannerEdit}>
+          <input 
+            type="text" 
+            value={editText} 
+            onChange={(e) => setEditText(e.target.value)} 
+            style={styles.newsBannerInput}
+            placeholder="Enter banner text..."
+          />
+          <button onClick={saveBanner} style={styles.newsBannerSaveBtn}>Save</button>
+          <button onClick={() => setIsEditing(false)} style={styles.newsBannerCancelBtn}>Cancel</button>
+        </div>
+      ) : (
+        <div style={styles.newsBannerScroll}>
+          <div style={styles.newsBannerText}>
+            <span>{bannerText}</span>
+            <span style={styles.newsBannerSpacer}>•</span>
+            <span>{bannerText}</span>
+            <span style={styles.newsBannerSpacer}>•</span>
+          </div>
+          {hasAccess('master') && (
+            <button onClick={startEditing} style={styles.newsBannerEditBtn}>✎</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Layout({ children, notification, pendingCount = 0 }) {
   const { isDark, toggle, theme } = useTheme();
   const { hasAccess } = useAuth();
@@ -138,6 +225,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
           <button onClick={toggle} style={styles.themeToggle} title={isDark ? 'Light' : 'Dark'}>{isDark ? '☀' : '☾'}</button>
         </div>
       </div></header>
+      <NewsBanner theme={theme} styles={styles} />
       {children}
     </div>
   );
@@ -1131,19 +1219,26 @@ function validateCSV(content, filename) {
 }
 
 function calculatePlayerMatch(csvRows, tournamentPlayers, fileType) {
-  if (!tournamentPlayers || tournamentPlayers.length === 0) return 0;
   if (!csvRows || csvRows.length === 0) return 0;
+  if (!tournamentPlayers || tournamentPlayers.length === 0) return 0;
   
   // Create set of tournament player names (lowercase for case-insensitive matching)
   const tournamentNames = new Set(tournamentPlayers.map(p => (p.name || '').toLowerCase().trim()));
-  let matches = 0;
   
+  // Get unique player names from CSV (since same player may appear multiple times)
+  const csvPlayerNames = new Set();
   csvRows.forEach(row => {
     const name = (row.Name || '').toLowerCase().trim();
-    if (name && tournamentNames.has(name)) matches++;
+    if (name) csvPlayerNames.add(name);
   });
   
-  return Math.round((matches / csvRows.length) * 100);
+  // Count how many unique CSV players exist in tournament
+  let matches = 0;
+  csvPlayerNames.forEach(name => {
+    if (tournamentNames.has(name)) matches++;
+  });
+  
+  return Math.round((matches / csvPlayerNames.size) * 100);
 }
 
 function SubmitDataPage() {
@@ -2240,6 +2335,18 @@ function getStyles(t) {
     headerRight: { display: 'flex', alignItems: 'center', gap: 16 },
     title: { margin: 0, fontSize: 22, color: t.textPrimary, fontWeight: 700 },
     subtitle: { margin: '2px 0 0', fontSize: 12, color: t.textDim, fontWeight: 500 },
+    
+    // News Banner
+    newsBannerContainer: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
+    newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
+    newsBannerText: { display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', animation: 'scrollBanner 25s linear infinite', color: t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
+    newsBannerSpacer: { margin: '0 50px', color: t.textDim },
+    newsBannerEditBtn: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.textMuted, fontSize: 12, zIndex: 10 },
+    newsBannerEdit: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' },
+    newsBannerInput: { flex: 1, padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
+    newsBannerSaveBtn: { padding: '8px 14px', background: t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
+    newsBannerCancelBtn: { padding: '8px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
+    
     nav: { display: 'flex', gap: 4 },
     navLink: { padding: '8px 16px', color: t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 500, fontSize: 13 },
     navLinkActive: { background: t.accent, color: '#fff' },
