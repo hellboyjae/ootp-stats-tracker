@@ -19,8 +19,8 @@ function ThemeProvider({ children }) {
       style.id = styleId;
       style.textContent = `
         @keyframes scrollBanner {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          0% { transform: translateX(100vw); }
+          100% { transform: translateX(-100%); }
         }
       `;
       document.head.appendChild(style);
@@ -187,10 +187,7 @@ function NewsBanner({ theme, styles }) {
       ) : (
         <div style={styles.newsBannerScroll}>
           <div style={styles.newsBannerText}>
-            <span>{bannerText}</span>
-            <span style={styles.newsBannerSpacer}>•</span>
-            <span>{bannerText}</span>
-            <span style={styles.newsBannerSpacer}>•</span>
+            {bannerText}
           </div>
           {hasAccess('master') && (
             <button onClick={startEditing} style={styles.newsBannerEditBtn}>✎</button>
@@ -2339,7 +2336,7 @@ function getStyles(t) {
     // News Banner
     newsBannerContainer: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
     newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
-    newsBannerText: { display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', animation: 'scrollBanner 25s linear infinite', color: t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
+    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 20s linear infinite', color: t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
     newsBannerSpacer: { margin: '0 50px', color: t.textDim },
     newsBannerEditBtn: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.textMuted, fontSize: 12, zIndex: 10 },
     newsBannerEdit: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' },
