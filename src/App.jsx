@@ -210,6 +210,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
         <div style={styles.headerRight}>
           <nav style={styles.nav}>
             <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
+            <NavLink to="/leaderboards" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Leaderboards</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
             <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
@@ -2294,6 +2295,225 @@ function ReviewQueuePage() {
   );
 }
 
+function LeaderboardsPage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const [activeTab, setActiveTab] = useState('weekly');
+  const [weeklyData, setWeeklyData] = useState([]);
+  const [allTimeData, setAllTimeData] = useState([]);
+  const [availableWeeks, setAvailableWeeks] = useState([]);
+  const [selectedWeek, setSelectedWeek] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [notification, setNotification] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedWeek) {
+      loadWeeklyData(selectedWeek);
+    }
+  }, [selectedWeek]);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // Get available weeks
+      const { data: weeks } = await supabase
+        .from('weekly_draft_leaderboard')
+        .select('week_of')
+        .order('week_of', { ascending: false });
+      
+      const uniqueWeeks = [...new Set((weeks || []).map(w => w.week_of))];
+      setAvailableWeeks(uniqueWeeks);
+      
+      if (uniqueWeeks.length > 0) {
+        setSelectedWeek(uniqueWeeks[0]);
+      }
+
+      // Load all-time data
+      const { data: allTime } = await supabase
+        .from('alltime_drafter_points')
+        .select('*')
+        .order('total_points', { ascending: false })
+        .limit(25);
+      
+      setAllTimeData(allTime || []);
+    } catch (e) {
+      console.error('Load error:', e);
+    }
+    setIsLoading(false);
+  };
+
+  const loadWeeklyData = async (weekOf) => {
+    try {
+      const { data } = await supabase
+        .from('weekly_draft_leaderboard')
+        .select('*')
+        .eq('week_of', weekOf)
+        .order('rank', { ascending: true });
+      
+      setWeeklyData(data || []);
+    } catch (e) {
+      console.error('Load weekly error:', e);
+    }
+  };
+
+  const formatWeekLabel = (dateStr) => {
+    const date = new Date(dateStr + 'T12:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const showNotif = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const getRankStyle = (rank) => {
+    if (rank === 1) return { color: '#FFD700', fontWeight: 700 }; // Gold
+    if (rank === 2) return { color: '#C0C0C0', fontWeight: 700 }; // Silver
+    if (rank === 3) return { color: '#CD7F32', fontWeight: 700 }; // Bronze
+    return {};
+  };
+
+  const getRankEmoji = (rank) => {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return `#${rank}`;
+  };
+
+  if (isLoading) {
+    return (
+      <Layout notification={notification}>
+        <div style={styles.loading}><p>Loading leaderboards...</p></div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout notification={notification}>
+      <div style={styles.leaderboardPage}>
+        <div style={styles.leaderboardContainer}>
+          <h2 style={styles.leaderboardTitle}>🏆 Draft Leaderboards</h2>
+          <p style={styles.leaderboardSubtitle}>Daily draft star rankings and all-time top drafters</p>
+
+          <div style={styles.leaderboardTabs}>
+            <button 
+              style={{...styles.leaderboardTab, ...(activeTab === 'weekly' ? styles.leaderboardTabActive : {})}}
+              onClick={() => setActiveTab('weekly')}
+            >
+              Weekly Stars
+            </button>
+            <button 
+              style={{...styles.leaderboardTab, ...(activeTab === 'alltime' ? styles.leaderboardTabActive : {})}}
+              onClick={() => setActiveTab('alltime')}
+            >
+              All-Time Top 25
+            </button>
+          </div>
+
+          {activeTab === 'weekly' && (
+            <div style={styles.leaderboardSection}>
+              <div style={styles.weekSelector}>
+                <label style={styles.weekLabel}>Week of:</label>
+                <select 
+                  value={selectedWeek} 
+                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  style={styles.weekSelect}
+                >
+                  {availableWeeks.map(week => (
+                    <option key={week} value={week}>{formatWeekLabel(week)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {weeklyData.length === 0 ? (
+                <div style={styles.emptyState}>No data for this week yet</div>
+              ) : (
+                <div style={styles.leaderboardTableWrapper}>
+                  <table style={styles.leaderboardTable}>
+                    <thead>
+                      <tr>
+                        <th style={styles.leaderboardTh}>Rank</th>
+                        <th style={{...styles.leaderboardTh, textAlign: 'left'}}>Username</th>
+                        <th style={styles.leaderboardTh}>Stars</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeklyData.map((row, idx) => (
+                        <tr key={row.id} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
+                          <td style={{...styles.leaderboardTd, ...getRankStyle(row.rank)}}>
+                            {getRankEmoji(row.rank)}
+                          </td>
+                          <td style={{...styles.leaderboardTd, textAlign: 'left', fontWeight: idx < 3 ? 600 : 400}}>
+                            {row.username}
+                          </td>
+                          <td style={{...styles.leaderboardTd, color: theme.gold, fontWeight: 600}}>
+                            {row.stars.toLocaleString()} ⭐
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'alltime' && (
+            <div style={styles.leaderboardSection}>
+              <p style={styles.allTimeExplainer}>
+                Top 20 weekly finishers earn points: 1st = 20pts, 2nd = 19pts, ... 20th = 1pt
+              </p>
+
+              {allTimeData.length === 0 ? (
+                <div style={styles.emptyState}>No all-time data yet</div>
+              ) : (
+                <div style={styles.leaderboardTableWrapper}>
+                  <table style={styles.leaderboardTable}>
+                    <thead>
+                      <tr>
+                        <th style={styles.leaderboardTh}>Rank</th>
+                        <th style={{...styles.leaderboardTh, textAlign: 'left'}}>Username</th>
+                        <th style={styles.leaderboardTh}>Points</th>
+                        <th style={styles.leaderboardTh}>Weeks</th>
+                        <th style={styles.leaderboardTh}>Best Finish</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allTimeData.map((row, idx) => (
+                        <tr key={row.username} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
+                          <td style={{...styles.leaderboardTd, ...getRankStyle(idx + 1)}}>
+                            {getRankEmoji(idx + 1)}
+                          </td>
+                          <td style={{...styles.leaderboardTd, textAlign: 'left', fontWeight: idx < 3 ? 600 : 400}}>
+                            {row.username}
+                          </td>
+                          <td style={{...styles.leaderboardTd, color: theme.accent, fontWeight: 600}}>
+                            {row.total_points.toLocaleString()}
+                          </td>
+                          <td style={styles.leaderboardTd}>
+                            {row.weeks_participated}
+                          </td>
+                          <td style={styles.leaderboardTd}>
+                            {row.best_finish ? getRankEmoji(row.best_finish) : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><Routes>
     <Route path="/" element={<StatsPage />} />
@@ -2301,6 +2521,7 @@ export default function App() {
     <Route path="/videos" element={<VideosPage />} />
     <Route path="/submit" element={<SubmitDataPage />} />
     <Route path="/review" element={<ReviewQueuePage />} />
+    <Route path="/leaderboards" element={<LeaderboardsPage />} />
   </Routes></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
@@ -2610,5 +2831,23 @@ function getStyles(t) {
     historyTh: { padding: '12px 16px', background: t.panelBg, textAlign: 'left', fontWeight: 600, fontSize: 13, color: t.textMuted, borderBottom: `1px solid ${t.border}` },
     historyTd: { padding: '12px 16px', borderBottom: `1px solid ${t.border}`, fontSize: 14, color: t.textPrimary },
     undoBtn: { padding: '6px 12px', background: 'transparent', color: t.warning, border: `1px solid ${t.warning}`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500 },
+    
+    // Leaderboards Page
+    leaderboardPage: { minHeight: 'calc(100vh - 60px)', padding: '24px' },
+    leaderboardContainer: { maxWidth: 800, margin: '0 auto' },
+    leaderboardTitle: { fontSize: 28, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
+    leaderboardSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
+    leaderboardTabs: { display: 'flex', gap: 4, marginBottom: 24, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
+    leaderboardTab: { padding: '10px 20px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.15s' },
+    leaderboardTabActive: { background: t.accent, color: '#fff' },
+    leaderboardSection: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden' },
+    weekSelector: { display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${t.border}`, background: t.panelBg },
+    weekLabel: { fontSize: 14, fontWeight: 600, color: t.textSecondary },
+    weekSelect: { padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer' },
+    leaderboardTableWrapper: { overflowX: 'auto' },
+    leaderboardTable: { width: '100%', borderCollapse: 'collapse' },
+    leaderboardTh: { padding: '14px 16px', background: t.panelBg, textAlign: 'center', fontWeight: 600, fontSize: 13, color: t.textMuted, borderBottom: `1px solid ${t.border}` },
+    leaderboardTd: { padding: '14px 16px', textAlign: 'center', borderBottom: `1px solid ${t.border}`, fontSize: 14, color: t.textPrimary },
+    allTimeExplainer: { padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textMuted, fontStyle: 'italic' },
   };
 }
