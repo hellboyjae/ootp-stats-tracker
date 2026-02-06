@@ -2299,8 +2299,10 @@ function LeaderboardsPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const [activeTab, setActiveTab] = useState('weekly');
-  const [weeklyData, setWeeklyData] = useState([]);
-  const [allTimeData, setAllTimeData] = useState([]);
+  const [dailyWeeklyData, setDailyWeeklyData] = useState([]);
+  const [weeklyWeeklyData, setWeeklyWeeklyData] = useState([]);
+  const [dailyAllTimeData, setDailyAllTimeData] = useState([]);
+  const [weeklyAllTimeData, setWeeklyAllTimeData] = useState([]);
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [selectedWeek, setSelectedWeek] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -2312,14 +2314,14 @@ function LeaderboardsPage() {
 
   useEffect(() => {
     if (selectedWeek) {
-      loadWeeklyData(selectedWeek);
+      loadWeekData(selectedWeek);
     }
   }, [selectedWeek]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // Get available weeks
+      // Get available weeks (from daily table, should be same as weekly)
       const { data: weeks } = await supabase
         .from('weekly_draft_leaderboard')
         .select('week_of')
@@ -2332,31 +2334,46 @@ function LeaderboardsPage() {
         setSelectedWeek(uniqueWeeks[0]);
       }
 
-      // Load all-time data
-      const { data: allTime } = await supabase
+      // Load daily all-time data (top 50)
+      const { data: dailyAllTime } = await supabase
         .from('alltime_drafter_points')
         .select('*')
         .order('total_points', { ascending: false })
-        .limit(25);
-      
-      setAllTimeData(allTime || []);
+        .limit(50);
+      setDailyAllTimeData(dailyAllTime || []);
+
+      // Load weekly all-time data (top 50)
+      const { data: weeklyAllTime } = await supabase
+        .from('alltime_drafter_points_weekly')
+        .select('*')
+        .order('total_points', { ascending: false })
+        .limit(50);
+      setWeeklyAllTimeData(weeklyAllTime || []);
     } catch (e) {
       console.error('Load error:', e);
     }
     setIsLoading(false);
   };
 
-  const loadWeeklyData = async (weekOf) => {
+  const loadWeekData = async (weekOf) => {
     try {
-      const { data } = await supabase
+      // Load daily stars for the week
+      const { data: dailyData } = await supabase
         .from('weekly_draft_leaderboard')
         .select('*')
         .eq('week_of', weekOf)
         .order('rank', { ascending: true });
-      
-      setWeeklyData(data || []);
+      setDailyWeeklyData(dailyData || []);
+
+      // Load weekly stars for the week
+      const { data: weeklyData } = await supabase
+        .from('weekly_draft_leaderboard_weekly')
+        .select('*')
+        .eq('week_of', weekOf)
+        .order('rank', { ascending: true });
+      setWeeklyWeeklyData(weeklyData || []);
     } catch (e) {
-      console.error('Load weekly error:', e);
+      console.error('Load week error:', e);
     }
   };
 
@@ -2365,15 +2382,10 @@ function LeaderboardsPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const showNotif = (message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
-
   const getRankStyle = (rank) => {
-    if (rank === 1) return { color: '#FFD700', fontWeight: 700 }; // Gold
-    if (rank === 2) return { color: '#C0C0C0', fontWeight: 700 }; // Silver
-    if (rank === 3) return { color: '#CD7F32', fontWeight: 700 }; // Bronze
+    if (rank === 1) return { color: '#FFD700', fontWeight: 700 };
+    if (rank === 2) return { color: '#C0C0C0', fontWeight: 700 };
+    if (rank === 3) return { color: '#CD7F32', fontWeight: 700 };
     return {};
   };
 
@@ -2383,6 +2395,87 @@ function LeaderboardsPage() {
     if (rank === 3) return '🥉';
     return `#${rank}`;
   };
+
+  const renderStarsTable = (data, title, starColor) => (
+    <div style={styles.leaderboardCard}>
+      <h3 style={styles.leaderboardCardTitle}>{title}</h3>
+      {data.length === 0 ? (
+        <div style={styles.emptyState}>No data yet</div>
+      ) : (
+        <div style={styles.leaderboardTableWrapper}>
+          <table style={styles.leaderboardTable}>
+            <thead>
+              <tr>
+                <th style={styles.leaderboardTh}>Rank</th>
+                <th style={{...styles.leaderboardTh, textAlign: 'left'}}>Username</th>
+                <th style={styles.leaderboardTh}>Stars</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.slice(0, 50).map((row, idx) => (
+                <tr key={row.id || row.username} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
+                  <td style={{...styles.leaderboardTd, ...getRankStyle(row.rank || idx + 1)}}>
+                    {getRankEmoji(row.rank || idx + 1)}
+                  </td>
+                  <td style={{...styles.leaderboardTd, textAlign: 'left', fontWeight: idx < 3 ? 600 : 400}}>
+                    {row.username}
+                  </td>
+                  <td style={{...styles.leaderboardTd, color: starColor, fontWeight: 600}}>
+                    {row.stars.toLocaleString()} ⭐
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAllTimeTable = (data, title, accentColor) => (
+    <div style={styles.leaderboardCard}>
+      <h3 style={styles.leaderboardCardTitle}>{title}</h3>
+      <p style={styles.allTimeExplainerSmall}>Top 50 weekly finishers earn points (1st = 50pts, 50th = 1pt)</p>
+      {data.length === 0 ? (
+        <div style={styles.emptyState}>No data yet</div>
+      ) : (
+        <div style={styles.leaderboardTableWrapper}>
+          <table style={styles.leaderboardTable}>
+            <thead>
+              <tr>
+                <th style={styles.leaderboardTh}>Rank</th>
+                <th style={{...styles.leaderboardTh, textAlign: 'left'}}>Username</th>
+                <th style={styles.leaderboardTh}>Points</th>
+                <th style={styles.leaderboardTh}>Weeks</th>
+                <th style={styles.leaderboardTh}>Best</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, idx) => (
+                <tr key={row.username} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
+                  <td style={{...styles.leaderboardTd, ...getRankStyle(idx + 1)}}>
+                    {getRankEmoji(idx + 1)}
+                  </td>
+                  <td style={{...styles.leaderboardTd, textAlign: 'left', fontWeight: idx < 3 ? 600 : 400}}>
+                    {row.username}
+                  </td>
+                  <td style={{...styles.leaderboardTd, color: accentColor, fontWeight: 600}}>
+                    {row.total_points.toLocaleString()}
+                  </td>
+                  <td style={styles.leaderboardTd}>
+                    {row.weeks_participated}
+                  </td>
+                  <td style={styles.leaderboardTd}>
+                    {row.best_finish ? getRankEmoji(row.best_finish) : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -2395,9 +2488,9 @@ function LeaderboardsPage() {
   return (
     <Layout notification={notification}>
       <div style={styles.leaderboardPage}>
-        <div style={styles.leaderboardContainer}>
+        <div style={styles.leaderboardContainerWide}>
           <h2 style={styles.leaderboardTitle}>🏆 Draft Leaderboards</h2>
-          <p style={styles.leaderboardSubtitle}>Daily draft star rankings and all-time top drafters</p>
+          <p style={styles.leaderboardSubtitle}>Daily and weekly draft star rankings</p>
 
           <div style={styles.leaderboardTabs}>
             <button 
@@ -2410,13 +2503,13 @@ function LeaderboardsPage() {
               style={{...styles.leaderboardTab, ...(activeTab === 'alltime' ? styles.leaderboardTabActive : {})}}
               onClick={() => setActiveTab('alltime')}
             >
-              All-Time Top 25
+              All-Time Top 50
             </button>
           </div>
 
           {activeTab === 'weekly' && (
-            <div style={styles.leaderboardSection}>
-              <div style={styles.weekSelector}>
+            <>
+              <div style={styles.weekSelectorCentered}>
                 <label style={styles.weekLabel}>Week of:</label>
                 <select 
                   value={selectedWeek} 
@@ -2429,83 +2522,17 @@ function LeaderboardsPage() {
                 </select>
               </div>
 
-              {weeklyData.length === 0 ? (
-                <div style={styles.emptyState}>No data for this week yet</div>
-              ) : (
-                <div style={styles.leaderboardTableWrapper}>
-                  <table style={styles.leaderboardTable}>
-                    <thead>
-                      <tr>
-                        <th style={styles.leaderboardTh}>Rank</th>
-                        <th style={{...styles.leaderboardTh, textAlign: 'left'}}>Username</th>
-                        <th style={styles.leaderboardTh}>Stars</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {weeklyData.map((row, idx) => (
-                        <tr key={row.id} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
-                          <td style={{...styles.leaderboardTd, ...getRankStyle(row.rank)}}>
-                            {getRankEmoji(row.rank)}
-                          </td>
-                          <td style={{...styles.leaderboardTd, textAlign: 'left', fontWeight: idx < 3 ? 600 : 400}}>
-                            {row.username}
-                          </td>
-                          <td style={{...styles.leaderboardTd, color: theme.gold, fontWeight: 600}}>
-                            {row.stars.toLocaleString()} ⭐
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+              <div style={styles.leaderboardSideBySide}>
+                {renderStarsTable(dailyWeeklyData, '📅 Daily Drafts', theme.gold)}
+                {renderStarsTable(weeklyWeeklyData, '📆 Weekly Drafts', theme.accent)}
+              </div>
+            </>
           )}
 
           {activeTab === 'alltime' && (
-            <div style={styles.leaderboardSection}>
-              <p style={styles.allTimeExplainer}>
-                Top 20 weekly finishers earn points: 1st = 20pts, 2nd = 19pts, ... 20th = 1pt
-              </p>
-
-              {allTimeData.length === 0 ? (
-                <div style={styles.emptyState}>No all-time data yet</div>
-              ) : (
-                <div style={styles.leaderboardTableWrapper}>
-                  <table style={styles.leaderboardTable}>
-                    <thead>
-                      <tr>
-                        <th style={styles.leaderboardTh}>Rank</th>
-                        <th style={{...styles.leaderboardTh, textAlign: 'left'}}>Username</th>
-                        <th style={styles.leaderboardTh}>Points</th>
-                        <th style={styles.leaderboardTh}>Weeks</th>
-                        <th style={styles.leaderboardTh}>Best Finish</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allTimeData.map((row, idx) => (
-                        <tr key={row.username} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
-                          <td style={{...styles.leaderboardTd, ...getRankStyle(idx + 1)}}>
-                            {getRankEmoji(idx + 1)}
-                          </td>
-                          <td style={{...styles.leaderboardTd, textAlign: 'left', fontWeight: idx < 3 ? 600 : 400}}>
-                            {row.username}
-                          </td>
-                          <td style={{...styles.leaderboardTd, color: theme.accent, fontWeight: 600}}>
-                            {row.total_points.toLocaleString()}
-                          </td>
-                          <td style={styles.leaderboardTd}>
-                            {row.weeks_participated}
-                          </td>
-                          <td style={styles.leaderboardTd}>
-                            {row.best_finish ? getRankEmoji(row.best_finish) : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <div style={styles.leaderboardSideBySide}>
+              {renderAllTimeTable(dailyAllTimeData, '📅 Daily Drafts - All Time', theme.gold)}
+              {renderAllTimeTable(weeklyAllTimeData, '📆 Weekly Drafts - All Time', theme.accent)}
             </div>
           )}
         </div>
@@ -2835,19 +2862,25 @@ function getStyles(t) {
     // Leaderboards Page
     leaderboardPage: { minHeight: 'calc(100vh - 60px)', padding: '24px' },
     leaderboardContainer: { maxWidth: 800, margin: '0 auto' },
+    leaderboardContainerWide: { maxWidth: 1400, margin: '0 auto' },
     leaderboardTitle: { fontSize: 28, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
     leaderboardSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
     leaderboardTabs: { display: 'flex', gap: 4, marginBottom: 24, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
     leaderboardTab: { padding: '10px 20px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.15s' },
     leaderboardTabActive: { background: t.accent, color: '#fff' },
     leaderboardSection: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden' },
+    leaderboardSideBySide: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 },
+    leaderboardCard: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden' },
+    leaderboardCardTitle: { margin: 0, padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 16, fontWeight: 600, color: t.textPrimary },
     weekSelector: { display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${t.border}`, background: t.panelBg },
+    weekSelectorCentered: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 24 },
     weekLabel: { fontSize: 14, fontWeight: 600, color: t.textSecondary },
     weekSelect: { padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer' },
-    leaderboardTableWrapper: { overflowX: 'auto' },
+    leaderboardTableWrapper: { overflowX: 'auto', maxHeight: 600, overflowY: 'auto' },
     leaderboardTable: { width: '100%', borderCollapse: 'collapse' },
-    leaderboardTh: { padding: '14px 16px', background: t.panelBg, textAlign: 'center', fontWeight: 600, fontSize: 13, color: t.textMuted, borderBottom: `1px solid ${t.border}` },
-    leaderboardTd: { padding: '14px 16px', textAlign: 'center', borderBottom: `1px solid ${t.border}`, fontSize: 14, color: t.textPrimary },
+    leaderboardTh: { padding: '12px 14px', background: t.panelBg, textAlign: 'center', fontWeight: 600, fontSize: 12, color: t.textMuted, borderBottom: `1px solid ${t.border}`, position: 'sticky', top: 0 },
+    leaderboardTd: { padding: '10px 14px', textAlign: 'center', borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textPrimary },
     allTimeExplainer: { padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textMuted, fontStyle: 'italic' },
+    allTimeExplainerSmall: { margin: 0, padding: '12px 20px', fontSize: 12, color: t.textDim, fontStyle: 'italic', borderBottom: `1px solid ${t.border}` },
   };
 }
