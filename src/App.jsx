@@ -212,6 +212,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/leaderboards" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Leaderboards</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
+            <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
             <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
             {hasAccess('master') && (
@@ -1017,6 +1018,232 @@ function VideosPage() {
               <div style={styles.videoInfo}><span style={styles.videoTitle}>{v.title}</span><span style={styles.videoPlatform}>{v.platform === 'youtube' ? 'YouTube' : 'Twitch'}</span></div>
               {hasAccess('master') && <button onClick={() => removeVideo(i)} style={styles.removeVideoBtn}>✕</button>}
             </div>))}
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
+function ArticlesPage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const { hasAccess, requestAuth } = useAuth();
+  const [articles, setArticles] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newArticleTitle, setNewArticleTitle] = useState('');
+  const [newArticleDescription, setNewArticleDescription] = useState('');
+  const [newArticleFile, setNewArticleFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [viewingArticle, setViewingArticle] = useState(null);
+
+  useEffect(() => { loadArticles(); }, []);
+
+  const loadArticles = async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await supabase.from('site_content').select('*').eq('id', 'articles').single();
+      if (data?.content?.articles) setArticles(data.content.articles);
+    } catch (e) {}
+    setIsLoading(false);
+  };
+
+  const saveArticles = async (newArticles) => {
+    try {
+      await supabase.from('site_content').upsert({ 
+        id: 'articles', 
+        content: { articles: newArticles }, 
+        updated_at: new Date().toISOString() 
+      });
+      setArticles(newArticles);
+    } catch (e) {
+      showNotif('Failed to save', 'error');
+    }
+  };
+
+  const showNotif = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const addArticle = async () => {
+    requestAuth(async () => {
+      if (!newArticleFile || !newArticleTitle) {
+        showNotif('Please provide a title and PDF file', 'error');
+        return;
+      }
+
+      setUploading(true);
+      try {
+        // Upload PDF to Supabase Storage
+        const fileName = `${Date.now()}_${newArticleFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('articles')
+          .upload(fileName, newArticleFile, { contentType: 'application/pdf' });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: urlData } = supabase.storage.from('articles').getPublicUrl(fileName);
+
+        const newArticle = {
+          id: crypto.randomUUID(),
+          title: newArticleTitle,
+          description: newArticleDescription || '',
+          fileName: fileName,
+          fileUrl: urlData.publicUrl,
+          addedAt: new Date().toISOString()
+        };
+
+        await saveArticles([newArticle, ...articles]);
+        setNewArticleTitle('');
+        setNewArticleDescription('');
+        setNewArticleFile(null);
+        setShowAddForm(false);
+        showNotif('Article added!');
+      } catch (e) {
+        console.error('Upload error:', e);
+        showNotif('Failed to upload PDF', 'error');
+      }
+      setUploading(false);
+    }, 'master');
+  };
+
+  const removeArticle = (articleId) => {
+    requestAuth(async () => {
+      if (!confirm('Remove this article?')) return;
+      const article = articles.find(a => a.id === articleId);
+      if (article?.fileName) {
+        // Delete from storage
+        await supabase.storage.from('articles').remove([article.fileName]);
+      }
+      await saveArticles(articles.filter(a => a.id !== articleId));
+      showNotif('Article removed');
+    }, 'master');
+  };
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+
+  // Check access for viewing
+  if (!hasAccess('master')) {
+    return (
+      <Layout notification={notification}>
+        <div style={styles.pageContent}>
+          <div style={styles.pageHeader}>
+            <h2 style={styles.pageTitle}>📄 Articles</h2>
+          </div>
+          <div style={styles.lockedContent}>
+            <div style={styles.lockIcon}>🔒</div>
+            <h3 style={styles.lockedTitle}>Premium Content</h3>
+            <p style={styles.lockedText}>Articles are available to premium members only.</p>
+            <button onClick={() => requestAuth(() => {}, 'master')} style={styles.unlockBtn}>Enter Access Code</button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout notification={notification}>
+      <div style={styles.pageContent}>
+        <div style={styles.pageHeader}>
+          <h2 style={styles.pageTitle}>📄 Articles</h2>
+          <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add Article</button>
+        </div>
+
+        {showAddForm && (
+          <div style={styles.addArticleForm}>
+            <input 
+              type="text" 
+              placeholder="Article Title *" 
+              value={newArticleTitle} 
+              onChange={(e) => setNewArticleTitle(e.target.value)} 
+              style={styles.input} 
+            />
+            <textarea 
+              placeholder="Description (optional)" 
+              value={newArticleDescription} 
+              onChange={(e) => setNewArticleDescription(e.target.value)} 
+              style={{...styles.input, minHeight: 80, resize: 'vertical'}} 
+            />
+            <label style={styles.fileDropzone}>
+              <input 
+                type="file" 
+                accept=".pdf" 
+                onChange={(e) => setNewArticleFile(e.target.files[0])} 
+                style={{display:'none'}} 
+              />
+              {newArticleFile ? (
+                <div style={styles.fileSelected}>
+                  📄 {newArticleFile.name}
+                  <button style={styles.fileClearBtn} onClick={(e) => { e.preventDefault(); setNewArticleFile(null); }}>✕</button>
+                </div>
+              ) : (
+                <div style={styles.filePrompt}><span style={styles.fileIcon}>📎</span>Click to upload PDF</div>
+              )}
+            </label>
+            <div style={styles.formBtns}>
+              <button onClick={addArticle} style={styles.saveBtn} disabled={uploading}>
+                {uploading ? 'Uploading...' : 'Add Article'}
+              </button>
+              <button onClick={() => { setShowAddForm(false); setNewArticleTitle(''); setNewArticleDescription(''); setNewArticleFile(null); }} style={styles.cancelBtn}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {viewingArticle && (
+          <div style={styles.articleViewerOverlay} onClick={() => setViewingArticle(null)}>
+            <div style={styles.articleViewerContainer} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.articleViewerHeader}>
+                <h3 style={styles.articleViewerTitle}>{viewingArticle.title}</h3>
+                <button onClick={() => setViewingArticle(null)} style={styles.closePlayerBtn}>✕</button>
+              </div>
+              <iframe 
+                src={viewingArticle.fileUrl} 
+                style={styles.articleViewer} 
+                title={viewingArticle.title}
+              />
+            </div>
+          </div>
+        )}
+
+        {articles.length === 0 ? (
+          <p style={styles.emptyMsg}>No articles yet.</p>
+        ) : (
+          <div style={styles.articleGrid}>
+            {articles.map((article) => (
+              <div key={article.id} style={styles.articleCard}>
+                <div style={styles.articleCardContent} onClick={() => setViewingArticle(article)}>
+                  <div style={styles.articleIcon}>📄</div>
+                  <div style={styles.articleInfo}>
+                    <h3 style={styles.articleTitle}>{article.title}</h3>
+                    {article.description && <p style={styles.articleDescription}>{article.description}</p>}
+                    <span style={styles.articleDate}>{formatDate(article.addedAt)}</span>
+                  </div>
+                </div>
+                <div style={styles.articleActions}>
+                  <a 
+                    href={article.fileUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style={styles.articleDownloadBtn}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    ⬇ Download
+                  </a>
+                  <button onClick={() => removeArticle(article.id)} style={styles.articleRemoveBtn}>✕</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -2682,6 +2909,7 @@ export default function App() {
     <Route path="/" element={<StatsPage />} />
     <Route path="/info" element={<InfoPage />} />
     <Route path="/videos" element={<VideosPage />} />
+    <Route path="/articles" element={<ArticlesPage />} />
     <Route path="/submit" element={<SubmitDataPage />} />
     <Route path="/review" element={<ReviewQueuePage />} />
     <Route path="/leaderboards" element={<LeaderboardsPage />} />
@@ -3018,5 +3246,29 @@ function getStyles(t) {
     leaderboardTd: { padding: '10px 14px', textAlign: 'center', borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textPrimary },
     allTimeExplainer: { padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textMuted, fontStyle: 'italic' },
     allTimeExplainerSmall: { margin: 0, padding: '12px 20px', fontSize: 12, color: t.textDim, fontStyle: 'italic', borderBottom: `1px solid ${t.border}` },
+    
+    // Articles Page
+    addArticleForm: { background: t.cardBg, padding: 20, borderRadius: 12, marginBottom: 24, border: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: 12 },
+    articleGrid: { display: 'flex', flexDirection: 'column', gap: 12 },
+    articleCard: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.15s' },
+    articleCardContent: { display: 'flex', alignItems: 'center', gap: 16, flex: 1, cursor: 'pointer' },
+    articleIcon: { fontSize: 32, width: 50, height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: t.panelBg, borderRadius: 8 },
+    articleInfo: { flex: 1 },
+    articleTitle: { margin: 0, fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    articleDescription: { margin: '6px 0 0', fontSize: 13, color: t.textMuted, lineHeight: 1.4 },
+    articleDate: { fontSize: 12, color: t.textDim },
+    articleActions: { display: 'flex', alignItems: 'center', gap: 8 },
+    articleDownloadBtn: { padding: '6px 12px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', textDecoration: 'none' },
+    articleRemoveBtn: { padding: '6px 10px', background: 'transparent', color: t.error, border: `1px solid ${t.error}`, borderRadius: 6, fontSize: 12, cursor: 'pointer' },
+    articleViewerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    articleViewerContainer: { width: '90%', height: '90%', maxWidth: 1200, background: t.cardBg, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+    articleViewerHeader: { padding: '12px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    articleViewerTitle: { margin: 0, fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    articleViewer: { flex: 1, width: '100%', border: 'none' },
+    lockedContent: { textAlign: 'center', padding: '60px 20px', background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}` },
+    lockIcon: { fontSize: 48, marginBottom: 16 },
+    lockedTitle: { fontSize: 20, fontWeight: 600, color: t.textPrimary, margin: '0 0 8px' },
+    lockedText: { fontSize: 14, color: t.textMuted, margin: '0 0 20px' },
+    unlockBtn: { padding: '10px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   };
 }
