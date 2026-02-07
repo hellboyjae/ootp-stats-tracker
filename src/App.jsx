@@ -1212,15 +1212,12 @@ function ArticlesPage() {
                   </div>
                 </div>
                 <div style={styles.articleActions}>
-                  <a 
-                    href={article.fileUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                  <button 
+                    onClick={() => setViewingArticle(article)} 
                     style={styles.articleDownloadBtn}
-                    onClick={(e) => e.stopPropagation()}
                   >
-                    ⬇ Download
-                  </a>
+                    📖 Read
+                  </button>
                   {hasAccess('master') && <button onClick={() => removeArticle(article.id)} style={styles.articleRemoveBtn}>✕</button>}
                 </div>
               </div>
