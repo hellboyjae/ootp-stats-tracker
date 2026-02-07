@@ -1131,31 +1131,12 @@ function ArticlesPage() {
 
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
 
-  // Check access for viewing
-  if (!hasAccess('master')) {
-    return (
-      <Layout notification={notification}>
-        <div style={styles.pageContent}>
-          <div style={styles.pageHeader}>
-            <h2 style={styles.pageTitle}>📄 Articles</h2>
-          </div>
-          <div style={styles.lockedContent}>
-            <div style={styles.lockIcon}>🔒</div>
-            <h3 style={styles.lockedTitle}>Premium Content</h3>
-            <p style={styles.lockedText}>Articles are available to premium members only.</p>
-            <button onClick={() => requestAuth(() => {}, 'master')} style={styles.unlockBtn}>Enter Access Code</button>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <Layout notification={notification}>
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>📄 Articles</h2>
-          <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add Article</button>
+          {hasAccess('master') && <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add Article</button>}
         </div>
 
         {showAddForm && (
@@ -1240,7 +1221,7 @@ function ArticlesPage() {
                   >
                     ⬇ Download
                   </a>
-                  <button onClick={() => removeArticle(article.id)} style={styles.articleRemoveBtn}>✕</button>
+                  {hasAccess('master') && <button onClick={() => removeArticle(article.id)} style={styles.articleRemoveBtn}>✕</button>}
                 </div>
               </div>
             ))}
