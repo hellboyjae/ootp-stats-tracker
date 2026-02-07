@@ -1838,7 +1838,11 @@ function ReviewQueuePage() {
           wraa: row.wRAA || '0.0',
           war: row.WAR || '0.0',
           sbPct: parsePct(row['SB%']),
-          bsr: row.BsR || '0.0'
+          bsr: row.BsR || '0.0',
+          // Store raw counting stats for compounding
+          bb: parseNum(row.BB) || Math.round(parseNum(row.PA) * parseFloat(parsePct(row['BB%'])) / 100),
+          sb: parseNum(row.SB) || 0,
+          cs: parseNum(row.CS) || 0
         } : {
           id: crypto.randomUUID(),
           name: row.Name?.trim() || 'Unknown',
@@ -1865,12 +1869,144 @@ function ReviewQueuePage() {
           fip: row.FIP || '0.00',
           fipMinus: parseNum(row['FIP-']),
           war: row.WAR || '0.0',
-          siera: row.SIERA || '0.00'
+          siera: row.SIERA || '0.00',
+          // Store raw counting stats for compounding
+          er: parseNum(row.ER) || 0,
+          h_allowed: parseNum(row.H) || 0,
+          bb_allowed: parseNum(row.BB) || 0,
+          k: parseNum(row.K) || parseNum(row.SO) || 0,
+          hr_allowed: parseNum(row.HR) || 0
         };
         
         if (playerMap.has(key)) {
-          // Merge stats - for now just keep the newer data
-          playerMap.set(key, { ...playerMap.get(key), ...normalized, id: playerMap.get(key).id });
+          // COMPOUND stats - add counting stats together, recalculate rate stats
+          const existing = playerMap.get(key);
+          
+          if (upload.file_type === 'batting') {
+            // Add counting stats
+            const compounded = {
+              ...existing,
+              g: existing.g + normalized.g,
+              gs: existing.gs + normalized.gs,
+              pa: existing.pa + normalized.pa,
+              ab: existing.ab + normalized.ab,
+              h: existing.h + normalized.h,
+              doubles: existing.doubles + normalized.doubles,
+              triples: existing.triples + normalized.triples,
+              hr: existing.hr + normalized.hr,
+              so: existing.so + normalized.so,
+              gidp: existing.gidp + normalized.gidp,
+              bb: (existing.bb || 0) + (normalized.bb || 0),
+              sb: (existing.sb || 0) + (normalized.sb || 0),
+              cs: (existing.cs || 0) + (normalized.cs || 0),
+              // Keep latest OVR, VAR, POS
+              ovr: normalized.ovr,
+              vari: normalized.vari,
+              pos: normalized.pos || existing.pos,
+              bats: normalized.bats || existing.bats
+            };
+            
+            // Recalculate rate stats
+            const ab = compounded.ab || 1;
+            const pa = compounded.pa || 1;
+            const h = compounded.h;
+            const bb = compounded.bb || 0;
+            const doubles = compounded.doubles;
+            const triples = compounded.triples;
+            const hr = compounded.hr;
+            const singles = h - doubles - triples - hr;
+            const tb = singles + (doubles * 2) + (triples * 3) + (hr * 4);
+            const hbp = Math.round(pa - ab - bb); // Estimate HBP
+            
+            compounded.avg = ab > 0 ? (h / ab).toFixed(3) : '.000';
+            compounded.obp = pa > 0 ? ((h + bb + Math.max(0, hbp)) / pa).toFixed(3) : '.000';
+            compounded.slg = ab > 0 ? (tb / ab).toFixed(3) : '.000';
+            compounded.ops = (parseFloat(compounded.obp) + parseFloat(compounded.slg)).toFixed(3);
+            compounded.bbPct = pa > 0 ? (bb / pa * 100).toFixed(1) : '0.0';
+            compounded.sbPct = (compounded.sb + compounded.cs) > 0 ? (compounded.sb / (compounded.sb + compounded.cs) * 100).toFixed(1) : '0.0';
+            
+            // These advanced stats are harder to recalculate - use weighted average based on PA
+            const oldPa = existing.pa || 1;
+            const newPa = normalized.pa || 1;
+            const totalPa = compounded.pa || 1;
+            compounded.woba = ((parseFloat(existing.woba || 0) * oldPa + parseFloat(normalized.woba || 0) * newPa) / totalPa).toFixed(3);
+            compounded.babip = ((parseFloat(existing.babip || 0) * oldPa + parseFloat(normalized.babip || 0) * newPa) / totalPa).toFixed(3);
+            compounded.opsPlus = Math.round((parseFloat(existing.opsPlus || 0) * oldPa + parseFloat(normalized.opsPlus || 0) * newPa) / totalPa);
+            compounded.wrcPlus = Math.round((parseFloat(existing.wrcPlus || 0) * oldPa + parseFloat(normalized.wrcPlus || 0) * newPa) / totalPa);
+            compounded.wraa = ((parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0))).toFixed(1);
+            compounded.war = ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1);
+            compounded.bsr = ((parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0))).toFixed(1);
+            
+            playerMap.set(key, compounded);
+          } else {
+            // Pitching - add counting stats
+            const parseIP = (ip) => {
+              const str = String(ip);
+              if (str.includes('.')) {
+                const [whole, frac] = str.split('.');
+                return parseFloat(whole) + (parseFloat(frac) / 3);
+              }
+              return parseFloat(ip) || 0;
+            };
+            const formatIP = (ipDecimal) => {
+              const whole = Math.floor(ipDecimal);
+              const frac = Math.round((ipDecimal - whole) * 3);
+              return frac === 0 ? String(whole) : `${whole}.${frac}`;
+            };
+            
+            const oldIP = parseIP(existing.ip);
+            const newIP = parseIP(normalized.ip);
+            const totalIP = oldIP + newIP;
+            
+            const compounded = {
+              ...existing,
+              g: existing.g + normalized.g,
+              gs: existing.gs + normalized.gs,
+              ip: formatIP(totalIP),
+              bf: existing.bf + normalized.bf,
+              er: (existing.er || 0) + (normalized.er || 0),
+              h_allowed: (existing.h_allowed || 0) + (normalized.h_allowed || 0),
+              bb_allowed: (existing.bb_allowed || 0) + (normalized.bb_allowed || 0),
+              k: (existing.k || 0) + (normalized.k || 0),
+              hr_allowed: (existing.hr_allowed || 0) + (normalized.hr_allowed || 0),
+              // Keep latest OVR, VAR, POS
+              ovr: normalized.ovr,
+              vari: normalized.vari,
+              pos: normalized.pos || existing.pos,
+              throws: normalized.throws || existing.throws
+            };
+            
+            // Recalculate rate stats
+            const ip = totalIP || 1;
+            const er = compounded.er || 0;
+            const h_allowed = compounded.h_allowed || 0;
+            const bb_allowed = compounded.bb_allowed || 0;
+            const k = compounded.k || 0;
+            const hr_allowed = compounded.hr_allowed || 0;
+            const bf = compounded.bf || 1;
+            
+            compounded.era = ip > 0 ? (er * 9 / ip).toFixed(2) : '0.00';
+            compounded.whip = ip > 0 ? ((h_allowed + bb_allowed) / ip).toFixed(2) : '0.00';
+            compounded.hPer9 = ip > 0 ? (h_allowed * 9 / ip).toFixed(2) : '0.00';
+            compounded.bbPer9 = ip > 0 ? (bb_allowed * 9 / ip).toFixed(2) : '0.00';
+            compounded.kPer9 = ip > 0 ? (k * 9 / ip).toFixed(2) : '0.00';
+            compounded.hrPer9 = ip > 0 ? (hr_allowed * 9 / ip).toFixed(2) : '0.00';
+            compounded.avg = bf > 0 ? (h_allowed / (bf - bb_allowed)).toFixed(3) : '.000';
+            
+            // These advanced stats use weighted average based on IP
+            const oldIpWeight = oldIP || 1;
+            const newIpWeight = newIP || 1;
+            compounded.babip = ((parseFloat(existing.babip || 0) * oldIpWeight + parseFloat(normalized.babip || 0) * newIpWeight) / ip).toFixed(3);
+            compounded.lobPct = ((parseFloat(existing.lobPct || 0) * oldIpWeight + parseFloat(normalized.lobPct || 0) * newIpWeight) / ip).toFixed(1);
+            compounded.fip = ((parseFloat(existing.fip || 0) * oldIpWeight + parseFloat(normalized.fip || 0) * newIpWeight) / ip).toFixed(2);
+            compounded.siera = ((parseFloat(existing.siera || 0) * oldIpWeight + parseFloat(normalized.siera || 0) * newIpWeight) / ip).toFixed(2);
+            compounded.braPer9 = ((parseFloat(existing.braPer9 || 0) * oldIpWeight + parseFloat(normalized.braPer9 || 0) * newIpWeight) / ip).toFixed(2);
+            compounded.eraPlus = Math.round((parseFloat(existing.eraPlus || 0) * oldIpWeight + parseFloat(normalized.eraPlus || 0) * newIpWeight) / ip);
+            compounded.fipMinus = Math.round((parseFloat(existing.fipMinus || 0) * oldIpWeight + parseFloat(normalized.fipMinus || 0) * newIpWeight) / ip);
+            compounded.war = ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1);
+            
+            playerMap.set(key, compounded);
+          }
         } else {
           playerMap.set(key, normalized);
         }
