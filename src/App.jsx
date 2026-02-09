@@ -464,6 +464,8 @@ function StatsPage() {
   const [pendingUploadFiles, setPendingUploadFiles] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [selectedPlayerType, setSelectedPlayerType] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 100;
 
   const handlePlayerClick = (player, playerType) => {
     setSelectedPlayer(player);
@@ -475,20 +477,29 @@ function StatsPage() {
     setSelectedPlayerType(null);
   };
 
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.search, filters.position, filters.gFilter.enabled, filters.paFilter.enabled, filters.abFilter.enabled, filters.ipFilter.enabled]);
+
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
+      // Only fetch metadata, not the heavy batting/pitching arrays
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('id, name, created_at, category, event_type, uploaded_dates, rotating_format, uploaded_hashes')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       const parsed = (data || []).map(t => ({ 
         id: t.id, 
         name: t.name, 
         createdAt: t.created_at, 
         category: t.category || 'tournaments', 
-        batting: t.batting || [], 
-        pitching: t.pitching || [], 
+        batting: null, // Lazy loaded
+        pitching: null, // Lazy loaded
         uploadedHashes: t.uploaded_hashes || [],
         eventType: t.event_type || 'daily',
         uploadedDates: t.uploaded_dates || [],
@@ -496,9 +507,39 @@ function StatsPage() {
       }));
       setTournaments(parsed);
       const lastSelectedId = localStorage.getItem('selectedTournamentId');
-      if (lastSelectedId) { const found = parsed.find(t => t.id === lastSelectedId); if (found) { setSelectedTournament(found); setSidebarTab(found.category || 'tournaments'); } }
+      if (lastSelectedId) { 
+        const found = parsed.find(t => t.id === lastSelectedId); 
+        if (found) { 
+          setSidebarTab(found.category || 'tournaments');
+          // Load the full tournament data
+          loadTournamentStats(found.id);
+        } 
+      }
     } catch (e) { console.error('Load error:', e); showNotif('Failed to load', 'error'); }
     setIsLoading(false);
+  };
+
+  const loadTournamentStats = async (tournamentId) => {
+    try {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('batting, pitching')
+        .eq('id', tournamentId)
+        .single();
+      
+      if (error) throw error;
+      
+      const updated = {
+        ...tournaments.find(t => t.id === tournamentId),
+        batting: data.batting || [],
+        pitching: data.pitching || []
+      };
+      
+      setTournaments(prev => prev.map(t => t.id === tournamentId ? updated : t));
+      setSelectedTournament(updated);
+    } catch (e) {
+      console.error('Load tournament stats error:', e);
+    }
   };
 
   const saveTournament = async (tournament) => {
@@ -586,7 +627,16 @@ function StatsPage() {
     }, 'master');
   };
 
-  const selectTournament = (t) => { setSelectedTournament(t); localStorage.setItem('selectedTournamentId', t.id); };
+  const selectTournament = (t) => { 
+    localStorage.setItem('selectedTournamentId', t.id);
+    setCurrentPage(1); // Reset pagination
+    // If stats not loaded yet, fetch them
+    if (t.batting === null || t.pitching === null) {
+      loadTournamentStats(t.id);
+    } else {
+      setSelectedTournament(t);
+    }
+  };
   const parseIP = (ip) => { if (!ip) return 0; const str = String(ip); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
   const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
@@ -881,8 +931,9 @@ function StatsPage() {
 
   const filteredTournaments = tournaments.filter(t => (t.category || 'tournaments') === sidebarTab).filter(t => !tournamentSearch || t.name.toLowerCase().includes(tournamentSearch.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
-  const filteredData = selectedTournament ? getFilteredData(selectedTournament[activeTab], activeTab) : [];
-  const totalData = selectedTournament ? selectedTournament[activeTab].length : 0;
+  const filteredData = selectedTournament && selectedTournament[activeTab] ? getFilteredData(selectedTournament[activeTab], activeTab) : [];
+  const totalData = selectedTournament && selectedTournament[activeTab] ? selectedTournament[activeTab].length : 0;
+  const isLoadingStats = selectedTournament && (selectedTournament.batting === null || selectedTournament.pitching === null);
 
   return (
     <Layout notification={notification}>
@@ -939,14 +990,16 @@ function StatsPage() {
           )}
         </aside>
         <div style={styles.content}>
-          {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : (<>
+          {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : isLoadingStats ? (
+            <div style={styles.welcome}><h2 style={styles.welcomeTitle}>Loading...</h2><p style={styles.welcomeText}>Fetching tournament data...</p></div>
+          ) : (<>
             <div style={styles.tournamentHeader}>
               <div style={styles.tournamentMeta}>
                 <h2 style={styles.tournamentTitleMain}>{selectedTournament.name}</h2>
-                {(selectedTournament.pitching.length > 0 || selectedTournament.batting.length > 0) && (
+                {((selectedTournament.pitching?.length || 0) > 0 || (selectedTournament.batting?.length || 0) > 0) && (
                   <div style={styles.handednessContainer}>
-                    {selectedTournament.pitching.length > 0 && (() => { const s = getHandednessStats(selectedTournament.pitching, 'throws'); return <span style={styles.handednessGroup}>T: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
-                    {selectedTournament.batting.length > 0 && (() => { const s = getHandednessStats(selectedTournament.batting, 'bats'); return <span style={styles.handednessGroup}>B: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
+                    {(selectedTournament.pitching?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.pitching, 'throws'); return <span style={styles.handednessGroup}>T: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
+                    {(selectedTournament.batting?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.batting, 'bats'); return <span style={styles.handednessGroup}>B: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
                   </div>
                 )}
               </div>
@@ -1088,8 +1141,8 @@ function StatsPage() {
             )}
             <div style={styles.tabRow}>
               <div style={styles.tabs}>
-                <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching.length}</span></button>
-                <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all'})); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting.length}</span></button>
+                <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching?.length || 0}</span></button>
+                <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting?.length || 0}</span></button>
               </div>
             </div>
             <div style={styles.controlBar}>
@@ -1140,8 +1193,31 @@ function StatsPage() {
               {activeTab === 'batting' ? (<><StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} theme={theme} /><StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} theme={theme} /></>) : (<StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} theme={theme} />)}
             </div></div>)}
             <div style={styles.tableContainer}>
-              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} />}
+              {activeTab === 'pitching' 
+                ? <PitchingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} /> 
+                : <BattingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} />}
             </div>
+            {filteredData.length > ROWS_PER_PAGE && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: `1px solid ${theme.border}` }}>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: currentPage === 1 ? theme.bgSecondary : theme.cardBg, color: currentPage === 1 ? theme.textMuted : theme.textPrimary, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >
+                  ← Prev
+                </button>
+                <span style={{ color: theme.textMuted, fontSize: 13 }}>
+                  Page {currentPage} of {Math.ceil(filteredData.length / ROWS_PER_PAGE)} ({filteredData.length} total)
+                </span>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredData.length / ROWS_PER_PAGE), p + 1))}
+                  disabled={currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE)}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? theme.bgSecondary : theme.cardBg, color: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? theme.textMuted : theme.textPrimary, cursor: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? 'not-allowed' : 'pointer' }}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
           </>)}
         </div>
       </main>
