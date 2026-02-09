@@ -1511,25 +1511,36 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
 
       history.forEach((upload, index) => {
         const playerData = upload.player_data || [];
-        // Search for player - player_data has raw CSV format with uppercase keys
-        const found = playerData.find(p => {
+        // Find ALL instances of this player in the upload (not just the first)
+        const allMatches = playerData.filter(p => {
           const name = (p.Name || p.name || '').trim();
           const ovr = parseFloat(p.OVR || p.ovr) || 0;
           return `${name}|${ovr}` === playerKey;
         });
 
-        if (found) {
+        if (allMatches.length > 0) {
           if (playerType === 'pitching') {
+            // Average all instances for this upload
+            const avgSiera = allMatches.reduce((sum, p) => sum + (parseFloat(p.SIERA || p.siera) || 0), 0) / allMatches.length;
+            const avgFipMinus = allMatches.reduce((sum, p) => sum + (parseFloat(p['FIP-'] || p.fipMinus) || 0), 0) / allMatches.length;
             dataPoints.push({
               upload: `#${index + 1}`,
-              siera: parseFloat(found.SIERA || found.siera) || 0,
-              fipMinus: parseFloat(found['FIP-'] || found.fipMinus) || 0,
+              siera: Math.round(avgSiera * 100) / 100,
+              fipMinus: Math.round(avgFipMinus),
+              instances: allMatches.length,
             });
           } else {
+            // Average all instances for this upload
+            const avgWoba = allMatches.reduce((sum, p) => {
+              const val = p.wOBA || p.woba || '0';
+              return sum + (parseFloat(String(val).replace('.', '0.')) || 0);
+            }, 0) / allMatches.length;
+            const avgOpsPlus = allMatches.reduce((sum, p) => sum + (parseFloat(p['OPS+'] || p.opsPlus) || 0), 0) / allMatches.length;
             dataPoints.push({
               upload: `#${index + 1}`,
-              woba: parseFloat(found.wOBA || found.woba) || 0,
-              opsPlus: parseFloat(found['OPS+'] || found.opsPlus) || 0,
+              woba: Math.round(avgWoba * 1000) / 1000,
+              opsPlus: Math.round(avgOpsPlus),
+              instances: allMatches.length,
             });
           }
         }
@@ -1689,14 +1700,15 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
           <>
             <div style={modalStyles.chartContainer}>
               <div style={modalStyles.chartTitle}>
-                Showing {trendData.length} Upload{trendData.length !== 1 ? 's' : ''}
+                Showing {trendData.length} Upload{trendData.length !== 1 ? 's' : ''} 
+                <span style={{fontSize: 11, color: theme.textDim, marginLeft: 8}}>(number in parentheses = draft instances averaged)</span>
               </div>
               <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <LineChart data={trendData.map((d, i) => ({...d, label: `Upl. ${i + 1} (${d.instances})`}))} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
                   <XAxis 
-                    dataKey="upload" 
-                    tick={{ fill: theme.textMuted, fontSize: 11 }}
+                    dataKey="label" 
+                    tick={{ fill: theme.textMuted, fontSize: 10 }}
                     axisLine={{ stroke: theme.border }}
                   />
                   <YAxis 
@@ -1719,6 +1731,14 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
                       color: theme.textPrimary 
                     }}
                     labelStyle={{ color: theme.textMuted }}
+                    formatter={(value, name) => [value, name]}
+                    labelFormatter={(label) => {
+                      const match = label.match(/Upl\. (\d+) \((\d+)\)/);
+                      if (match) {
+                        return `Upload ${match[1]} — ${match[2]} draft instance${match[2] !== '1' ? 's' : ''} averaged`;
+                      }
+                      return label;
+                    }}
                   />
                   {playerType === 'pitching' ? (
                     <>
@@ -1781,30 +1801,30 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
               {playerType === 'pitching' ? (
                 <>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Current SIERA</div>
-                    <div style={modalStyles.statValue}>{player.siera}</div>
+                    <div style={modalStyles.statLabel}>Latest SIERA</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].siera?.toFixed(2) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Current FIP-</div>
-                    <div style={modalStyles.statValue}>{player.fipMinus}</div>
+                    <div style={modalStyles.statLabel}>Latest FIP-</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].fipMinus : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>WAR</div>
+                    <div style={modalStyles.statLabel}>Total WAR</div>
                     <div style={modalStyles.statValue}>{player.war}</div>
                   </div>
                 </>
               ) : (
                 <>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Current wOBA</div>
-                    <div style={modalStyles.statValue}>{player.woba}</div>
+                    <div style={modalStyles.statLabel}>Latest wOBA</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].woba?.toFixed(3) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Current OPS+</div>
-                    <div style={modalStyles.statValue}>{player.opsPlus}</div>
+                    <div style={modalStyles.statLabel}>Latest OPS+</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].opsPlus : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>WAR</div>
+                    <div style={modalStyles.statLabel}>Total WAR</div>
                     <div style={modalStyles.statValue}>{player.war}</div>
                   </div>
                 </>
