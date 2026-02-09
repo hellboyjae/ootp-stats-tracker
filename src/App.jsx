@@ -2,6 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const ThemeContext = createContext();
 
@@ -461,6 +462,18 @@ function StatsPage() {
   const [showMissingData, setShowMissingData] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingUploadFiles, setPendingUploadFiles] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [selectedPlayerType, setSelectedPlayerType] = useState(null);
+
+  const handlePlayerClick = (player, playerType) => {
+    setSelectedPlayer(player);
+    setSelectedPlayerType(playerType);
+  };
+
+  const closePlayerModal = () => {
+    setSelectedPlayer(null);
+    setSelectedPlayerType(null);
+  };
 
   useEffect(() => { loadData(); }, []);
 
@@ -1082,11 +1095,20 @@ function StatsPage() {
               {activeTab === 'batting' ? (<><StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} theme={theme} /><StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} theme={theme} /></>) : (<StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} theme={theme} />)}
             </div></div>)}
             <div style={styles.tableContainer}>
-              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} />}
+              {activeTab === 'pitching' ? <PitchingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} /> : <BattingTable data={filteredData} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} />}
             </div>
           </>)}
         </div>
       </main>
+      {selectedPlayer && selectedTournament && (
+        <PlayerTrendModal 
+          player={selectedPlayer} 
+          playerType={selectedPlayerType} 
+          tournamentId={selectedTournament.id}
+          theme={theme} 
+          onClose={closePlayerModal} 
+        />
+      )}
     </Layout>
   );
 }
@@ -1452,7 +1474,355 @@ function StatFilter({ label, filter, onChange, theme }) {
   </div>);
 }
 
-function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional }) {
+// Player Trend Modal - shows performance over time
+function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) {
+  const styles = getStyles(theme);
+  const [trendData, setTrendData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadTrendData();
+  }, [player, tournamentId]);
+
+  const loadTrendData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Get upload history for this tournament
+      const { data: history, error: historyError } = await supabase
+        .from('upload_history')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .eq('file_type', playerType)
+        .order('created_at', { ascending: true });
+
+      if (historyError) throw historyError;
+
+      if (!history || history.length === 0) {
+        setTrendData([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Find this player in each upload by name|ovr key
+      const playerKey = `${player.name}|${player.ovr}`;
+      const dataPoints = [];
+
+      history.forEach((upload, index) => {
+        const playerData = upload.player_data || [];
+        // Search for player - player_data has raw CSV format with uppercase keys
+        const found = playerData.find(p => {
+          const name = (p.Name || p.name || '').trim();
+          const ovr = parseFloat(p.OVR || p.ovr) || 0;
+          return `${name}|${ovr}` === playerKey;
+        });
+
+        if (found) {
+          const uploadDate = new Date(upload.upload_date || upload.created_at);
+          const dateLabel = uploadDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          
+          if (playerType === 'pitching') {
+            dataPoints.push({
+              upload: index + 1,
+              date: dateLabel,
+              siera: parseFloat(found.SIERA || found.siera) || 0,
+              fipMinus: parseFloat(found['FIP-'] || found.fipMinus) || 0,
+            });
+          } else {
+            dataPoints.push({
+              upload: index + 1,
+              date: dateLabel,
+              woba: parseFloat(found.wOBA || found.woba) || 0,
+              opsPlus: parseFloat(found['OPS+'] || found.opsPlus) || 0,
+            });
+          }
+        }
+      });
+
+      setTrendData(dataPoints);
+    } catch (e) {
+      console.error('Error loading trend data:', e);
+      setError('Failed to load trend data');
+    }
+    setIsLoading(false);
+  };
+
+  const formatDate = (dateStr) => dateStr;
+
+  const modalStyles = {
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+    },
+    modal: {
+      background: theme.cardBg,
+      borderRadius: 12,
+      padding: 24,
+      maxWidth: 700,
+      width: '95%',
+      maxHeight: '90vh',
+      overflow: 'auto',
+      border: `1px solid ${theme.border}`,
+      boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+    },
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 20,
+    },
+    playerInfo: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    },
+    playerName: {
+      fontSize: 22,
+      fontWeight: 700,
+      color: theme.textPrimary,
+      margin: 0,
+    },
+    playerMeta: {
+      fontSize: 14,
+      color: theme.textMuted,
+    },
+    closeBtn: {
+      background: 'transparent',
+      border: 'none',
+      color: theme.textMuted,
+      fontSize: 24,
+      cursor: 'pointer',
+      padding: 4,
+    },
+    chartContainer: {
+      background: theme.panelBg,
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 16,
+    },
+    chartTitle: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: theme.textSecondary,
+      marginBottom: 16,
+    },
+    noData: {
+      textAlign: 'center',
+      padding: 40,
+      color: theme.textMuted,
+    },
+    statRow: {
+      display: 'flex',
+      gap: 20,
+      marginTop: 16,
+    },
+    statBox: {
+      flex: 1,
+      background: theme.panelBg,
+      borderRadius: 8,
+      padding: 16,
+      textAlign: 'center',
+    },
+    statLabel: {
+      fontSize: 11,
+      color: theme.textMuted,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: 700,
+      color: theme.textPrimary,
+    },
+    legend: {
+      display: 'flex',
+      justifyContent: 'center',
+      gap: 24,
+      marginTop: 12,
+    },
+    legendItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      fontSize: 12,
+      color: theme.textMuted,
+    },
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: '50%',
+    },
+  };
+
+  const primaryColor = theme.teamPrimary || '#3b82f6';
+  const secondaryColor = theme.teamSecondary || '#f59e0b';
+
+  return (
+    <div style={modalStyles.overlay} onClick={onClose}>
+      <div style={modalStyles.modal} onClick={e => e.stopPropagation()}>
+        <div style={modalStyles.header}>
+          <div style={modalStyles.playerInfo}>
+            <h2 style={modalStyles.playerName}>{player.name}</h2>
+            <span style={modalStyles.playerMeta}>
+              {player.pos} • OVR {player.ovr} • {playerType === 'pitching' ? `${player.throws || 'R'}HP` : `Bats ${player.bats || 'R'}`}
+            </span>
+          </div>
+          <button style={modalStyles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        {isLoading ? (
+          <div style={modalStyles.noData}>Loading trend data...</div>
+        ) : error ? (
+          <div style={modalStyles.noData}>{error}</div>
+        ) : trendData.length < 2 ? (
+          <div style={modalStyles.noData}>
+            Not enough data points to show trends.<br />
+            <span style={{fontSize: 12, marginTop: 8, display: 'block'}}>
+              Player needs to appear in at least 2 uploads.
+            </span>
+          </div>
+        ) : (
+          <>
+            <div style={modalStyles.chartContainer}>
+              <div style={modalStyles.chartTitle}>
+                Performance Over {trendData.length} Uploads
+              </div>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fill: theme.textMuted, fontSize: 11 }}
+                    axisLine={{ stroke: theme.border }}
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    tick={{ fill: theme.textMuted, fontSize: 11 }}
+                    axisLine={{ stroke: theme.border }}
+                    domain={playerType === 'pitching' ? ['auto', 'auto'] : [0, 'auto']}
+                  />
+                  <YAxis 
+                    yAxisId="right" 
+                    orientation="right"
+                    tick={{ fill: theme.textMuted, fontSize: 11 }}
+                    axisLine={{ stroke: theme.border }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      background: theme.cardBg, 
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: 6,
+                      color: theme.textPrimary 
+                    }}
+                    labelStyle={{ color: theme.textMuted }}
+                  />
+                  {playerType === 'pitching' ? (
+                    <>
+                      <Line 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="siera" 
+                        stroke={primaryColor}
+                        strokeWidth={2}
+                        dot={{ fill: primaryColor, strokeWidth: 2 }}
+                        name="SIERA"
+                      />
+                      <Line 
+                        yAxisId="right"
+                        type="monotone" 
+                        dataKey="fipMinus" 
+                        stroke={secondaryColor}
+                        strokeWidth={2}
+                        dot={{ fill: secondaryColor, strokeWidth: 2 }}
+                        name="FIP-"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Line 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="woba" 
+                        stroke={primaryColor}
+                        strokeWidth={2}
+                        dot={{ fill: primaryColor, strokeWidth: 2 }}
+                        name="wOBA"
+                      />
+                      <Line 
+                        yAxisId="right"
+                        type="monotone" 
+                        dataKey="opsPlus" 
+                        stroke={secondaryColor}
+                        strokeWidth={2}
+                        dot={{ fill: secondaryColor, strokeWidth: 2 }}
+                        name="OPS+"
+                      />
+                    </>
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={modalStyles.legend}>
+                <div style={modalStyles.legendItem}>
+                  <div style={{...modalStyles.legendDot, background: primaryColor}}></div>
+                  {playerType === 'pitching' ? 'SIERA' : 'wOBA'}
+                </div>
+                <div style={modalStyles.legendItem}>
+                  <div style={{...modalStyles.legendDot, background: secondaryColor}}></div>
+                  {playerType === 'pitching' ? 'FIP-' : 'OPS+'}
+                </div>
+              </div>
+            </div>
+
+            <div style={modalStyles.statRow}>
+              {playerType === 'pitching' ? (
+                <>
+                  <div style={modalStyles.statBox}>
+                    <div style={modalStyles.statLabel}>Current SIERA</div>
+                    <div style={modalStyles.statValue}>{player.siera}</div>
+                  </div>
+                  <div style={modalStyles.statBox}>
+                    <div style={modalStyles.statLabel}>Current FIP-</div>
+                    <div style={modalStyles.statValue}>{player.fipMinus}</div>
+                  </div>
+                  <div style={modalStyles.statBox}>
+                    <div style={modalStyles.statLabel}>WAR</div>
+                    <div style={modalStyles.statValue}>{player.war}</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={modalStyles.statBox}>
+                    <div style={modalStyles.statLabel}>Current wOBA</div>
+                    <div style={modalStyles.statValue}>{player.woba}</div>
+                  </div>
+                  <div style={modalStyles.statBox}>
+                    <div style={modalStyles.statLabel}>Current OPS+</div>
+                    <div style={modalStyles.statValue}>{player.opsPlus}</div>
+                  </div>
+                  <div style={modalStyles.statBox}>
+                    <div style={modalStyles.statLabel}>WAR</div>
+                    <div style={modalStyles.statValue}>{player.war}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children, isRate }) => (
     <th style={{...styles.th, ...(isRate ? styles.thRate : {}), ...(sortBy === field ? styles.thSorted : {})}} onClick={() => onSort(field)}>
@@ -1473,7 +1843,9 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
     {showPer9 && <SortHeader field="warPer200IP" isRate>WAR/200</SortHeader>}<SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.throws}</td>
+      <td style={styles.td}>{p.pos}</td>
+      <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')}>{p.name}</td>
+      <td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.td}>{calcIPperG(p.ip, p.g)}</td>
       {showTraditional && <td style={styles.td}>{p.bf}</td>}{showTraditional && <td style={styles.td}>{p.era}</td>}{showTraditional && <td style={styles.td}>{p.avg}</td>}{showTraditional && <td style={styles.td}>{p.obp}</td>}
@@ -1487,7 +1859,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   </tbody></table></div>);
 }
 
-function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional }) {
+function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick }) {
   const styles = getStyles(theme);
   const SortHeader = ({ field, children, isRate }) => (
     <th style={{...styles.th, ...(isRate ? styles.thRate : {}), ...(sortBy === field ? styles.thSorted : {})}} onClick={() => onSort(field)}>
@@ -1508,7 +1880,9 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
     <SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeader field="bsrPer600PA" isRate>BsR/600</SortHeader>}
   </tr></thead><tbody>
     {data.map(p => (<tr key={p.id} style={styles.tr}>
-      <td style={styles.td}>{p.pos}</td><td style={styles.tdName}>{p.name}</td><td style={styles.td}>{p.bats}</td>
+      <td style={styles.td}>{p.pos}</td>
+      <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
+      <td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
       {showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}
