@@ -1129,6 +1129,7 @@ function InfoPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState({ title: '', sections: [] });
   const [notification, setNotification] = useState(null);
+  const [isRebuilding, setIsRebuilding] = useState(false);
 
   useEffect(() => { loadContent(); }, []);
   const loadContent = async () => { setIsLoading(true); try { const { data } = await supabase.from('site_content').select('*').eq('id', 'info').single(); if (data?.content) setContent(data.content); } catch (e) {} setIsLoading(false); };
@@ -1139,6 +1140,171 @@ function InfoPage() {
   const updateSection = (i, field, value) => { setEditContent(c => { const s = [...c.sections]; s[i] = { ...s[i], [field]: value }; return { ...c, sections: s }; }); };
   const removeSection = (i) => { setEditContent(c => ({ ...c, sections: c.sections.filter((_, idx) => idx !== i) })); };
   const moveSection = (i, dir) => { const ni = i + dir; if (ni < 0 || ni >= editContent.sections.length) return; setEditContent(c => { const s = [...c.sections]; [s[i], s[ni]] = [s[ni], s[i]]; return { ...c, sections: s }; }); };
+
+  const rebuildAllStats = async () => {
+    if (!confirm('This will rebuild ALL tournament stats from upload history. Continue?')) return;
+    
+    setIsRebuilding(true);
+    showNotif('Rebuilding stats... This may take a moment.');
+    
+    try {
+      // Get all tournaments
+      const { data: tournaments, error: tError } = await supabase.from('tournaments').select('*');
+      if (tError) throw tError;
+      
+      // Get all upload history
+      const { data: uploads, error: uError } = await supabase.from('upload_history').select('*').order('created_at', { ascending: true });
+      if (uError) throw uError;
+      
+      const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+      const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
+      const parseIP = (ip) => { const str = String(ip); if (str.includes('.')) { const [whole, frac] = str.split('.'); return parseFloat(whole) + (parseFloat(frac) / 3); } return parseFloat(ip) || 0; };
+      const formatIP = (ipDecimal) => { const whole = Math.floor(ipDecimal); const frac = Math.round((ipDecimal - whole) * 3); return frac === 0 ? String(whole) : `${whole}.${frac}`; };
+      
+      let rebuiltCount = 0;
+      
+      for (const tournament of tournaments) {
+        const tournamentUploads = uploads.filter(u => u.tournament_id === tournament.id);
+        if (tournamentUploads.length === 0) continue;
+        
+        const battingMap = new Map();
+        const pitchingMap = new Map();
+        
+        for (const upload of tournamentUploads) {
+          const playerData = upload.player_data || [];
+          
+          for (const row of playerData) {
+            const name = (row.Name || '').trim();
+            const ovr = parseNum(row.OVR);
+            const key = `${name}|${ovr}`;
+            
+            if (upload.file_type === 'batting') {
+              const normalized = {
+                id: crypto.randomUUID(),
+                name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+                g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
+                h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
+                bbPct: parsePct(row['BB%']), so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+                avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
+                woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
+                babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
+                wraa: row.wRAA || '0.0', war: row.WAR || '0.0', sbPct: parsePct(row['SB%']), bsr: row.BsR || '0.0'
+              };
+              
+              if (battingMap.has(key)) {
+                const existing = battingMap.get(key);
+                const entryCount = (existing._entryCount || 1) + 1;
+                const oldCount = existing._entryCount || 1;
+                
+                const compounded = {
+                  ...existing, _entryCount: entryCount,
+                  g: existing.g + normalized.g, gs: existing.gs + normalized.gs,
+                  pa: existing.pa + normalized.pa, ab: existing.ab + normalized.ab,
+                  bf: (existing.bf || 0) + (normalized.bf || 0),
+                  war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
+                  wraa: ((parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0))).toFixed(1),
+                  bsr: ((parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0))).toFixed(1),
+                  ovr: normalized.ovr, vari: normalized.vari,
+                  pos: normalized.pos || existing.pos, bats: normalized.bats || existing.bats,
+                  h: Math.round(((existing.h * oldCount) + normalized.h) / entryCount),
+                  doubles: Math.round(((existing.doubles * oldCount) + normalized.doubles) / entryCount),
+                  triples: Math.round(((existing.triples * oldCount) + normalized.triples) / entryCount),
+                  hr: Math.round(((existing.hr * oldCount) + normalized.hr) / entryCount),
+                  so: Math.round(((existing.so * oldCount) + normalized.so) / entryCount),
+                  gidp: Math.round(((existing.gidp * oldCount) + normalized.gidp) / entryCount),
+                  avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3),
+                  obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3),
+                  slg: (((parseFloat(existing.slg || 0) * oldCount) + parseFloat(normalized.slg || 0)) / entryCount).toFixed(3),
+                  ops: (((parseFloat(existing.ops || 0) * oldCount) + parseFloat(normalized.ops || 0)) / entryCount).toFixed(3),
+                  woba: (((parseFloat(existing.woba || 0) * oldCount) + parseFloat(normalized.woba || 0)) / entryCount).toFixed(3),
+                  babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3),
+                  opsPlus: Math.round(((parseFloat(existing.opsPlus || 0) * oldCount) + parseFloat(normalized.opsPlus || 0)) / entryCount),
+                  wrcPlus: Math.round(((parseFloat(existing.wrcPlus || 0) * oldCount) + parseFloat(normalized.wrcPlus || 0)) / entryCount),
+                  bbPct: (((parseFloat(existing.bbPct || 0) * oldCount) + parseFloat(normalized.bbPct || 0)) / entryCount).toFixed(1),
+                  sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(normalized.sbPct || 0)) / entryCount).toFixed(1)
+                };
+                battingMap.set(key, compounded);
+              } else {
+                normalized._entryCount = 1;
+                battingMap.set(key, normalized);
+              }
+            } else {
+              const normalized = {
+                id: crypto.randomUUID(),
+                name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+                g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
+                era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
+                babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
+                braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00',
+                hPer9: row['H/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00',
+                lobPct: parsePct(row['LOB%']), eraPlus: parseNum(row['ERA+']),
+                fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']),
+                war: row.WAR || '0.0', siera: row.SIERA || '0.00'
+              };
+              
+              if (pitchingMap.has(key)) {
+                const existing = pitchingMap.get(key);
+                const entryCount = (existing._entryCount || 1) + 1;
+                const oldCount = existing._entryCount || 1;
+                const oldIP = parseIP(existing.ip);
+                const newIP = parseIP(normalized.ip);
+                
+                const compounded = {
+                  ...existing, _entryCount: entryCount,
+                  g: existing.g + normalized.g, gs: existing.gs + normalized.gs,
+                  ip: formatIP(oldIP + newIP), bf: existing.bf + normalized.bf,
+                  war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
+                  ovr: normalized.ovr, vari: normalized.vari,
+                  pos: normalized.pos || existing.pos, throws: normalized.throws || existing.throws,
+                  era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(normalized.era || 0)) / entryCount).toFixed(2),
+                  avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3),
+                  obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3),
+                  babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3),
+                  whip: (((parseFloat(existing.whip || 0) * oldCount) + parseFloat(normalized.whip || 0)) / entryCount).toFixed(2),
+                  braPer9: (((parseFloat(existing.braPer9 || 0) * oldCount) + parseFloat(normalized.braPer9 || 0)) / entryCount).toFixed(2),
+                  hrPer9: (((parseFloat(existing.hrPer9 || 0) * oldCount) + parseFloat(normalized.hrPer9 || 0)) / entryCount).toFixed(2),
+                  hPer9: (((parseFloat(existing.hPer9 || 0) * oldCount) + parseFloat(normalized.hPer9 || 0)) / entryCount).toFixed(2),
+                  bbPer9: (((parseFloat(existing.bbPer9 || 0) * oldCount) + parseFloat(normalized.bbPer9 || 0)) / entryCount).toFixed(2),
+                  kPer9: (((parseFloat(existing.kPer9 || 0) * oldCount) + parseFloat(normalized.kPer9 || 0)) / entryCount).toFixed(2),
+                  lobPct: (((parseFloat(existing.lobPct || 0) * oldCount) + parseFloat(normalized.lobPct || 0)) / entryCount).toFixed(1),
+                  eraPlus: Math.round(((parseFloat(existing.eraPlus || 0) * oldCount) + parseFloat(normalized.eraPlus || 0)) / entryCount),
+                  fip: (((parseFloat(existing.fip || 0) * oldCount) + parseFloat(normalized.fip || 0)) / entryCount).toFixed(2),
+                  fipMinus: Math.round(((parseFloat(existing.fipMinus || 0) * oldCount) + parseFloat(normalized.fipMinus || 0)) / entryCount),
+                  siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(normalized.siera || 0)) / entryCount).toFixed(2)
+                };
+                pitchingMap.set(key, compounded);
+              } else {
+                normalized._entryCount = 1;
+                pitchingMap.set(key, normalized);
+              }
+            }
+          }
+        }
+        
+        // Update tournament
+        const battingData = Array.from(battingMap.values());
+        const pitchingData = Array.from(pitchingMap.values());
+        
+        const { error: updateError } = await supabase.from('tournaments').update({
+          batting: battingData,
+          pitching: pitchingData
+        }).eq('id', tournament.id);
+        
+        if (updateError) {
+          console.error(`Failed to update ${tournament.name}:`, updateError);
+        } else {
+          rebuiltCount++;
+        }
+      }
+      
+      showNotif(`Rebuilt ${rebuiltCount} tournaments!`);
+    } catch (e) {
+      console.error('Rebuild error:', e);
+      showNotif('Rebuild failed: ' + e.message, 'error');
+    }
+    
+    setIsRebuilding(false);
+  };
 
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
 
@@ -1172,6 +1338,13 @@ function InfoPage() {
             <div style={styles.adminLoginStatus}>
               <span style={styles.adminLoginBadge}>✓ Logged in as Admin</span>
               <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
+              <button 
+                onClick={() => requestAuth(rebuildAllStats, 'master')} 
+                disabled={isRebuilding}
+                style={{...styles.adminLogoutBtn, background: '#f59e0b', marginLeft: 8}}
+              >
+                {isRebuilding ? 'Rebuilding...' : '🔧 Rebuild All Stats'}
+              </button>
             </div>
           ) : hasAccess('upload') ? (
             <div style={styles.adminLoginStatus}>
