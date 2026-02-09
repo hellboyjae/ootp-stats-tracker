@@ -5,7 +5,29 @@ import { supabase } from './supabase.js';
 
 const ThemeContext = createContext();
 
-// MLB Team color schemes
+// Helper to determine if a color is dark (for text contrast)
+const isColorDark = (hex) => {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substr(0, 2), 16);
+  const g = parseInt(c.substr(2, 2), 16);
+  const b = parseInt(c.substr(4, 2), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.5;
+};
+
+// Helper to lighten/darken colors
+const adjustColor = (hex, amount) => {
+  const c = hex.replace('#', '');
+  let r = parseInt(c.substr(0, 2), 16);
+  let g = parseInt(c.substr(2, 2), 16);
+  let b = parseInt(c.substr(4, 2), 16);
+  r = Math.min(255, Math.max(0, r + amount));
+  g = Math.min(255, Math.max(0, g + amount));
+  b = Math.min(255, Math.max(0, b + amount));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+// MLB Team color schemes - primary is main color, secondary is accent
 const teamColors = {
   default: { primary: '#3b82f6', secondary: '#fbbf24', name: 'Default' },
   // AL East
@@ -46,6 +68,83 @@ const teamColors = {
   rockies: { primary: '#333366', secondary: '#C4CED4', name: 'Rockies' },
 };
 
+// Generate a full theme from team colors
+const generateTeamTheme = (teamKey, isDark) => {
+  const team = teamColors[teamKey] || teamColors.default;
+  const primary = team.primary;
+  const secondary = team.secondary;
+  
+  if (isDark) {
+    // Dark mode - use primary as accent, darken for backgrounds
+    const mainBg = adjustColor(primary, -100); // Very dark version of primary
+    const cardBg = adjustColor(primary, -85);
+    const panelBg = adjustColor(primary, -75);
+    const sidebarBg = adjustColor(primary, -105);
+    const tableBg = adjustColor(primary, -90);
+    const border = adjustColor(primary, -50);
+    
+    return {
+      mainBg: mainBg,
+      cardBg: cardBg,
+      panelBg: panelBg,
+      tableBg: tableBg,
+      sidebarBg: sidebarBg,
+      textPrimary: '#e2e8f0',
+      textSecondary: '#94a3b8',
+      textMuted: '#94a3b8',
+      textDim: '#64748b',
+      accent: secondary,
+      accentHover: adjustColor(secondary, -20),
+      success: '#22c55e',
+      warning: '#f59e0b',
+      error: '#ef4444',
+      gold: secondary,
+      tableHeaderBg: panelBg,
+      tableRowBg: tableBg,
+      tableRowHover: cardBg,
+      tableBorder: border,
+      border: border,
+      borderLight: adjustColor(primary, -40),
+      inputBg: cardBg,
+      inputBorder: border,
+    };
+  } else {
+    // Light mode - use lighter versions of primary
+    const mainBg = '#f8fafc';
+    const cardBg = '#ffffff';
+    const panelBg = adjustColor(primary, 180); // Very light tint of primary
+    const sidebarBg = adjustColor(primary, 170);
+    const tableBg = '#ffffff';
+    const border = adjustColor(primary, 140);
+    
+    return {
+      mainBg: mainBg,
+      cardBg: cardBg,
+      panelBg: panelBg,
+      tableBg: tableBg,
+      sidebarBg: sidebarBg,
+      textPrimary: '#0f172a',
+      textSecondary: '#475569',
+      textMuted: '#64748b',
+      textDim: '#94a3b8',
+      accent: primary,
+      accentHover: adjustColor(primary, -20),
+      success: '#16a34a',
+      warning: '#d97706',
+      error: '#dc2626',
+      gold: secondary,
+      tableHeaderBg: panelBg,
+      tableRowBg: tableBg,
+      tableRowHover: adjustColor(primary, 190),
+      tableBorder: border,
+      border: border,
+      borderLight: adjustColor(primary, 160),
+      inputBg: cardBg,
+      inputBorder: border,
+    };
+  }
+};
+
 function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -78,15 +177,13 @@ function ThemeProvider({ children }) {
   const toggle = () => setIsDark(!isDark);
   const setTeamTheme = (teamKey) => setTeam(teamKey);
   
-  // Apply team colors to base theme
-  const baseTheme = isDark ? darkTheme : lightTheme;
-  const teamColor = teamColors[team] || teamColors.default;
-  const theme = {
-    ...baseTheme,
-    accent: teamColor.primary,
-    accentHover: teamColor.primary,
-    gold: teamColor.secondary,
-  };
+  // Generate full theme based on team and dark/light mode
+  let theme;
+  if (team === 'default') {
+    theme = isDark ? darkTheme : lightTheme;
+  } else {
+    theme = generateTeamTheme(team, isDark);
+  }
   
   return <ThemeContext.Provider value={{ isDark, toggle, theme, team, setTeamTheme, teamColors }}>{children}</ThemeContext.Provider>;
 }
