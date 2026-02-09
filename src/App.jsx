@@ -5,10 +5,55 @@ import { supabase } from './supabase.js';
 
 const ThemeContext = createContext();
 
+// MLB Team color schemes
+const teamColors = {
+  default: { primary: '#3b82f6', secondary: '#fbbf24', name: 'Default' },
+  // AL East
+  yankees: { primary: '#003087', secondary: '#C4CED4', name: 'Yankees' },
+  redsox: { primary: '#BD3039', secondary: '#0C2340', name: 'Red Sox' },
+  rays: { primary: '#092C5C', secondary: '#8FBCE6', name: 'Rays' },
+  bluejays: { primary: '#134A8E', secondary: '#1D2D5C', name: 'Blue Jays' },
+  orioles: { primary: '#DF4601', secondary: '#000000', name: 'Orioles' },
+  // AL Central
+  guardians: { primary: '#00385D', secondary: '#E50022', name: 'Guardians' },
+  twins: { primary: '#002B5C', secondary: '#D31145', name: 'Twins' },
+  whitesox: { primary: '#27251F', secondary: '#C4CED4', name: 'White Sox' },
+  tigers: { primary: '#0C2340', secondary: '#FA4616', name: 'Tigers' },
+  royals: { primary: '#004687', secondary: '#BD9B60', name: 'Royals' },
+  // AL West
+  astros: { primary: '#002D62', secondary: '#EB6E1F', name: 'Astros' },
+  rangers: { primary: '#003278', secondary: '#C0111F', name: 'Rangers' },
+  mariners: { primary: '#0C2C56', secondary: '#005C5C', name: 'Mariners' },
+  angels: { primary: '#BA0021', secondary: '#003263', name: 'Angels' },
+  athletics: { primary: '#003831', secondary: '#EFB21E', name: 'Athletics' },
+  // NL East
+  braves: { primary: '#CE1141', secondary: '#13274F', name: 'Braves' },
+  phillies: { primary: '#E81828', secondary: '#002D72', name: 'Phillies' },
+  mets: { primary: '#002D72', secondary: '#FF5910', name: 'Mets' },
+  marlins: { primary: '#00A3E0', secondary: '#EF3340', name: 'Marlins' },
+  nationals: { primary: '#AB0003', secondary: '#14225A', name: 'Nationals' },
+  // NL Central
+  brewers: { primary: '#12284B', secondary: '#FFC52F', name: 'Brewers' },
+  cardinals: { primary: '#C41E3A', secondary: '#0C2340', name: 'Cardinals' },
+  cubs: { primary: '#0E3386', secondary: '#CC3433', name: 'Cubs' },
+  reds: { primary: '#C6011F', secondary: '#000000', name: 'Reds' },
+  pirates: { primary: '#27251F', secondary: '#FDB827', name: 'Pirates' },
+  // NL West
+  dodgers: { primary: '#005A9C', secondary: '#EF3E42', name: 'Dodgers' },
+  padres: { primary: '#2F241D', secondary: '#FFC425', name: 'Padres' },
+  giants: { primary: '#FD5A1E', secondary: '#27251F', name: 'Giants' },
+  dbacks: { primary: '#A71930', secondary: '#E3D4AD', name: 'D-backs' },
+  rockies: { primary: '#333366', secondary: '#C4CED4', name: 'Rockies' },
+};
+
 function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
     return saved ? saved === 'dark' : true;
+  });
+  
+  const [team, setTeam] = useState(() => {
+    return localStorage.getItem('teamTheme') || 'default';
   });
   
   // Inject keyframes for news banner animation
@@ -28,9 +73,22 @@ function ThemeProvider({ children }) {
   }, []);
   
   useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
+  useEffect(() => { localStorage.setItem('teamTheme', team); }, [team]);
+  
   const toggle = () => setIsDark(!isDark);
-  const theme = isDark ? darkTheme : lightTheme;
-  return <ThemeContext.Provider value={{ isDark, toggle, theme }}>{children}</ThemeContext.Provider>;
+  const setTeamTheme = (teamKey) => setTeam(teamKey);
+  
+  // Apply team colors to base theme
+  const baseTheme = isDark ? darkTheme : lightTheme;
+  const teamColor = teamColors[team] || teamColors.default;
+  const theme = {
+    ...baseTheme,
+    accent: teamColor.primary,
+    accentHover: teamColor.primary,
+    gold: teamColor.secondary,
+  };
+  
+  return <ThemeContext.Provider value={{ isDark, toggle, theme, team, setTeamTheme, teamColors }}>{children}</ThemeContext.Provider>;
 }
 
 function useTheme() { return useContext(ThemeContext); }
@@ -199,9 +257,20 @@ function NewsBanner({ theme, styles }) {
 }
 
 function Layout({ children, notification, pendingCount = 0 }) {
-  const { isDark, toggle, theme } = useTheme();
+  const { isDark, toggle, theme, team, setTeamTheme, teamColors } = useTheme();
   const { hasAccess } = useAuth();
   const styles = getStyles(theme);
+  
+  // Group teams by division for the dropdown
+  const teamGroups = {
+    'AL East': ['yankees', 'redsox', 'rays', 'bluejays', 'orioles'],
+    'AL Central': ['guardians', 'twins', 'whitesox', 'tigers', 'royals'],
+    'AL West': ['astros', 'rangers', 'mariners', 'angels', 'athletics'],
+    'NL East': ['braves', 'phillies', 'mets', 'marlins', 'nationals'],
+    'NL Central': ['brewers', 'cardinals', 'cubs', 'reds', 'pirates'],
+    'NL West': ['dodgers', 'padres', 'giants', 'dbacks', 'rockies'],
+  };
+  
   return (
     <div style={styles.container}>
       {notification && <div style={{...styles.notification, background: notification.type === 'error' ? theme.error : theme.success}}>{notification.message}</div>}
@@ -221,7 +290,24 @@ function Layout({ children, notification, pendingCount = 0 }) {
               </NavLink>
             )}
           </nav>
-          <button onClick={toggle} style={styles.themeToggle} title={isDark ? 'Light' : 'Dark'}>{isDark ? '☀' : '☾'}</button>
+          <div style={styles.themeControls}>
+            <select 
+              value={team} 
+              onChange={(e) => setTeamTheme(e.target.value)} 
+              style={styles.teamSelect}
+              title="Team Colors"
+            >
+              <option value="default">⚾ Default</option>
+              {Object.entries(teamGroups).map(([division, teams]) => (
+                <optgroup key={division} label={division}>
+                  {teams.map(t => (
+                    <option key={t} value={t}>{teamColors[t].name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <button onClick={toggle} style={styles.themeToggle} title={isDark ? 'Light' : 'Dark'}>{isDark ? '☀' : '☾'}</button>
+          </div>
         </div>
       </div></header>
       <NewsBanner theme={theme} styles={styles} />
@@ -3007,6 +3093,8 @@ function getStyles(t) {
     nav: { display: 'flex', gap: 4 },
     navLink: { padding: '8px 16px', color: t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 500, fontSize: 13 },
     navLinkActive: { background: t.accent, color: '#fff' },
+    themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
+    teamSelect: { padding: '6px 10px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none' },
     themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
     main: { display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
     sidebar: { width: 240, background: t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
