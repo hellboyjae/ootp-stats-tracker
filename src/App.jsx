@@ -5,16 +5,6 @@ import { supabase } from './supabase.js';
 
 const ThemeContext = createContext();
 
-// Helper to determine if a color is dark (for text contrast)
-const isColorDark = (hex) => {
-  const c = hex.replace('#', '');
-  const r = parseInt(c.substr(0, 2), 16);
-  const g = parseInt(c.substr(2, 2), 16);
-  const b = parseInt(c.substr(4, 2), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.5;
-};
-
 // Helper to lighten/darken colors
 const adjustColor = (hex, amount) => {
   const c = hex.replace('#', '');
@@ -25,6 +15,15 @@ const adjustColor = (hex, amount) => {
   g = Math.min(255, Math.max(0, g + amount));
   b = Math.min(255, Math.max(0, b + amount));
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+// Helper to add transparency to hex color
+const withAlpha = (hex, alpha) => {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substr(0, 2), 16);
+  const g = parseInt(c.substr(2, 2), 16);
+  const b = parseInt(c.substr(4, 2), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
 // MLB Team color schemes - primary is main color, secondary is accent
@@ -75,72 +74,96 @@ const generateTeamTheme = (teamKey, isDark) => {
   const secondary = team.secondary;
   
   if (isDark) {
-    // Dark mode - use primary as accent, darken for backgrounds
-    const mainBg = adjustColor(primary, -100); // Very dark version of primary
-    const cardBg = adjustColor(primary, -85);
-    const panelBg = adjustColor(primary, -75);
-    const sidebarBg = adjustColor(primary, -105);
-    const tableBg = adjustColor(primary, -90);
-    const border = adjustColor(primary, -50);
-    
+    // Dark mode - use team's TRUE primary color prominently
     return {
-      mainBg: mainBg,
-      cardBg: cardBg,
-      panelBg: panelBg,
-      tableBg: tableBg,
-      sidebarBg: sidebarBg,
+      // Main backgrounds stay dark for readability
+      mainBg: '#0a0e17',
+      cardBg: '#0f1419',
+      tableBg: '#111827',
+      inputBg: '#0f1419',
+      
+      // Header and sidebar use TRUE primary color
+      sidebarBg: primary,
+      panelBg: '#141a23',
+      
+      // Table header uses primary color
+      tableHeaderBg: primary,
+      tableRowBg: '#111827',
+      tableRowHover: withAlpha(primary, 0.15),
+      tableBorder: withAlpha(primary, 0.3),
+      
+      // Text colors
       textPrimary: '#e2e8f0',
       textSecondary: '#94a3b8',
       textMuted: '#94a3b8',
       textDim: '#64748b',
+      
+      // Accent uses secondary color for contrast
       accent: secondary,
       accentHover: adjustColor(secondary, -20),
+      
+      // Status colors
       success: '#22c55e',
       warning: '#f59e0b',
       error: '#ef4444',
+      
+      // Gold uses secondary
       gold: secondary,
-      tableHeaderBg: panelBg,
-      tableRowBg: tableBg,
-      tableRowHover: cardBg,
-      tableBorder: border,
-      border: border,
-      borderLight: adjustColor(primary, -40),
-      inputBg: cardBg,
-      inputBorder: border,
+      
+      // Borders mix both colors
+      border: withAlpha(primary, 0.4),
+      borderLight: withAlpha(secondary, 0.3),
+      inputBorder: withAlpha(primary, 0.4),
+      
+      // Store original colors for special use
+      teamPrimary: primary,
+      teamSecondary: secondary,
     };
   } else {
-    // Light mode - use lighter versions of primary
-    const mainBg = '#f8fafc';
-    const cardBg = '#ffffff';
-    const panelBg = adjustColor(primary, 180); // Very light tint of primary
-    const sidebarBg = adjustColor(primary, 170);
-    const tableBg = '#ffffff';
-    const border = adjustColor(primary, 140);
-    
+    // Light mode - use team colors as accents on white backgrounds
     return {
-      mainBg: mainBg,
-      cardBg: cardBg,
-      panelBg: panelBg,
-      tableBg: tableBg,
-      sidebarBg: sidebarBg,
+      // Main backgrounds stay light for readability
+      mainBg: '#f8fafc',
+      cardBg: '#ffffff',
+      tableBg: '#ffffff',
+      inputBg: '#ffffff',
+      
+      // Header and sidebar use primary color
+      sidebarBg: primary,
+      panelBg: withAlpha(primary, 0.08),
+      
+      // Table header uses primary
+      tableHeaderBg: primary,
+      tableRowBg: '#ffffff',
+      tableRowHover: withAlpha(primary, 0.05),
+      tableBorder: withAlpha(primary, 0.2),
+      
+      // Text colors
       textPrimary: '#0f172a',
       textSecondary: '#475569',
       textMuted: '#64748b',
       textDim: '#94a3b8',
-      accent: primary,
-      accentHover: adjustColor(primary, -20),
+      
+      // Accent uses secondary for buttons etc
+      accent: secondary,
+      accentHover: adjustColor(secondary, -20),
+      
+      // Status colors
       success: '#16a34a',
       warning: '#d97706',
       error: '#dc2626',
+      
+      // Gold uses secondary
       gold: secondary,
-      tableHeaderBg: panelBg,
-      tableRowBg: tableBg,
-      tableRowHover: adjustColor(primary, 190),
-      tableBorder: border,
-      border: border,
-      borderLight: adjustColor(primary, 160),
-      inputBg: cardBg,
-      inputBorder: border,
+      
+      // Borders
+      border: withAlpha(primary, 0.2),
+      borderLight: withAlpha(primary, 0.15),
+      inputBorder: withAlpha(primary, 0.25),
+      
+      // Store original colors for special use
+      teamPrimary: primary,
+      teamSecondary: secondary,
     };
   }
 };
@@ -3173,13 +3196,13 @@ function getStyles(t) {
     header: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, padding: '12px 24px' },
     headerContent: { maxWidth: 1800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     headerRight: { display: 'flex', alignItems: 'center', gap: 16 },
-    title: { margin: 0, fontSize: 22, color: t.textPrimary, fontWeight: 700 },
-    subtitle: { margin: '2px 0 0', fontSize: 12, color: t.textDim, fontWeight: 500 },
+    title: { margin: 0, fontSize: 22, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontWeight: 700 },
+    subtitle: { margin: '2px 0 0', fontSize: 12, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 500 },
     
     // News Banner
-    newsBannerContainer: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
+    newsBannerContainer: { background: t.teamSecondary || t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
     newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
-    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 20s linear infinite', color: t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
+    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 20s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
     newsBannerSpacer: { margin: '0 50px', color: t.textDim },
     newsBannerEditBtn: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.textMuted, fontSize: 12, zIndex: 10 },
     newsBannerEdit: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' },
@@ -3188,23 +3211,23 @@ function getStyles(t) {
     newsBannerCancelBtn: { padding: '8px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
     
     nav: { display: 'flex', gap: 4 },
-    navLink: { padding: '8px 16px', color: t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 500, fontSize: 13 },
-    navLinkActive: { background: t.accent, color: '#fff' },
+    navLink: { padding: '8px 16px', color: t.teamPrimary ? 'rgba(255,255,255,0.8)' : t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 500, fontSize: 13 },
+    navLinkActive: { background: t.teamSecondary || t.accent, color: '#fff' },
     themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
-    teamSelect: { padding: '6px 10px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none' },
-    themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
+    teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none' },
+    themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, background: t.teamPrimary ? 'rgba(255,255,255,0.1)' : 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.teamPrimary ? '#ffffff' : t.textMuted },
     main: { display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
-    sidebar: { width: 240, background: t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
+    sidebar: { width: 240, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
     sidebarTabs: { display: 'flex', gap: 2, marginBottom: 12 },
-    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11 },
-    sidebarTabActive: { background: t.panelBg, color: t.textPrimary },
-    sidebarSearch: { width: '100%', padding: '9px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
+    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11 },
+    sidebarTabActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
+    sidebarSearch: { width: '100%', padding: '9px 12px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, borderRadius: 4, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
     tournamentList: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflow: 'auto' },
-    emptyMsg: { color: t.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' },
-    tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'transparent', borderRadius: 4, cursor: 'pointer', borderLeft: '3px solid transparent' },
-    tournamentActive: { background: t.panelBg, borderLeftColor: t.accent },
+    emptyMsg: { color: t.teamPrimary ? 'rgba(255,255,255,0.6)' : t.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' },
+    tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'transparent', borderRadius: 4, cursor: 'pointer', borderLeft: `3px solid transparent` },
+    tournamentActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.panelBg, borderLeftColor: t.teamSecondary || t.accent },
     tournamentInfo: { display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden', flex: 1 },
-    tournamentName: { fontWeight: 500, color: t.textSecondary, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    tournamentName: { fontWeight: 500, color: t.teamPrimary ? 'rgba(255,255,255,0.9)' : t.textSecondary, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     tournamentNameActive: { color: t.textPrimary, fontWeight: 600 },
     tournamentStats: { fontSize: 11, color: t.textDim },
     tournamentActions: { display: 'flex', gap: 4, alignItems: 'center' },
@@ -3224,17 +3247,17 @@ function getStyles(t) {
     tabRow: { marginBottom: 12 },
     tabs: { display: 'flex', gap: 4 },
     tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
-    tabActive: { background: t.panelBg, color: t.textPrimary },
-    tabCount: { marginLeft: 6, color: t.textDim, fontWeight: 400 },
-    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 6 },
+    tabActive: { background: t.teamPrimary || t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
+    tabCount: { marginLeft: 6, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 400 },
+    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 6, borderLeft: `3px solid ${t.teamPrimary || t.accent}` },
     controlGroup: { display: 'flex', alignItems: 'center', gap: 6 },
     controlDivider: { width: 1, height: 24, background: t.border, margin: '0 6px' },
     searchInput: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: '4px 0 0 4px', fontSize: 13, width: 160, outline: 'none' },
     filterSelect: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderLeft: 'none', borderRadius: '0 4px 4px 0', fontSize: 13, cursor: 'pointer', outline: 'none' },
     controlBtn: { padding: '7px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 },
-    controlBtnActive: { background: t.accent, color: '#fff', borderColor: t.accent },
-    controlBtnHighlight: { borderColor: t.accent, color: t.accent },
-    filterBadge: { background: t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600 },
+    controlBtnActive: { background: t.teamSecondary || t.accent, color: '#fff', borderColor: t.teamSecondary || t.accent },
+    controlBtnHighlight: { borderColor: t.teamPrimary || t.accent, color: t.teamPrimary || t.accent },
+    filterBadge: { background: t.teamSecondary || t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600 },
     resetBtn: { padding: '7px 12px', background: 'transparent', color: t.warning, border: `1px solid ${t.warning}40`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500 },
     resultsCount: { marginLeft: 'auto', color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
     advancedFilters: { background: t.panelBg, borderRadius: 6, padding: '12px 14px', marginBottom: 12 },
@@ -3245,22 +3268,22 @@ function getStyles(t) {
     statFilterControls: { display: 'flex', gap: 6 },
     operatorSelect: { padding: '5px 8px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: 3, fontSize: 12, cursor: 'pointer' },
     valueInput: { padding: '5px 8px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: 3, fontSize: 12, width: 60 },
-    tableContainer: { background: t.tableBg, borderRadius: 6, border: `1px solid ${t.border}`, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
+    tableContainer: { background: t.tableBg, borderRadius: 6, border: `1px solid ${t.teamPrimary ? t.teamPrimary : t.border}`, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
     tableWrapper: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-    th: { padding: '8px 6px', background: t.tableHeaderBg, color: t.textMuted, fontWeight: 600, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${t.border}`, userSelect: 'none', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.02em', zIndex: 10, boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
-    thRate: { background: t.tableHeaderBg, color: t.gold, fontSize: 10, fontWeight: 700 },
-    thSorted: { color: t.textPrimary },
+    th: { padding: '8px 6px', background: t.teamPrimary || t.tableHeaderBg, color: t.teamPrimary ? '#ffffff' : t.textMuted, fontWeight: 600, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, userSelect: 'none', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.02em', zIndex: 10, boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
+    thRate: { background: t.teamSecondary || t.tableHeaderBg, color: t.teamSecondary ? '#ffffff' : t.gold, fontSize: 10, fontWeight: 700 },
+    thSorted: { color: t.teamPrimary ? t.teamSecondary || '#ffffff' : t.textPrimary },
     sortIndicator: { marginLeft: 3, fontSize: 10 },
     tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg },
     td: { padding: '6px 6px', color: t.textPrimary, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 12 },
     tdName: { padding: '6px 6px', color: t.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 },
     tdOvr: { padding: '6px 6px', textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: 12 },
-    tdRate: { padding: '6px 6px', color: t.gold, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 },
+    tdRate: { padding: '6px 6px', color: t.teamSecondary || t.gold, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 },
     emptyTable: { padding: 48, textAlign: 'center', color: t.textMuted, fontSize: 14 },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
-    modalTitle: { margin: '0 0 10px', color: t.textPrimary, fontSize: 20, fontWeight: 600 },
+    modal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.teamPrimary || t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
+    modalTitle: { margin: '0 0 10px', color: t.teamPrimary || t.textPrimary, fontSize: 20, fontWeight: 600 },
     modalText: { margin: '0 0 20px', color: t.textSecondary, fontSize: 14 },
     modalBtns: { display: 'flex', gap: 10, marginTop: 20 },
     authError: { color: t.error, fontSize: 13, margin: '0 0 14px', padding: '10px 14px', background: `${t.error}15`, borderRadius: 4 },
@@ -3268,16 +3291,16 @@ function getStyles(t) {
     textareaLarge: { width: '100%', padding: '10px 12px', background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 4, color: t.textPrimary, fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', minHeight: 140, outline: 'none' },
     formBtns: { display: 'flex', gap: 10 },
     newForm: { marginBottom: 12, padding: 12, background: t.panelBg, borderRadius: 6 },
-    saveBtn: { flex: 1, padding: '10px 14px', background: t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
+    saveBtn: { flex: 1, padding: '10px 14px', background: t.teamPrimary || t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
     cancelBtn: { flex: 1, padding: '10px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    addBtn: { padding: '8px 14px', background: t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    editBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
+    addBtn: { padding: '8px 14px', background: t.teamSecondary || t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
+    editBtn: { padding: '8px 14px', background: 'transparent', color: t.teamPrimary || t.textMuted, border: `1px solid ${t.teamPrimary || t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
     pageContent: { flex: 1, padding: '24px 28px', maxWidth: 900, margin: '0 auto' },
-    pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${t.border}` },
-    pageTitle: { margin: 0, fontSize: 24, color: t.textPrimary, fontWeight: 600 },
+    pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${t.teamPrimary || t.border}` },
+    pageTitle: { margin: 0, fontSize: 24, color: t.teamPrimary || t.textPrimary, fontWeight: 600 },
     infoContent: { display: 'flex', flexDirection: 'column', gap: 20 },
-    infoSection: { background: t.panelBg, padding: 24, borderRadius: 6 },
-    infoHeading: { margin: '0 0 12px', color: t.textPrimary, fontSize: 18, fontWeight: 600 },
+    infoSection: { background: t.panelBg, padding: 24, borderRadius: 6, borderLeft: `4px solid ${t.teamPrimary || t.accent}` },
+    infoHeading: { margin: '0 0 12px', color: t.teamPrimary || t.textPrimary, fontSize: 18, fontWeight: 600 },
     infoBody: { margin: 0, color: t.textSecondary, fontSize: 14, lineHeight: 1.7 },
     
     // Admin Login Section
