@@ -1519,20 +1519,15 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
         });
 
         if (found) {
-          const uploadDate = new Date(upload.upload_date || upload.created_at);
-          const dateLabel = uploadDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          
           if (playerType === 'pitching') {
             dataPoints.push({
-              upload: index + 1,
-              date: dateLabel,
+              upload: `#${index + 1}`,
               siera: parseFloat(found.SIERA || found.siera) || 0,
               fipMinus: parseFloat(found['FIP-'] || found.fipMinus) || 0,
             });
           } else {
             dataPoints.push({
-              upload: index + 1,
-              date: dateLabel,
+              upload: `#${index + 1}`,
               woba: parseFloat(found.wOBA || found.woba) || 0,
               opsPlus: parseFloat(found['OPS+'] || found.opsPlus) || 0,
             });
@@ -1700,7 +1695,7 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
                 <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
                   <XAxis 
-                    dataKey="date" 
+                    dataKey="upload" 
                     tick={{ fill: theme.textMuted, fontSize: 11 }}
                     axisLine={{ stroke: theme.border }}
                   />
