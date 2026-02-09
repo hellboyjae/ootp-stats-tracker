@@ -405,6 +405,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
           <nav style={styles.nav}>
             <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/leaderboards" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Leaderboards</NavLink>
+            <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
@@ -4674,6 +4675,1028 @@ function LeaderboardsPage() {
   );
 }
 
+function DraftAssistantPage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  
+  // Setup state
+  const [tournaments, setTournaments] = useState([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState('');
+  const [draftSize, setDraftSize] = useState(26);
+  const [hasDH, setHasDH] = useState(true);
+  const [cardPool, setCardPool] = useState({
+    perfect: true,   // 95+
+    diamond: true,   // 90-94
+    gold: true,      // 85-89
+    silver: true,    // 80-84
+    bronze: true,    // 75-79
+    common: false    // <75
+  });
+  
+  // Draft state
+  const [draftStarted, setDraftStarted] = useState(false);
+  const [tournamentData, setTournamentData] = useState(null);
+  const [roster, setRoster] = useState({});
+  const [takenPlayers, setTakenPlayers] = useState(new Set()); // Players taken by others
+  const [activePositionTab, setActivePositionTab] = useState('C');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [notification, setNotification] = useState(null);
+  const [showPlayerModal, setShowPlayerModal] = useState(null); // Player to show in modal
+  const [editingSlot, setEditingSlot] = useState(null); // For position switching
+  const [showLowConfidence, setShowLowConfidence] = useState(false); // Hide low sample players by default
+  
+  // Position definitions
+  const battingPositions = hasDH ? ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'] : ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'];
+  const pitchingPositions = ['SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'RP1', 'RP2', 'RP3', 'RP4', 'CL'];
+  const benchCount = draftSize - battingPositions.length - pitchingPositions.length;
+  const benchSlots = Array.from({ length: benchCount }, (_, i) => `BENCH${i + 1}`);
+  const allSlots = [...battingPositions, ...pitchingPositions, ...benchSlots];
+  
+  const showNotif = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  useEffect(() => {
+    loadTournaments();
+  }, []);
+
+  const loadTournaments = async () => {
+    const { data } = await supabase
+      .from('tournaments')
+      .select('id, name, category')
+      .order('name');
+    setTournaments(data || []);
+  };
+
+  const getCardTier = (ovr) => {
+    if (ovr >= 95) return 'perfect';
+    if (ovr >= 90) return 'diamond';
+    if (ovr >= 85) return 'gold';
+    if (ovr >= 80) return 'silver';
+    if (ovr >= 75) return 'bronze';
+    return 'common';
+  };
+
+  const getCardTierLabel = (ovr) => {
+    if (ovr >= 95) return { label: '★', color: '#a855f7' };      // Purple
+    if (ovr >= 90) return { label: '◆', color: '#38bdf8' };      // Diamond blue
+    if (ovr >= 85) return { label: '●', color: '#fbbf24' };      // Gold
+    if (ovr >= 80) return { label: '●', color: '#94a3b8' };      // Silver
+    if (ovr >= 75) return { label: '●', color: '#cd7f32' };      // Bronze
+    return { label: '○', color: '#64748b' };                      // Common
+  };
+
+  // === HEURISTICS: Sample Size Confidence ===
+  // Based on PD Data Interpretation Guide thresholds
+  const getSampleConfidence = (player, isPitching) => {
+    if (isPitching) {
+      // Parse IP (handles "123.2" format)
+      const ip = parseFloat(player.ip) || 0;
+      if (ip >= 250) return { level: 'high', label: '✓', color: '#22c55e', desc: 'Measurement-grade (250+ IP)' };
+      if (ip >= 100) return { level: 'good', label: '✓', color: '#86efac', desc: 'Decision-grade (100+ IP)' };
+      if (ip >= 50) return { level: 'ok', label: '~', color: '#fbbf24', desc: 'Stronger signal (50+ IP)' };
+      return { level: 'low', label: '⚠', color: '#f87171', desc: 'Low sample (<50 IP) - use for extremes only' };
+    } else {
+      const ab = parseInt(player.ab) || 0;
+      const pa = parseInt(player.pa) || ab;
+      if (pa >= 1500) return { level: 'high', label: '✓', color: '#22c55e', desc: 'Measurement-grade (1500+ PA)' };
+      if (pa >= 600) return { level: 'good', label: '✓', color: '#86efac', desc: 'Decision-grade (600+ PA)' };
+      if (pa >= 300) return { level: 'ok', label: '~', color: '#fbbf24', desc: 'Stronger signal (300+ PA)' };
+      return { level: 'low', label: '⚠', color: '#f87171', desc: 'Low sample (<300 PA) - big gaps only' };
+    }
+  };
+
+  // === HEURISTICS: Calculate Performance Tiers ===
+  // Groups players into tiers based on meaningful gaps in key metrics
+  const calculateTiers = (players, isPitching) => {
+    if (!players || players.length === 0) return [];
+
+    // Sort by primary metric (wOBA for batters, SIERA for pitchers)
+    const sorted = [...players].sort((a, b) => {
+      if (isPitching) {
+        // Lower SIERA is better, fallback to FIP- then ERA
+        const aVal = parseFloat(a.siera) || (parseFloat(a.fipMinus) / 25) || parseFloat(a.era) || 99;
+        const bVal = parseFloat(b.siera) || (parseFloat(b.fipMinus) / 25) || parseFloat(b.era) || 99;
+        return aVal - bVal;
+      } else {
+        // Higher wOBA is better, combine with OPS+ for composite
+        const aWoba = parseFloat(a.woba) || 0;
+        const bWoba = parseFloat(b.woba) || 0;
+        const aOpsPlus = parseFloat(a.opsPlus) || 100;
+        const bOpsPlus = parseFloat(b.opsPlus) || 100;
+        // Composite: wOBA * 1000 + OPS+ (wOBA dominates, OPS+ breaks ties)
+        const aVal = (aWoba * 1000) + aOpsPlus;
+        const bVal = (bWoba * 1000) + bOpsPlus;
+        return bVal - aVal;
+      }
+    });
+
+    // Find tier breaks (gaps > threshold)
+    const tierThreshold = isPitching ? 0.3 : 0.020; // SIERA gap of 0.3, wOBA gap of .020
+    let currentTier = 1;
+    
+    return sorted.map((player, idx) => {
+      if (idx > 0) {
+        const prev = sorted[idx - 1];
+        let gap;
+        if (isPitching) {
+          const prevVal = parseFloat(prev.siera) || parseFloat(prev.era) || 0;
+          const currVal = parseFloat(player.siera) || parseFloat(player.era) || 0;
+          gap = currVal - prevVal; // Higher SIERA = worse
+        } else {
+          const prevVal = parseFloat(prev.woba) || 0;
+          const currVal = parseFloat(player.woba) || 0;
+          gap = prevVal - currVal; // Lower wOBA = worse
+        }
+        if (gap >= tierThreshold) {
+          currentTier++;
+        }
+      }
+      return { ...player, _tier: currentTier };
+    });
+  };
+
+  // === HEURISTICS: Composite Draft Score ===
+  // Combines sample-adjusted performance using proper metrics (no WAR)
+  const getDraftScore = (player, isPitching) => {
+    const confidence = getSampleConfidence(player, isPitching);
+    
+    let baseScore;
+    if (isPitching) {
+      // Primary: SIERA (lower is better), Secondary: FIP-
+      // Invert so higher score = better pitcher
+      const siera = parseFloat(player.siera) || parseFloat(player.era) || 5;
+      const fipMinus = parseFloat(player.fipMinus) || 100;
+      
+      // SIERA typically 2.5-5.5, invert and scale
+      const sieraScore = (6 - siera) * 40; // ~20-140 range
+      // FIP- typically 60-140, invert (lower is better)
+      const fipScore = (150 - fipMinus) * 0.5; // ~5-45 range
+      
+      baseScore = sieraScore + fipScore;
+    } else {
+      // Primary: wOBA, Secondary: OPS+
+      const woba = parseFloat(player.woba) || 0.300;
+      const opsPlus = parseFloat(player.opsPlus) || 100;
+      
+      // wOBA typically .280-.420, scale up
+      const wobaScore = woba * 400; // ~112-168 range
+      // OPS+ typically 80-160
+      const opsScore = (opsPlus - 80) * 0.3; // ~0-24 range
+      
+      baseScore = wobaScore + opsScore;
+    }
+    
+    // Apply confidence multiplier - low confidence gets significant penalty
+    const confidenceMultiplier = {
+      high: 1.0,
+      good: 0.95,
+      ok: 0.85,
+      low: 0.60  // Significant penalty for low sample
+    };
+    
+    return baseScore * confidenceMultiplier[confidence.level];
+  };
+
+  const startDraft = async () => {
+    if (!selectedTournamentId) {
+      showNotif('Please select a tournament', 'error');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', selectedTournamentId)
+      .single();
+
+    if (error || !data) {
+      showNotif('Failed to load tournament', 'error');
+      return;
+    }
+
+    setTournamentData(data);
+    setRoster({});
+    setTakenPlayers(new Set());
+    setDraftStarted(true);
+    setActivePositionTab('C');
+  };
+
+  const resetDraft = () => {
+    if (!confirm('Reset draft? This will clear your roster and all taken players.')) return;
+    setRoster({});
+    setTakenPlayers(new Set());
+  };
+
+  const exitDraft = () => {
+    if (!confirm('Exit draft? Progress will be lost.')) return;
+    setDraftStarted(false);
+    setTournamentData(null);
+    setRoster({});
+    setTakenPlayers(new Set());
+  };
+
+  // Get available players for a position
+  const getAvailablePlayers = (position, limit = 5) => {
+    if (!tournamentData) return [];
+    
+    const isPitching = ['SP', 'SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'RP', 'RP1', 'RP2', 'RP3', 'RP4', 'CL'].some(p => position.startsWith(p) || position === p);
+    const data = isPitching ? tournamentData.pitching : tournamentData.batting;
+    if (!data) return [];
+
+    // Normalize position for matching
+    let posMatch = position;
+    if (position.startsWith('SP')) posMatch = 'SP';
+    else if (position.startsWith('RP')) posMatch = 'RP';
+    else if (position === 'BENCH' || position.startsWith('BENCH')) posMatch = null; // All positions for bench
+
+    // Get roster player keys
+    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
+
+    const filtered = data.filter(p => {
+      // Filter by card pool
+      const tier = getCardTier(p.ovr);
+      if (!cardPool[tier]) return false;
+      
+      // Filter by position (null = any for bench)
+      if (posMatch && p.pos?.toUpperCase() !== posMatch) return false;
+      
+      // Filter out already taken or on roster
+      const key = `${p.name}|${p.ovr}`;
+      if (takenPlayers.has(key) || rosterPlayerKeys.has(key)) return false;
+
+      // Filter out low confidence players unless enabled
+      if (!showLowConfidence) {
+        const confidence = getSampleConfidence(p, isPitching);
+        if (confidence.level === 'low') return false;
+      }
+      
+      return true;
+    });
+
+    // Calculate tiers and add confidence/score
+    const tiered = calculateTiers(filtered, isPitching);
+    const withScores = tiered.map(p => ({
+      ...p,
+      _confidence: getSampleConfidence(p, isPitching),
+      _draftScore: getDraftScore(p, isPitching),
+      _isPitching: isPitching
+    }));
+
+    // Sort by draft score (combines metric + sample size confidence)
+    return withScores
+      .sort((a, b) => b._draftScore - a._draftScore)
+      .slice(0, limit);
+  };
+
+  // Get all available for a position type (for scarcity calculation)
+  const getAllAvailableForPosition = (position) => {
+    return getAvailablePlayers(position, 999);
+  };
+
+  // Check position scarcity
+  const getScarcityAlert = () => {
+    const alerts = [];
+    const positions = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'SP', 'RP', 'CL'];
+    
+    for (const pos of positions) {
+      // Skip if already filled
+      if (pos === 'SP' && ['SP1','SP2','SP3','SP4','SP5'].every(s => roster[s])) continue;
+      if (pos === 'RP' && ['RP1','RP2','RP3','RP4'].every(s => roster[s])) continue;
+      if (!pos.startsWith('SP') && !pos.startsWith('RP') && roster[pos]) continue;
+
+      const available = getAllAvailableForPosition(pos);
+      const eliteCount = available.filter(p => parseFloat(p.war || 0) >= 2).length;
+      
+      if (eliteCount <= 3 && eliteCount > 0) {
+        alerts.push({ pos, count: eliteCount, type: 'warning' });
+      } else if (eliteCount === 0) {
+        alerts.push({ pos, count: 0, type: 'danger' });
+      }
+    }
+    
+    return alerts;
+  };
+
+  // Add player to roster
+  const addToRoster = (slot, player) => {
+    setRoster(prev => ({ ...prev, [slot]: player }));
+    setShowPlayerModal(null);
+    showNotif(`${player.name} added to ${slot}`);
+  };
+
+  // Remove player from roster (back to available)
+  const removeFromRoster = (slot) => {
+    setRoster(prev => {
+      const newRoster = { ...prev };
+      delete newRoster[slot];
+      return newRoster;
+    });
+  };
+
+  // Mark player as taken by another drafter
+  const markAsTaken = (player) => {
+    const key = `${player.name}|${player.ovr}`;
+    setTakenPlayers(prev => new Set([...prev, key]));
+    showNotif(`${player.name} marked as taken`);
+  };
+
+  // Switch player position
+  const switchPosition = (fromSlot, toSlot) => {
+    const player = roster[fromSlot];
+    if (!player) return;
+    
+    setRoster(prev => {
+      const newRoster = { ...prev };
+      delete newRoster[fromSlot];
+      newRoster[toSlot] = player;
+      return newRoster;
+    });
+    setEditingSlot(null);
+    showNotif(`${player.name} moved to ${toSlot}`);
+  };
+
+  // Search players
+  useEffect(() => {
+    if (!searchQuery.trim() || !tournamentData) {
+      setSearchResults([]);
+      return;
+    }
+    
+    const query = searchQuery.toLowerCase();
+    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
+    
+    const batting = (tournamentData.batting || []).filter(p => {
+      if (!p.name.toLowerCase().includes(query)) return false;
+      if (takenPlayers.has(`${p.name}|${p.ovr}`)) return false;
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (!cardPool[getCardTier(p.ovr)]) return false;
+      // Filter out low confidence unless enabled
+      if (!showLowConfidence && getSampleConfidence(p, false).level === 'low') return false;
+      return true;
+    });
+    const pitching = (tournamentData.pitching || []).filter(p => {
+      if (!p.name.toLowerCase().includes(query)) return false;
+      if (takenPlayers.has(`${p.name}|${p.ovr}`)) return false;
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (!cardPool[getCardTier(p.ovr)]) return false;
+      // Filter out low confidence unless enabled
+      if (!showLowConfidence && getSampleConfidence(p, true).level === 'low') return false;
+      return true;
+    });
+    
+    setSearchResults([
+      ...batting.map(p => ({ ...p, type: 'batting', _confidence: getSampleConfidence(p, false) })),
+      ...pitching.map(p => ({ ...p, type: 'pitching', _confidence: getSampleConfidence(p, true) }))
+    ].slice(0, 10));
+  }, [searchQuery, tournamentData, takenPlayers, roster, cardPool, showLowConfidence]);
+
+  // Get empty slots for a player type
+  const getEmptySlots = (playerType) => {
+    if (playerType === 'batting') {
+      return [...battingPositions, ...benchSlots].filter(s => !roster[s]);
+    } else {
+      return [...pitchingPositions, ...benchSlots].filter(s => !roster[s]);
+    }
+  };
+
+  const filledCount = Object.keys(roster).length;
+  const scarcityAlerts = draftStarted ? getScarcityAlert() : [];
+
+  // Render Setup Screen
+  if (!draftStarted) {
+    const groupedTournaments = {
+      tournaments: tournaments.filter(t => t.category === 'tournaments' || !t.category),
+      drafts: tournaments.filter(t => t.category === 'drafts')
+    };
+
+    return (
+      <Layout notification={notification}>
+        <div style={{ maxWidth: 600, margin: '40px auto', padding: 20 }}>
+          <h1 style={{ color: theme.textPrimary, marginBottom: 8 }}>🎯 Draft Assistant</h1>
+          <p style={{ color: theme.textMuted, marginBottom: 32 }}>Set up your draft to get position recommendations and track picks.</p>
+
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 24, border: `1px solid ${theme.border}` }}>
+            {/* Tournament Selection */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
+                Select Tournament
+              </label>
+              <select 
+                value={selectedTournamentId} 
+                onChange={(e) => setSelectedTournamentId(e.target.value)}
+                style={{ 
+                  width: '100%', padding: 12, borderRadius: 8, 
+                  background: theme.inputBg, color: theme.textPrimary, 
+                  border: `1px solid ${theme.border}`, fontSize: 14 
+                }}
+              >
+                <option value="">Choose a tournament...</option>
+                {groupedTournaments.tournaments.length > 0 && (
+                  <optgroup label="Tournaments">
+                    {groupedTournaments.tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </optgroup>
+                )}
+                {groupedTournaments.drafts.length > 0 && (
+                  <optgroup label="Drafts">
+                    {groupedTournaments.drafts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            {/* Draft Size & DH */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+              <div>
+                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
+                  Draft Size
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button 
+                    onClick={() => setDraftSize(26)}
+                    style={{
+                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
+                      background: draftSize === 26 ? theme.accent : theme.inputBg,
+                      color: draftSize === 26 ? '#fff' : theme.textPrimary,
+                      cursor: 'pointer', fontWeight: 600
+                    }}
+                  >26</button>
+                  <button 
+                    onClick={() => setDraftSize(32)}
+                    style={{
+                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
+                      background: draftSize === 32 ? theme.accent : theme.inputBg,
+                      color: draftSize === 32 ? '#fff' : theme.textPrimary,
+                      cursor: 'pointer', fontWeight: 600
+                    }}
+                  >32</button>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
+                  League Type
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button 
+                    onClick={() => setHasDH(true)}
+                    style={{
+                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
+                      background: hasDH ? theme.accent : theme.inputBg,
+                      color: hasDH ? '#fff' : theme.textPrimary,
+                      cursor: 'pointer', fontWeight: 600
+                    }}
+                  >DH</button>
+                  <button 
+                    onClick={() => setHasDH(false)}
+                    style={{
+                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
+                      background: !hasDH ? theme.accent : theme.inputBg,
+                      color: !hasDH ? '#fff' : theme.textPrimary,
+                      cursor: 'pointer', fontWeight: 600
+                    }}
+                  >No DH</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Card Pool */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
+                Card Pool Available
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[
+                  { key: 'perfect', label: 'Perfect (95+)', color: '#a855f7' },
+                  { key: 'diamond', label: 'Diamond (90-94)', color: '#38bdf8' },
+                  { key: 'gold', label: 'Gold (85-89)', color: '#fbbf24' },
+                  { key: 'silver', label: 'Silver (80-84)', color: '#94a3b8' },
+                  { key: 'bronze', label: 'Bronze (75-79)', color: '#cd7f32' },
+                  { key: 'common', label: 'Common (<75)', color: '#64748b' },
+                ].map(tier => (
+                  <label 
+                    key={tier.key}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 6, 
+                      padding: '8px 12px', borderRadius: 6, cursor: 'pointer',
+                      background: cardPool[tier.key] ? tier.color + '22' : theme.inputBg,
+                      border: `1px solid ${cardPool[tier.key] ? tier.color : theme.border}`,
+                      color: cardPool[tier.key] ? tier.color : theme.textMuted
+                    }}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={cardPool[tier.key]}
+                      onChange={(e) => setCardPool(prev => ({ ...prev, [tier.key]: e.target.checked }))}
+                    />
+                    {tier.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Start Button */}
+            <button 
+              onClick={startDraft}
+              disabled={!selectedTournamentId}
+              style={{
+                width: '100%', padding: 16, borderRadius: 8, border: 'none',
+                background: selectedTournamentId ? theme.accent : theme.inputBg,
+                color: selectedTournamentId ? '#fff' : theme.textMuted,
+                fontSize: 16, fontWeight: 600, cursor: selectedTournamentId ? 'pointer' : 'not-allowed'
+              }}
+            >
+              Start Draft
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Render Main Draft View
+  const positionTabs = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', ...(hasDH ? ['DH'] : []), 'SP', 'RP', 'CL'];
+  const currentAvailable = getAvailablePlayers(
+    activePositionTab === 'SP' ? 'SP' : activePositionTab === 'RP' ? 'RP' : activePositionTab, 
+    activePositionTab === 'SP' ? 10 : 5
+  );
+
+  return (
+    <Layout notification={notification}>
+      <div style={{ padding: 20, maxWidth: 1400, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 24 }}>
+              🎯 Draft Assistant - {tournamentData?.name}
+            </h1>
+            <p style={{ color: theme.textMuted, margin: '4px 0 0 0', fontSize: 13 }}>
+              {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={resetDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer' }}>Reset</button>
+            <button onClick={exitDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer' }}>Exit Draft</button>
+          </div>
+        </div>
+
+        {/* Scarcity Alerts */}
+        {scarcityAlerts.length > 0 && (
+          <div style={{ 
+            background: theme.warning + '22', border: `1px solid ${theme.warning}`, 
+            borderRadius: 8, padding: 12, marginBottom: 16 
+          }}>
+            {scarcityAlerts.map((alert, i) => (
+              <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 13 }}>
+                ⚠️ {alert.count === 0 ? `No elite ${alert.pos} remaining!` : `Only ${alert.count} elite ${alert.pos} remaining in pool!`}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Card Pool Toggles */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
+          {[
+            { key: 'perfect', label: 'Perf', color: '#a855f7' },
+            { key: 'diamond', label: 'Dia', color: '#38bdf8' },
+            { key: 'gold', label: 'Gold', color: '#fbbf24' },
+            { key: 'silver', label: 'Silv', color: '#94a3b8' },
+            { key: 'bronze', label: 'Brnz', color: '#cd7f32' },
+            { key: 'common', label: 'Com', color: '#64748b' },
+          ].map(tier => (
+            <button 
+              key={tier.key}
+              onClick={() => setCardPool(prev => ({ ...prev, [tier.key]: !prev[tier.key] }))}
+              style={{
+                padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                background: cardPool[tier.key] ? tier.color : 'transparent',
+                color: cardPool[tier.key] ? '#fff' : tier.color,
+                border: `1px solid ${tier.color}`,
+                cursor: 'pointer', opacity: cardPool[tier.key] ? 1 : 0.5
+              }}
+            >
+              {tier.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Heuristics Legend */}
+        <div style={{ 
+          display: 'flex', gap: 16, marginBottom: 16, padding: '8px 12px', 
+          background: theme.panelBg, borderRadius: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center'
+        }}>
+          <span style={{ color: theme.textMuted }}>Sample Confidence:</span>
+          <span><span style={{ color: '#22c55e' }}>✓</span> High (trusted)</span>
+          <span><span style={{ color: '#86efac' }}>✓</span> Good</span>
+          <span><span style={{ color: '#fbbf24' }}>~</span> Signal only</span>
+          <span><span style={{ color: '#f87171' }}>⚠</span> Low sample</span>
+          <span style={{ color: theme.textMuted }}>|</span>
+          <span style={{ color: theme.textMuted }}>Tier:</span>
+          <span><span style={{ color: '#22c55e' }}>T1</span> Elite</span>
+          <span><span style={{ color: '#fbbf24' }}>T2</span> Good</span>
+          <span><span style={{ color: theme.textMuted }}>T3+</span> Below</span>
+          <span style={{ color: theme.textMuted }}>|</span>
+          <label style={{ 
+            display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+            padding: '2px 8px', borderRadius: 4,
+            background: showLowConfidence ? theme.warning + '33' : 'transparent',
+            border: `1px solid ${showLowConfidence ? theme.warning : theme.border}`
+          }}>
+            <input 
+              type="checkbox" 
+              checked={showLowConfidence} 
+              onChange={(e) => setShowLowConfidence(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            <span style={{ color: showLowConfidence ? theme.warning : theme.textMuted }}>
+              Show Low Confidence
+            </span>
+          </label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
+          {/* Left: Roster */}
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.textPrimary, margin: '0 0 16px 0', fontSize: 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
+            
+            {/* Batting */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>BATTING</div>
+              {battingPositions.map(pos => (
+                <div key={pos} style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8, padding: 8, 
+                  background: roster[pos] ? theme.success + '22' : theme.inputBg, 
+                  borderRadius: 6, marginBottom: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
+                }}>
+                  <span style={{ width: 28, fontWeight: 600, color: theme.textMuted, fontSize: 12 }}>{pos}</span>
+                  {roster[pos] ? (
+                    <>
+                      <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13 }}>
+                        {roster[pos].name} 
+                        <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
+                          {roster[pos].ovr}
+                        </span>
+                      </span>
+                      <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>
+                      <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 12 }}>×</button>
+                    </>
+                  ) : (
+                    <span 
+                      onClick={() => setActivePositionTab(pos === 'DH' ? 'DH' : pos)}
+                      style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
+                    >Empty - Click to view</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Pitching */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>PITCHING</div>
+              {pitchingPositions.map(pos => (
+                <div key={pos} style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8, padding: 8, 
+                  background: roster[pos] ? theme.success + '22' : theme.inputBg, 
+                  borderRadius: 6, marginBottom: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
+                }}>
+                  <span style={{ width: 28, fontWeight: 600, color: theme.textMuted, fontSize: 12 }}>{pos}</span>
+                  {roster[pos] ? (
+                    <>
+                      <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13 }}>
+                        {roster[pos].name}
+                        <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
+                          {roster[pos].ovr}
+                        </span>
+                      </span>
+                      <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>
+                      <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 12 }}>×</button>
+                    </>
+                  ) : (
+                    <span 
+                      onClick={() => setActivePositionTab(pos.startsWith('SP') ? 'SP' : pos.startsWith('RP') ? 'RP' : 'CL')}
+                      style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
+                    >Empty - Click to view</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Bench */}
+            <div>
+              <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>BENCH ({Object.keys(roster).filter(k => k.startsWith('BENCH')).length}/{benchCount})</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {benchSlots.map(slot => (
+                  <div key={slot} style={{ 
+                    width: 'calc(50% - 2px)', padding: 6, 
+                    background: roster[slot] ? theme.success + '22' : theme.inputBg, 
+                    borderRadius: 4, border: `1px solid ${roster[slot] ? theme.success : theme.border}`,
+                    fontSize: 11
+                  }}>
+                    {roster[slot] ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ flex: 1, color: theme.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {roster[slot].name}
+                        </span>
+                        <button onClick={() => removeFromRoster(slot)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 10, padding: 0 }}>×</button>
+                      </div>
+                    ) : (
+                      <span style={{ color: theme.textMuted }}>—</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Available Players */}
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
+            {/* Search */}
+            <div style={{ marginBottom: 16 }}>
+              <input 
+                type="text"
+                placeholder="🔍 Quick search any player..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%', padding: 12, borderRadius: 8,
+                  background: theme.inputBg, color: theme.textPrimary,
+                  border: `1px solid ${theme.border}`, fontSize: 14
+                }}
+              />
+              {searchResults.length > 0 && (
+                <div style={{ 
+                  marginTop: 8, background: theme.panelBg, borderRadius: 8, 
+                  border: `1px solid ${theme.border}`, maxHeight: 300, overflowY: 'auto' 
+                }}>
+                  {searchResults.map((p, i) => {
+                    const tier = getCardTierLabel(p.ovr);
+                    return (
+                      <div key={i} style={{ 
+                        display: 'flex', alignItems: 'center', gap: 8, padding: 10,
+                        borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setShowPlayerModal(p)}
+                      >
+                        <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
+                        <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
+                        <span style={{ color: theme.textMuted, fontSize: 12 }}>{p.pos}</span>
+                        <span style={{ color: theme.textMuted, fontSize: 12 }}>
+                          {p.type === 'batting' ? `${p.wrcPlus || '—'} wRC+` : `${p.era || '—'} ERA`}
+                        </span>
+                        <span style={{ color: theme.accent, fontSize: 12 }}>{p.war} WAR</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Position Tabs */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+              {positionTabs.map(pos => {
+                const hasScarcity = scarcityAlerts.some(a => a.pos === pos);
+                return (
+                  <button 
+                    key={pos}
+                    onClick={() => setActivePositionTab(pos)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      background: activePositionTab === pos ? theme.accent : theme.inputBg,
+                      color: activePositionTab === pos ? '#fff' : theme.textPrimary,
+                      border: `1px solid ${hasScarcity ? theme.warning : theme.border}`,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {pos} {hasScarcity && '⚠️'}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Available Players List */}
+            <h4 style={{ color: theme.textPrimary, margin: '0 0 8px 0' }}>
+              Best Available - {activePositionTab} ({activePositionTab === 'SP' ? 'Top 10' : 'Top 5'})
+            </h4>
+            <p style={{ color: theme.textMuted, fontSize: 11, margin: '0 0 12px 0' }}>
+              Sorted by sample-adjusted performance (wOBA for batters, SIERA for pitchers)
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {currentAvailable.length === 0 ? (
+                <div style={{ color: theme.textMuted, textAlign: 'center', padding: 20 }}>
+                  No available players for this position in current card pool
+                </div>
+              ) : currentAvailable.map((p, i) => {
+                const cardTier = getCardTierLabel(p.ovr);
+                const isPitching = p._isPitching;
+                const confidence = p._confidence;
+                const performanceTier = p._tier;
+                return (
+                  <div key={i} style={{ 
+                    display: 'flex', alignItems: 'center', gap: 10, padding: 12,
+                    background: theme.panelBg, borderRadius: 8, 
+                    border: `1px solid ${confidence.level === 'low' ? theme.warning + '66' : theme.border}`
+                  }}>
+                    {/* Rank + Tier Badge */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <span style={{ 
+                        width: 22, height: 22, borderRadius: '50%', 
+                        background: theme.inputBg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: theme.textMuted, fontSize: 11, fontWeight: 600 
+                      }}>{i + 1}</span>
+                      <span style={{ 
+                        fontSize: 9, fontWeight: 700, color: performanceTier === 1 ? '#22c55e' : performanceTier === 2 ? '#fbbf24' : theme.textMuted 
+                      }}>T{performanceTier}</span>
+                    </div>
+                    
+                    {/* OVR */}
+                    <span style={{ color: cardTier.color, fontWeight: 700, fontSize: 14 }}>{p.ovr}</span>
+                    
+                    {/* Player Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: theme.textPrimary, fontWeight: 500 }}>{p.name}</span>
+                        {/* Sample Size Confidence Badge */}
+                        <span 
+                          title={confidence.desc}
+                          style={{ 
+                            fontSize: 10, fontWeight: 600, color: confidence.color,
+                            cursor: 'help'
+                          }}
+                        >{confidence.label}</span>
+                      </div>
+                      <div style={{ color: theme.textMuted, fontSize: 11 }}>
+                        {isPitching 
+                          ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
+                          : `${p.woba || '—'} wOBA · ${p.opsPlus || '—'} OPS+ · ${p.pa || p.ab || '—'} PA`
+                        }
+                      </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button 
+                        onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
+                        style={{ padding: '6px 10px', borderRadius: 4, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11 }}
+                      >Draft</button>
+                      <button 
+                        onClick={() => markAsTaken(p)}
+                        style={{ padding: '6px 10px', borderRadius: 4, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 11 }}
+                      >Taken</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Player Modal */}
+        {showPlayerModal && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setShowPlayerModal(null)}
+          >
+            <div 
+              style={{ background: theme.cardBg, borderRadius: 12, padding: 24, maxWidth: 400, width: '90%', border: `1px solid ${theme.border}` }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ color: theme.textPrimary, margin: 0 }}>{showPlayerModal.name}</h3>
+                  <p style={{ color: theme.textMuted, margin: '4px 0 0 0' }}>
+                    {showPlayerModal.pos} · <span style={{ color: getCardTierLabel(showPlayerModal.ovr).color }}>{showPlayerModal.ovr} OVR</span>
+                  </p>
+                </div>
+                <button onClick={() => setShowPlayerModal(null)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
+              </div>
+
+              {/* Sample Size Confidence Banner */}
+              {(() => {
+                const isPitch = showPlayerModal.type === 'pitching';
+                const conf = getSampleConfidence(showPlayerModal, isPitch);
+                return (
+                  <div style={{ 
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', 
+                    marginBottom: 12, borderRadius: 6,
+                    background: conf.level === 'low' ? theme.warning + '22' : theme.success + '22',
+                    border: `1px solid ${conf.color}`
+                  }}>
+                    <span style={{ color: conf.color, fontWeight: 700, fontSize: 14 }}>{conf.label}</span>
+                    <span style={{ color: theme.textPrimary, fontSize: 12 }}>{conf.desc}</span>
+                  </div>
+                );
+              })()}
+
+              <div style={{ background: theme.panelBg, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                {showPlayerModal.type === 'pitching' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, textAlign: 'center' }}>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>SIERA</div><div style={{ color: theme.accent, fontWeight: 600 }}>{showPlayerModal.siera || '—'}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>FIP-</div><div style={{ color: theme.accent, fontWeight: 600 }}>{showPlayerModal.fipMinus || '—'}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>ERA</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.era}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>K/9</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.kPer9}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>WHIP</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.whip}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>IP</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.ip}</div></div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, textAlign: 'center' }}>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>wOBA</div><div style={{ color: theme.accent, fontWeight: 600 }}>{showPlayerModal.woba || '—'}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>OPS+</div><div style={{ color: theme.accent, fontWeight: 600 }}>{showPlayerModal.opsPlus || '—'}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>wRC+</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.wrcPlus}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>OPS</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.ops}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>AVG</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.avg}</div></div>
+                    <div><div style={{ color: theme.textMuted, fontSize: 10 }}>PA</div><div style={{ color: theme.textPrimary, fontWeight: 600 }}>{showPlayerModal.pa}</div></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Performance Tier */}
+              {showPlayerModal._tier && (
+                <div style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, 
+                  padding: '6px 12px', background: theme.inputBg, borderRadius: 6
+                }}>
+                  <span style={{ color: theme.textMuted, fontSize: 11 }}>Performance Tier:</span>
+                  <span style={{ 
+                    fontWeight: 700, 
+                    color: showPlayerModal._tier === 1 ? '#22c55e' : showPlayerModal._tier === 2 ? '#fbbf24' : theme.textMuted 
+                  }}>
+                    Tier {showPlayerModal._tier}
+                    {showPlayerModal._tier === 1 && ' (Elite)'}
+                    {showPlayerModal._tier === 2 && ' (Good)'}
+                    {showPlayerModal._tier >= 3 && ' (Below gap)'}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 8 }}>Add to roster slot:</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {getEmptySlots(showPlayerModal.type).map(slot => (
+                    <button 
+                      key={slot}
+                      onClick={() => addToRoster(slot, showPlayerModal)}
+                      style={{
+                        padding: '6px 12px', borderRadius: 4, fontSize: 11,
+                        background: theme.inputBg, color: theme.textPrimary,
+                        border: `1px solid ${theme.border}`, cursor: 'pointer'
+                      }}
+                    >{slot.replace('BENCH', 'B')}</button>
+                  ))}
+                </div>
+              </div>
+
+              <button 
+                onClick={() => { markAsTaken(showPlayerModal); setShowPlayerModal(null); }}
+                style={{ width: '100%', padding: 10, borderRadius: 6, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer' }}
+              >Mark as Taken (by opponent)</button>
+            </div>
+          </div>
+        )}
+
+        {/* Position Switch Modal */}
+        {editingSlot && roster[editingSlot] && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setEditingSlot(null)}
+          >
+            <div 
+              style={{ background: theme.cardBg, borderRadius: 12, padding: 24, maxWidth: 300, width: '90%', border: `1px solid ${theme.border}` }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 style={{ color: theme.textPrimary, margin: '0 0 16px 0' }}>Move {roster[editingSlot].name}</h3>
+              <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16 }}>Select new position:</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {allSlots.filter(s => s !== editingSlot && !roster[s]).map(slot => (
+                  <button 
+                    key={slot}
+                    onClick={() => switchPosition(editingSlot, slot)}
+                    style={{
+                      padding: '8px 12px', borderRadius: 4, fontSize: 12,
+                      background: theme.inputBg, color: theme.textPrimary,
+                      border: `1px solid ${theme.border}`, cursor: 'pointer'
+                    }}
+                  >{slot.replace('BENCH', 'B')}</button>
+                ))}
+              </div>
+              <button 
+                onClick={() => setEditingSlot(null)}
+                style={{ width: '100%', marginTop: 16, padding: 10, borderRadius: 6, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer' }}
+              >Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><Routes>
     <Route path="/" element={<StatsPage />} />
@@ -4683,6 +5706,7 @@ export default function App() {
     <Route path="/submit" element={<SubmitDataPage />} />
     <Route path="/review" element={<ReviewQueuePage />} />
     <Route path="/leaderboards" element={<LeaderboardsPage />} />
+    <Route path="/draft-assistant" element={<DraftAssistantPage />} />
   </Routes></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
