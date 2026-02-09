@@ -304,6 +304,28 @@ function AuthProvider({ children }) {
 
 function useAuth() { return useContext(AuthContext); }
 
+// Helper: Update position counts and get primary position
+function updatePositionTracking(existing, instancePos) {
+  const positionCounts = { ...(existing._positionCounts || {}) };
+  const pos = (instancePos || '').toUpperCase().trim();
+  if (pos) {
+    positionCounts[pos] = (positionCounts[pos] || 0) + 1;
+  }
+  const positions = Object.keys(positionCounts).sort((a, b) => positionCounts[b] - positionCounts[a]);
+  const primaryPos = positions[0] || existing.pos || pos;
+  return { _positionCounts: positionCounts, positions, pos: primaryPos };
+}
+
+// Helper: Initialize position tracking for new player
+function initPositionTracking(instancePos) {
+  const pos = (instancePos || '').toUpperCase().trim();
+  return {
+    _positionCounts: pos ? { [pos]: 1 } : {},
+    positions: pos ? [pos] : [],
+    pos: pos
+  };
+}
+
 function getOvrColor(ovr) {
   const val = parseInt(ovr) || 0;
   if (val >= 100) return '#E82D07';
@@ -856,7 +878,16 @@ function StatsPage() {
     if (!data) return [];
     let f = [...data];
     if (filters.search) f = f.filter(p => p.name.toLowerCase().includes(filters.search.toLowerCase()));
-    if (filters.position !== 'all') f = f.filter(p => p.pos.toUpperCase() === filters.position.toUpperCase());
+    // Check positions array if it exists, otherwise fall back to pos
+    if (filters.position !== 'all') {
+      const filterPos = filters.position.toUpperCase();
+      f = f.filter(p => {
+        if (p.positions && p.positions.length > 0) {
+          return p.positions.includes(filterPos);
+        }
+        return (p.pos || '').toUpperCase() === filterPos;
+      });
+    }
     f = f.filter(p => passesFilter(p.g, filters.gFilter));
     if (type === 'batting') f = f.filter(p => passesFilter(p.pa, filters.paFilter) && passesFilter(p.ab, filters.abFilter));
     else f = f.filter(p => passesFilter(parseIP(p.ip), filters.ipFilter));
@@ -1291,9 +1322,23 @@ function InfoPage() {
                 const oldCount = existing._instanceCount || 1;
                 const newCount = oldCount + 1;
                 
+                // Track position counts
+                const positionCounts = { ...(existing._positionCounts || {}) };
+                const instancePos = instance.pos?.toUpperCase() || '';
+                if (instancePos) {
+                  positionCounts[instancePos] = (positionCounts[instancePos] || 0) + 1;
+                }
+                
+                // Get all positions and primary (most played)
+                const positions = Object.keys(positionCounts).sort((a, b) => positionCounts[b] - positionCounts[a]);
+                const primaryPos = positions[0] || existing.pos;
+                
                 battingMap.set(key, {
                   ...existing,
                   _instanceCount: newCount,
+                  _positionCounts: positionCounts,
+                  positions: positions,
+                  pos: primaryPos,
                   g: existing.g + instance.g,
                   gs: existing.gs + instance.gs,
                   pa: existing.pa + instance.pa,
@@ -1302,7 +1347,7 @@ function InfoPage() {
                   wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
                   bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
                   ovr: instance.ovr, vari: instance.vari,
-                  pos: instance.pos || existing.pos, bats: instance.bats || existing.bats,
+                  bats: instance.bats || existing.bats,
                   h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
                   doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
                   triples: Math.round(((existing.triples * oldCount) + instance.triples) / newCount),
@@ -1321,7 +1366,11 @@ function InfoPage() {
                   sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(instance.sbPct || 0)) / newCount).toFixed(1)
                 });
               } else {
+                const instancePos = instance.pos?.toUpperCase() || '';
                 instance._instanceCount = 1;
+                instance._positionCounts = instancePos ? { [instancePos]: 1 } : {};
+                instance.positions = instancePos ? [instancePos] : [];
+                instance.pos = instancePos;
                 battingMap.set(key, instance);
               }
             } else {
@@ -1344,16 +1393,30 @@ function InfoPage() {
                 const oldCount = existing._instanceCount || 1;
                 const newCount = oldCount + 1;
                 
+                // Track position counts
+                const positionCounts = { ...(existing._positionCounts || {}) };
+                const instancePos = instance.pos?.toUpperCase() || '';
+                if (instancePos) {
+                  positionCounts[instancePos] = (positionCounts[instancePos] || 0) + 1;
+                }
+                
+                // Get all positions and primary (most played)
+                const positions = Object.keys(positionCounts).sort((a, b) => positionCounts[b] - positionCounts[a]);
+                const primaryPos = positions[0] || existing.pos;
+                
                 pitchingMap.set(key, {
                   ...existing,
                   _instanceCount: newCount,
+                  _positionCounts: positionCounts,
+                  positions: positions,
+                  pos: primaryPos,
                   g: existing.g + instance.g,
                   gs: existing.gs + instance.gs,
                   ip: formatIP(parseIP(existing.ip) + parseIP(instance.ip)),
                   bf: existing.bf + instance.bf,
                   war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
                   ovr: instance.ovr, vari: instance.vari,
-                  pos: instance.pos || existing.pos, throws: instance.throws || existing.throws,
+                  throws: instance.throws || existing.throws,
                   era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(instance.era || 0)) / newCount).toFixed(2),
                   avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
                   obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
@@ -1371,7 +1434,11 @@ function InfoPage() {
                   siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(instance.siera || 0)) / newCount).toFixed(2)
                 });
               } else {
+                const instancePos = instance.pos?.toUpperCase() || '';
                 instance._instanceCount = 1;
+                instance._positionCounts = instancePos ? { [instancePos]: 1 } : {};
+                instance.positions = instancePos ? [instancePos] : [];
+                instance.pos = instancePos;
                 pitchingMap.set(key, instance);
               }
             }
@@ -2712,15 +2779,17 @@ function SubmitDataPage() {
             const existing = playerMap.get(key);
             const oldCount = existing._instanceCount || 1;
             const newCount = oldCount + 1;
+            const posTracking = updatePositionTracking(existing, instance.pos);
             
             playerMap.set(key, {
               ...existing, _instanceCount: newCount,
+              ...posTracking,
               g: existing.g + instance.g, gs: existing.gs + instance.gs,
               ip: formatIP(parseIP(existing.ip) + parseIP(instance.ip)),
               bf: existing.bf + instance.bf,
               war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
               ovr: instance.ovr, vari: instance.vari,
-              pos: instance.pos || existing.pos, throws: instance.throws || existing.throws,
+              throws: instance.throws || existing.throws,
               era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(instance.era || 0)) / newCount).toFixed(2),
               avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
               obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
@@ -2738,8 +2807,8 @@ function SubmitDataPage() {
               siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(instance.siera || 0)) / newCount).toFixed(2)
             });
           } else {
-            instance._instanceCount = 1;
-            playerMap.set(key, instance);
+            const posTracking = initPositionTracking(instance.pos);
+            playerMap.set(key, { ...instance, _instanceCount: 1, ...posTracking });
           }
         });
         
@@ -2791,16 +2860,18 @@ function SubmitDataPage() {
             const existing = playerMap.get(key);
             const oldCount = existing._instanceCount || 1;
             const newCount = oldCount + 1;
+            const posTracking = updatePositionTracking(existing, instance.pos);
             
             playerMap.set(key, {
               ...existing, _instanceCount: newCount,
+              ...posTracking,
               g: existing.g + instance.g, gs: existing.gs + instance.gs,
               pa: existing.pa + instance.pa, ab: existing.ab + instance.ab,
               war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
               wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
               bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
               ovr: instance.ovr, vari: instance.vari,
-              pos: instance.pos || existing.pos, bats: instance.bats || existing.bats,
+              bats: instance.bats || existing.bats,
               h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
               doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
               triples: Math.round(((existing.triples * oldCount) + instance.triples) / newCount),
@@ -2819,8 +2890,8 @@ function SubmitDataPage() {
               sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(instance.sbPct || 0)) / newCount).toFixed(1)
             });
           } else {
-            instance._instanceCount = 1;
-            playerMap.set(key, instance);
+            const posTracking = initPositionTracking(instance.pos);
+            playerMap.set(key, { ...instance, _instanceCount: 1, ...posTracking });
           }
         });
         
@@ -3035,17 +3106,19 @@ function SubmitDataPage() {
             const existing = playerMap.get(key);
             const oldCount = existing._instanceCount || 1;
             const newCount = oldCount + 1;
+            const posTracking = updatePositionTracking(existing, instance.pos);
             
             playerMap.set(key, {
               ...existing,
               _instanceCount: newCount,
+              ...posTracking,
               g: existing.g + instance.g,
               gs: existing.gs + instance.gs,
               ip: formatIP(parseIP(existing.ip) + parseIP(instance.ip)),
               bf: existing.bf + instance.bf,
               war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
               ovr: instance.ovr, vari: instance.vari,
-              pos: instance.pos || existing.pos, throws: instance.throws || existing.throws,
+              throws: instance.throws || existing.throws,
               era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(instance.era || 0)) / newCount).toFixed(2),
               avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
               obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
@@ -3063,8 +3136,8 @@ function SubmitDataPage() {
               siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(instance.siera || 0)) / newCount).toFixed(2)
             });
           } else {
-            instance._instanceCount = 1;
-            playerMap.set(key, instance);
+            const posTracking = initPositionTracking(instance.pos);
+            playerMap.set(key, { ...instance, _instanceCount: 1, ...posTracking });
           }
         });
         
@@ -3111,10 +3184,12 @@ function SubmitDataPage() {
             const existing = playerMap.get(key);
             const oldCount = existing._instanceCount || 1;
             const newCount = oldCount + 1;
+            const posTracking = updatePositionTracking(existing, instance.pos);
             
             playerMap.set(key, {
               ...existing,
               _instanceCount: newCount,
+              ...posTracking,
               g: existing.g + instance.g,
               gs: existing.gs + instance.gs,
               pa: existing.pa + instance.pa,
@@ -3123,7 +3198,7 @@ function SubmitDataPage() {
               wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
               bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
               ovr: instance.ovr, vari: instance.vari,
-              pos: instance.pos || existing.pos, bats: instance.bats || existing.bats,
+              bats: instance.bats || existing.bats,
               h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
               doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
               triples: Math.round(((existing.triples * oldCount) + instance.triples) / newCount),
@@ -3142,8 +3217,8 @@ function SubmitDataPage() {
               sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(instance.sbPct || 0)) / newCount).toFixed(1)
             });
           } else {
-            instance._instanceCount = 1;
-            playerMap.set(key, instance);
+            const posTracking = initPositionTracking(instance.pos);
+            playerMap.set(key, { ...instance, _instanceCount: 1, ...posTracking });
           }
         });
         
@@ -3905,10 +3980,12 @@ function ReviewQueuePage() {
             const existing = playerMap.get(key);
             const oldCount = existing._instanceCount || 1;
             const newCount = oldCount + 1;
+            const posTracking = updatePositionTracking(existing, instance.pos);
             
             const merged = {
               ...existing,
               _instanceCount: newCount,
+              ...posTracking,
               // Cumulative stats - add
               g: existing.g + instance.g,
               gs: existing.gs + instance.gs,
@@ -3917,9 +3994,9 @@ function ReviewQueuePage() {
               war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
               wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
               bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
-              // Keep latest OVR, VAR, POS
+              // Keep latest OVR, VAR
               ovr: instance.ovr, vari: instance.vari,
-              pos: instance.pos || existing.pos, bats: instance.bats || existing.bats,
+              bats: instance.bats || existing.bats,
               // Average stats - running average
               h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
               doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
@@ -3940,8 +4017,8 @@ function ReviewQueuePage() {
             };
             playerMap.set(key, merged);
           } else {
-            instance._instanceCount = 1;
-            playerMap.set(key, instance);
+            const posTracking = initPositionTracking(instance.pos);
+            playerMap.set(key, { ...instance, _instanceCount: 1, ...posTracking });
           }
         } else {
           // Pitching
@@ -3962,19 +4039,21 @@ function ReviewQueuePage() {
             const existing = playerMap.get(key);
             const oldCount = existing._instanceCount || 1;
             const newCount = oldCount + 1;
+            const posTracking = updatePositionTracking(existing, instance.pos);
             
             const merged = {
               ...existing,
               _instanceCount: newCount,
+              ...posTracking,
               // Cumulative stats - add
               g: existing.g + instance.g,
               gs: existing.gs + instance.gs,
               ip: formatIP(parseIP(existing.ip) + parseIP(instance.ip)),
               bf: existing.bf + instance.bf,
               war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
-              // Keep latest OVR, VAR, POS
+              // Keep latest OVR, VAR
               ovr: instance.ovr, vari: instance.vari,
-              pos: instance.pos || existing.pos, throws: instance.throws || existing.throws,
+              throws: instance.throws || existing.throws,
               // Average stats - running average
               era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(instance.era || 0)) / newCount).toFixed(2),
               avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
@@ -3994,8 +4073,8 @@ function ReviewQueuePage() {
             };
             playerMap.set(key, merged);
           } else {
-            instance._instanceCount = 1;
-            playerMap.set(key, instance);
+            const posTracking = initPositionTracking(instance.pos);
+            playerMap.set(key, { ...instance, _instanceCount: 1, ...posTracking });
           }
         }
       });
@@ -4915,8 +4994,15 @@ function DraftAssistantPage() {
       const tier = getCardTier(p.ovr);
       if (!cardPool[tier]) return false;
       
-      // Filter by position (null = any for bench, SP matches all pitching)
-      if (posMatch && p.pos?.toUpperCase() !== posMatch) return false;
+      // Filter by position (null = any for bench)
+      // Check positions array if it exists, otherwise fall back to pos
+      if (posMatch) {
+        if (p.positions && p.positions.length > 0) {
+          if (!p.positions.includes(posMatch)) return false;
+        } else if ((p.pos || '').toUpperCase() !== posMatch) {
+          return false;
+        }
+      }
       
       // Filter out already on roster
       const key = `${p.name}|${p.ovr}`;
