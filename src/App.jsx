@@ -487,19 +487,15 @@ function StatsPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // Only fetch metadata, not the heavy batting/pitching arrays
-      const { data, error } = await supabase
-        .from('tournaments')
-        .select('id, name, created_at, category, event_type, uploaded_dates, rotating_format, uploaded_hashes')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       const parsed = (data || []).map(t => ({ 
         id: t.id, 
         name: t.name, 
         createdAt: t.created_at, 
         category: t.category || 'tournaments', 
-        batting: null, // Lazy loaded
-        pitching: null, // Lazy loaded
+        batting: t.batting || [], 
+        pitching: t.pitching || [], 
         uploadedHashes: t.uploaded_hashes || [],
         eventType: t.event_type || 'daily',
         uploadedDates: t.uploaded_dates || [],
@@ -510,36 +506,12 @@ function StatsPage() {
       if (lastSelectedId) { 
         const found = parsed.find(t => t.id === lastSelectedId); 
         if (found) { 
+          setSelectedTournament(found);
           setSidebarTab(found.category || 'tournaments');
-          // Load the full tournament data
-          loadTournamentStats(found.id);
         } 
       }
     } catch (e) { console.error('Load error:', e); showNotif('Failed to load', 'error'); }
     setIsLoading(false);
-  };
-
-  const loadTournamentStats = async (tournamentId) => {
-    try {
-      const { data, error } = await supabase
-        .from('tournaments')
-        .select('batting, pitching')
-        .eq('id', tournamentId)
-        .single();
-      
-      if (error) throw error;
-      
-      const updated = {
-        ...tournaments.find(t => t.id === tournamentId),
-        batting: data.batting || [],
-        pitching: data.pitching || []
-      };
-      
-      setTournaments(prev => prev.map(t => t.id === tournamentId ? updated : t));
-      setSelectedTournament(updated);
-    } catch (e) {
-      console.error('Load tournament stats error:', e);
-    }
   };
 
   const saveTournament = async (tournament) => {
@@ -628,14 +600,9 @@ function StatsPage() {
   };
 
   const selectTournament = (t) => { 
+    setSelectedTournament(t); 
     localStorage.setItem('selectedTournamentId', t.id);
     setCurrentPage(1); // Reset pagination
-    // If stats not loaded yet, fetch them
-    if (t.batting === null || t.pitching === null) {
-      loadTournamentStats(t.id);
-    } else {
-      setSelectedTournament(t);
-    }
   };
   const parseIP = (ip) => { if (!ip) return 0; const str = String(ip); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
@@ -931,9 +898,8 @@ function StatsPage() {
 
   const filteredTournaments = tournaments.filter(t => (t.category || 'tournaments') === sidebarTab).filter(t => !tournamentSearch || t.name.toLowerCase().includes(tournamentSearch.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
-  const filteredData = selectedTournament && selectedTournament[activeTab] ? getFilteredData(selectedTournament[activeTab], activeTab) : [];
-  const totalData = selectedTournament && selectedTournament[activeTab] ? selectedTournament[activeTab].length : 0;
-  const isLoadingStats = selectedTournament && (selectedTournament.batting === null || selectedTournament.pitching === null);
+  const filteredData = selectedTournament ? getFilteredData(selectedTournament[activeTab] || [], activeTab) : [];
+  const totalData = selectedTournament ? (selectedTournament[activeTab]?.length || 0) : 0;
 
   return (
     <Layout notification={notification}>
@@ -968,7 +934,10 @@ function StatsPage() {
                 return (<div key={t.id} style={{...styles.tournamentItem, ...(isSelected ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
                   <div style={styles.tournamentInfo}>
                     <span style={{...styles.tournamentName, ...(isSelected ? styles.tournamentNameActive : {})}}>{t.name}</span>
-                    <span style={styles.tournamentStats}><span style={{color: quality.color, fontWeight: 600}}>{quality.label}</span> · {t.batting.length}B / {t.pitching.length}P</span>
+                    <span style={styles.tournamentStats}>
+                      <span style={{color: quality.color, fontWeight: 600}}>{quality.label}</span>
+                      {` · ${t.batting?.length || 0}B / ${t.pitching?.length || 0}P`}
+                    </span>
                   </div>
                   <div style={styles.tournamentActions}>
                     {hasAccess('master') && (
@@ -990,9 +959,7 @@ function StatsPage() {
           )}
         </aside>
         <div style={styles.content}>
-          {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : isLoadingStats ? (
-            <div style={styles.welcome}><h2 style={styles.welcomeTitle}>Loading...</h2><p style={styles.welcomeText}>Fetching tournament data...</p></div>
-          ) : (<>
+          {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : (<>
             <div style={styles.tournamentHeader}>
               <div style={styles.tournamentMeta}>
                 <h2 style={styles.tournamentTitleMain}>{selectedTournament.name}</h2>
