@@ -2251,6 +2251,13 @@ function SubmitDataPage() {
   const [submitResult, setSubmitResult] = useState(null);
   const [notification, setNotification] = useState(null);
   
+  // Bulk upload state
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkUploads, setBulkUploads] = useState([]); // Array of { id, pitchingFile, battingFile, date }
+  
+  // Admin direct upload state
+  const [adminConfirmData, setAdminConfirmData] = useState(null);
+  
   // Info panel state
   const [infoContent, setInfoContent] = useState({ sections: [] });
   const [isEditingInfo, setIsEditingInfo] = useState(false);
@@ -2400,6 +2407,344 @@ function SubmitDataPage() {
     }
   };
 
+  // Bulk upload functions
+  const addBulkUploadRow = () => {
+    if (bulkUploads.length >= 10) {
+      showNotif('Maximum 10 uploads at a time', 'error');
+      return;
+    }
+    setBulkUploads([...bulkUploads, { id: Date.now(), pitchingFile: null, battingFile: null, date: '' }]);
+  };
+
+  const removeBulkUploadRow = (id) => {
+    setBulkUploads(bulkUploads.filter(u => u.id !== id));
+  };
+
+  const updateBulkUpload = async (id, field, value) => {
+    // Handle file auto-detect for bulk uploads
+    if ((field === 'pitchingFile' || field === 'battingFile') && value) {
+      const detectedType = await detectFileType(value);
+      const actualField = detectedType === 'pitching' ? 'pitchingFile' : 'battingFile';
+      
+      if (actualField !== field) {
+        showNotif(`📋 Auto-detected as ${detectedType} file`, 'success');
+      }
+      
+      setBulkUploads(bulkUploads.map(u => 
+        u.id === id ? { ...u, [actualField]: value } : u
+      ));
+    } else {
+      setBulkUploads(bulkUploads.map(u => 
+        u.id === id ? { ...u, [field]: value } : u
+      ));
+    }
+  };
+
+  const handleBulkSubmit = async () => {
+    if (!selectedTournamentId) {
+      showNotif('Please select a tournament', 'error');
+      return;
+    }
+    
+    const validUploads = bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date);
+    if (validUploads.length === 0) {
+      showNotif('Please add at least one file with a date', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const { data: selectedTournament } = await supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', selectedTournamentId)
+        .single();
+
+      if (!selectedTournament) throw new Error('Tournament not found');
+
+      let totalSubmitted = { pitching: 0, batting: 0 };
+
+      for (const upload of validUploads) {
+        const dateAlreadyUploaded = selectedTournament?.uploaded_dates?.includes(upload.date);
+
+        // Process pitching file
+        if (upload.pitchingFile) {
+          const content = await upload.pitchingFile.text();
+          const validation = validateCSV(content, upload.pitchingFile.name);
+          let matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.pitching, 'pitching');
+
+          const { error } = await supabase.from('pending_uploads').insert({
+            suggested_tournament_id: selectedTournamentId,
+            suggested_tournament_name: selectedTournament.name,
+            suggested_date: upload.date,
+            user_notes: `Bulk upload: ${upload.pitchingFile.name}`,
+            file_type: 'pitching',
+            file_name: upload.pitchingFile.name,
+            raw_data: validation.rawRows,
+            clean_data: validation.cleanRows,
+            removed_rows: validation.removedRows,
+            validation_issues: validation.issues,
+            player_match_percent: matchPercent,
+            date_already_uploaded: dateAlreadyUploaded,
+            has_critical_issues: validation.hasCritical,
+            status: 'pending'
+          });
+          if (error) throw error;
+          totalSubmitted.pitching++;
+        }
+
+        // Process batting file
+        if (upload.battingFile) {
+          const content = await upload.battingFile.text();
+          const validation = validateCSV(content, upload.battingFile.name);
+          let matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.batting, 'batting');
+
+          const { error } = await supabase.from('pending_uploads').insert({
+            suggested_tournament_id: selectedTournamentId,
+            suggested_tournament_name: selectedTournament.name,
+            suggested_date: upload.date,
+            user_notes: `Bulk upload: ${upload.battingFile.name}`,
+            file_type: 'batting',
+            file_name: upload.battingFile.name,
+            raw_data: validation.rawRows,
+            clean_data: validation.cleanRows,
+            removed_rows: validation.removedRows,
+            validation_issues: validation.issues,
+            player_match_percent: matchPercent,
+            date_already_uploaded: dateAlreadyUploaded,
+            has_critical_issues: validation.hasCritical,
+            status: 'pending'
+          });
+          if (error) throw error;
+          totalSubmitted.batting++;
+        }
+      }
+
+      showNotif(`✓ Submitted ${totalSubmitted.pitching} pitching + ${totalSubmitted.batting} batting files for review`);
+      setBulkUploads([]);
+      setBulkMode(false);
+      
+    } catch (e) {
+      console.error('Bulk submit error:', e);
+      showNotif('Failed to submit: ' + e.message, 'error');
+    }
+    setIsSubmitting(false);
+  };
+
+  // Admin bulk direct upload
+  const handleAdminBulkUpload = async () => {
+    if (!selectedTournamentId) {
+      showNotif('Please select a tournament', 'error');
+      return;
+    }
+    
+    const validUploads = bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date);
+    if (validUploads.length === 0) {
+      showNotif('Please add at least one file with a date', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+    const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
+    const parseIP = (ip) => { const str = String(ip); if (str.includes('.')) { const [whole, frac] = str.split('.'); return parseFloat(whole) + (parseFloat(frac) / 3); } return parseFloat(ip) || 0; };
+    const formatIP = (ipDecimal) => { const whole = Math.floor(ipDecimal); const frac = Math.round((ipDecimal - whole) * 3); return frac === 0 ? String(whole) : `${whole}.${frac}`; };
+    
+    try {
+      let { data: tournament } = await supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', selectedTournamentId)
+        .single();
+
+      if (!tournament) throw new Error('Tournament not found');
+
+      let totalAdded = { pitching: 0, batting: 0 };
+      let uploadedDates = [...(tournament.uploaded_dates || [])];
+      let battingData = [...(tournament.batting || [])];
+      let pitchingData = [...(tournament.pitching || [])];
+
+      for (const upload of validUploads) {
+        // Process pitching file
+        if (upload.pitchingFile) {
+          const content = await upload.pitchingFile.text();
+          const validation = validateCSV(content, upload.pitchingFile.name);
+          const newData = validation.cleanRows;
+          
+          const playerMap = new Map();
+          pitchingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+          
+          newData.forEach(row => {
+            const name = (row.Name || '').trim();
+            const ovr = parseNum(row.OVR);
+            const key = `${name}|${ovr}`;
+            
+            const instance = {
+              id: crypto.randomUUID(),
+              name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+              g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
+              era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
+              babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
+              braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00',
+              hPer9: row['H/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00',
+              lobPct: parsePct(row['LOB%']), eraPlus: parseNum(row['ERA+']),
+              fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']),
+              war: row.WAR || '0.0', siera: row.SIERA || '0.00'
+            };
+            
+            if (playerMap.has(key)) {
+              const existing = playerMap.get(key);
+              const oldCount = existing._instanceCount || 1;
+              const newCount = oldCount + 1;
+              
+              playerMap.set(key, {
+                ...existing, _instanceCount: newCount,
+                g: existing.g + instance.g, gs: existing.gs + instance.gs,
+                ip: formatIP(parseIP(existing.ip) + parseIP(instance.ip)),
+                bf: existing.bf + instance.bf,
+                war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
+                ovr: instance.ovr, vari: instance.vari,
+                pos: instance.pos || existing.pos, throws: instance.throws || existing.throws,
+                era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(instance.era || 0)) / newCount).toFixed(2),
+                avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
+                obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
+                babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(instance.babip || 0)) / newCount).toFixed(3),
+                whip: (((parseFloat(existing.whip || 0) * oldCount) + parseFloat(instance.whip || 0)) / newCount).toFixed(2),
+                braPer9: (((parseFloat(existing.braPer9 || 0) * oldCount) + parseFloat(instance.braPer9 || 0)) / newCount).toFixed(2),
+                hrPer9: (((parseFloat(existing.hrPer9 || 0) * oldCount) + parseFloat(instance.hrPer9 || 0)) / newCount).toFixed(2),
+                hPer9: (((parseFloat(existing.hPer9 || 0) * oldCount) + parseFloat(instance.hPer9 || 0)) / newCount).toFixed(2),
+                bbPer9: (((parseFloat(existing.bbPer9 || 0) * oldCount) + parseFloat(instance.bbPer9 || 0)) / newCount).toFixed(2),
+                kPer9: (((parseFloat(existing.kPer9 || 0) * oldCount) + parseFloat(instance.kPer9 || 0)) / newCount).toFixed(2),
+                lobPct: (((parseFloat(existing.lobPct || 0) * oldCount) + parseFloat(instance.lobPct || 0)) / newCount).toFixed(1),
+                eraPlus: Math.round(((parseFloat(existing.eraPlus || 0) * oldCount) + parseFloat(instance.eraPlus || 0)) / newCount),
+                fip: (((parseFloat(existing.fip || 0) * oldCount) + parseFloat(instance.fip || 0)) / newCount).toFixed(2),
+                fipMinus: Math.round(((parseFloat(existing.fipMinus || 0) * oldCount) + parseFloat(instance.fipMinus || 0)) / newCount),
+                siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(instance.siera || 0)) / newCount).toFixed(2)
+              });
+            } else {
+              instance._instanceCount = 1;
+              playerMap.set(key, instance);
+            }
+          });
+          
+          pitchingData = Array.from(playerMap.values());
+          totalAdded.pitching += newData.length;
+          
+          await supabase.from('upload_history').insert({
+            tournament_id: selectedTournamentId,
+            tournament_name: tournament.name,
+            file_type: 'pitching',
+            upload_date: upload.date,
+            player_count: newData.length,
+            player_data: newData
+          });
+        }
+
+        // Process batting file
+        if (upload.battingFile) {
+          const content = await upload.battingFile.text();
+          const validation = validateCSV(content, upload.battingFile.name);
+          const newData = validation.cleanRows;
+          
+          const playerMap = new Map();
+          battingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+          
+          newData.forEach(row => {
+            const name = (row.Name || '').trim();
+            const ovr = parseNum(row.OVR);
+            const key = `${name}|${ovr}`;
+            
+            const instance = {
+              id: crypto.randomUUID(),
+              name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+              g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
+              h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
+              so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+              avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
+              woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
+              babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
+              wraa: row.wRAA || '0.0', war: row.WAR || '0.0',
+              bbPct: parsePct(row['BB%']), sbPct: parsePct(row['SB%']), bsr: row.BsR || '0.0'
+            };
+            
+            if (playerMap.has(key)) {
+              const existing = playerMap.get(key);
+              const oldCount = existing._instanceCount || 1;
+              const newCount = oldCount + 1;
+              
+              playerMap.set(key, {
+                ...existing, _instanceCount: newCount,
+                g: existing.g + instance.g, gs: existing.gs + instance.gs,
+                pa: existing.pa + instance.pa, ab: existing.ab + instance.ab,
+                war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
+                wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
+                bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
+                ovr: instance.ovr, vari: instance.vari,
+                pos: instance.pos || existing.pos, bats: instance.bats || existing.bats,
+                h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
+                doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
+                triples: Math.round(((existing.triples * oldCount) + instance.triples) / newCount),
+                hr: Math.round(((existing.hr * oldCount) + instance.hr) / newCount),
+                so: Math.round(((existing.so * oldCount) + instance.so) / newCount),
+                gidp: Math.round(((existing.gidp * oldCount) + instance.gidp) / newCount),
+                avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
+                obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
+                slg: (((parseFloat(existing.slg || 0) * oldCount) + parseFloat(instance.slg || 0)) / newCount).toFixed(3),
+                ops: (((parseFloat(existing.ops || 0) * oldCount) + parseFloat(instance.ops || 0)) / newCount).toFixed(3),
+                woba: (((parseFloat(existing.woba || 0) * oldCount) + parseFloat(instance.woba || 0)) / newCount).toFixed(3),
+                babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(instance.babip || 0)) / newCount).toFixed(3),
+                opsPlus: Math.round(((parseFloat(existing.opsPlus || 0) * oldCount) + parseFloat(instance.opsPlus || 0)) / newCount),
+                wrcPlus: Math.round(((parseFloat(existing.wrcPlus || 0) * oldCount) + parseFloat(instance.wrcPlus || 0)) / newCount),
+                bbPct: (((parseFloat(existing.bbPct || 0) * oldCount) + parseFloat(instance.bbPct || 0)) / newCount).toFixed(1),
+                sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(instance.sbPct || 0)) / newCount).toFixed(1)
+              });
+            } else {
+              instance._instanceCount = 1;
+              playerMap.set(key, instance);
+            }
+          });
+          
+          battingData = Array.from(playerMap.values());
+          totalAdded.batting += newData.length;
+          
+          await supabase.from('upload_history').insert({
+            tournament_id: selectedTournamentId,
+            tournament_name: tournament.name,
+            file_type: 'batting',
+            upload_date: upload.date,
+            player_count: newData.length,
+            player_data: newData
+          });
+        }
+
+        // Add date to uploaded_dates
+        if (!uploadedDates.includes(upload.date)) {
+          uploadedDates.push(upload.date);
+        }
+      }
+
+      // Save tournament
+      const { error: updateError } = await supabase.from('tournaments').update({
+        batting: battingData,
+        pitching: pitchingData,
+        uploaded_dates: uploadedDates
+      }).eq('id', selectedTournamentId);
+
+      if (updateError) throw updateError;
+
+      showNotif(`✓ Bulk upload complete: ${totalAdded.pitching} pitchers, ${totalAdded.batting} batters across ${validUploads.length} dates`);
+      setBulkUploads([]);
+      setBulkMode(false);
+      
+    } catch (e) {
+      console.error('Admin bulk upload error:', e);
+      showNotif('Failed: ' + e.message, 'error');
+    }
+    setIsSubmitting(false);
+  };
+
   const handleSubmit = async () => {
     if (!pitchingFile && !battingFile) { showNotif('Please select at least one CSV file', 'error'); return; }
     if (!selectedDate) { showNotif('Please select a date', 'error'); return; }
@@ -2407,7 +2752,6 @@ function SubmitDataPage() {
     if (suggestNewEvent && !newEventName.trim()) { showNotif('Please enter a name for the new event', 'error'); return; }
 
     setIsSubmitting(true);
-    const results = { pitching: null, batting: null };
     
     try {
       // Get tournament for player matching
@@ -2423,23 +2767,55 @@ function SubmitDataPage() {
         dateAlreadyUploaded = true;
       }
 
-      // Process pitching file
+      // Process files and get validation data
+      const fileData = { pitching: null, batting: null };
+      
       if (pitchingFile) {
         const content = await pitchingFile.text();
         const validation = validateCSV(content, pitchingFile.name);
-        
         let matchPercent = 0;
         if (selectedTournament) {
           matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.pitching, 'pitching');
         }
+        fileData.pitching = { validation, matchPercent, fileName: pitchingFile.name };
+      }
 
+      if (battingFile) {
+        const content = await battingFile.text();
+        const validation = validateCSV(content, battingFile.name);
+        let matchPercent = 0;
+        if (selectedTournament) {
+          matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.batting, 'batting');
+        }
+        fileData.batting = { validation, matchPercent, fileName: battingFile.name };
+      }
+
+      // If admin, show confirmation dialog instead of submitting to pending
+      if (hasAccess('master')) {
+        setAdminConfirmData({
+          tournament: selectedTournament,
+          tournamentId: selectedTournamentId,
+          date: selectedDate,
+          dateAlreadyUploaded,
+          pitching: fileData.pitching,
+          batting: fileData.batting
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Non-admin: submit to pending_uploads as before
+      const results = { pitching: null, batting: null };
+
+      if (fileData.pitching) {
+        const { validation, matchPercent, fileName } = fileData.pitching;
         const { error } = await supabase.from('pending_uploads').insert({
           suggested_tournament_id: selectedTournamentId || null,
           suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
           suggested_date: selectedDate,
           user_notes: userNotes.trim() || null,
           file_type: 'pitching',
-          file_name: pitchingFile.name,
+          file_name: fileName,
           raw_data: validation.rawRows,
           clean_data: validation.cleanRows,
           removed_rows: validation.removedRows,
@@ -2449,28 +2825,19 @@ function SubmitDataPage() {
           has_critical_issues: validation.hasCritical,
           status: 'pending'
         });
-
         if (error) throw error;
         results.pitching = { playerCount: validation.cleanRows.length, removedCount: validation.removedRows.length, hasCritical: validation.hasCritical };
       }
 
-      // Process batting file
-      if (battingFile) {
-        const content = await battingFile.text();
-        const validation = validateCSV(content, battingFile.name);
-        
-        let matchPercent = 0;
-        if (selectedTournament) {
-          matchPercent = calculatePlayerMatch(validation.rawRows, selectedTournament.batting, 'batting');
-        }
-
+      if (fileData.batting) {
+        const { validation, matchPercent, fileName } = fileData.batting;
         const { error } = await supabase.from('pending_uploads').insert({
           suggested_tournament_id: selectedTournamentId || null,
           suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
           suggested_date: selectedDate,
           user_notes: userNotes.trim() || null,
           file_type: 'batting',
-          file_name: battingFile.name,
+          file_name: fileName,
           raw_data: validation.rawRows,
           clean_data: validation.cleanRows,
           removed_rows: validation.removedRows,
@@ -2480,7 +2847,6 @@ function SubmitDataPage() {
           has_critical_issues: validation.hasCritical,
           status: 'pending'
         });
-
         if (error) throw error;
         results.batting = { playerCount: validation.cleanRows.length, removedCount: validation.removedRows.length, hasCritical: validation.hasCritical };
       }
@@ -2508,6 +2874,211 @@ function SubmitDataPage() {
     setIsSubmitting(false);
   };
 
+  // Admin direct upload - process files directly
+  const handleAdminDirectUpload = async () => {
+    if (!adminConfirmData) return;
+    
+    setIsSubmitting(true);
+    const { tournament, tournamentId, date, pitching, batting } = adminConfirmData;
+    
+    const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+    const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
+    const parseIP = (ip) => { const str = String(ip); if (str.includes('.')) { const [whole, frac] = str.split('.'); return parseFloat(whole) + (parseFloat(frac) / 3); } return parseFloat(ip) || 0; };
+    const formatIP = (ipDecimal) => { const whole = Math.floor(ipDecimal); const frac = Math.round((ipDecimal - whole) * 3); return frac === 0 ? String(whole) : `${whole}.${frac}`; };
+    
+    try {
+      let updatedTournament = { ...tournament };
+      let totalAdded = { pitching: 0, batting: 0 };
+      
+      // Process pitching
+      if (pitching) {
+        const existingData = updatedTournament.pitching || [];
+        const newData = pitching.validation.cleanRows;
+        const playerMap = new Map();
+        existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+        
+        newData.forEach(row => {
+          const name = (row.Name || '').trim();
+          const ovr = parseNum(row.OVR);
+          const key = `${name}|${ovr}`;
+          
+          const instance = {
+            id: crypto.randomUUID(),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+            g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
+            era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
+            babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
+            braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00',
+            hPer9: row['H/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00',
+            lobPct: parsePct(row['LOB%']), eraPlus: parseNum(row['ERA+']),
+            fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']),
+            war: row.WAR || '0.0', siera: row.SIERA || '0.00'
+          };
+          
+          if (playerMap.has(key)) {
+            const existing = playerMap.get(key);
+            const oldCount = existing._instanceCount || 1;
+            const newCount = oldCount + 1;
+            
+            playerMap.set(key, {
+              ...existing,
+              _instanceCount: newCount,
+              g: existing.g + instance.g,
+              gs: existing.gs + instance.gs,
+              ip: formatIP(parseIP(existing.ip) + parseIP(instance.ip)),
+              bf: existing.bf + instance.bf,
+              war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
+              ovr: instance.ovr, vari: instance.vari,
+              pos: instance.pos || existing.pos, throws: instance.throws || existing.throws,
+              era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(instance.era || 0)) / newCount).toFixed(2),
+              avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
+              obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
+              babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(instance.babip || 0)) / newCount).toFixed(3),
+              whip: (((parseFloat(existing.whip || 0) * oldCount) + parseFloat(instance.whip || 0)) / newCount).toFixed(2),
+              braPer9: (((parseFloat(existing.braPer9 || 0) * oldCount) + parseFloat(instance.braPer9 || 0)) / newCount).toFixed(2),
+              hrPer9: (((parseFloat(existing.hrPer9 || 0) * oldCount) + parseFloat(instance.hrPer9 || 0)) / newCount).toFixed(2),
+              hPer9: (((parseFloat(existing.hPer9 || 0) * oldCount) + parseFloat(instance.hPer9 || 0)) / newCount).toFixed(2),
+              bbPer9: (((parseFloat(existing.bbPer9 || 0) * oldCount) + parseFloat(instance.bbPer9 || 0)) / newCount).toFixed(2),
+              kPer9: (((parseFloat(existing.kPer9 || 0) * oldCount) + parseFloat(instance.kPer9 || 0)) / newCount).toFixed(2),
+              lobPct: (((parseFloat(existing.lobPct || 0) * oldCount) + parseFloat(instance.lobPct || 0)) / newCount).toFixed(1),
+              eraPlus: Math.round(((parseFloat(existing.eraPlus || 0) * oldCount) + parseFloat(instance.eraPlus || 0)) / newCount),
+              fip: (((parseFloat(existing.fip || 0) * oldCount) + parseFloat(instance.fip || 0)) / newCount).toFixed(2),
+              fipMinus: Math.round(((parseFloat(existing.fipMinus || 0) * oldCount) + parseFloat(instance.fipMinus || 0)) / newCount),
+              siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(instance.siera || 0)) / newCount).toFixed(2)
+            });
+          } else {
+            instance._instanceCount = 1;
+            playerMap.set(key, instance);
+          }
+        });
+        
+        updatedTournament.pitching = Array.from(playerMap.values());
+        totalAdded.pitching = newData.length;
+        
+        // Save to upload_history
+        await supabase.from('upload_history').insert({
+          tournament_id: tournamentId,
+          tournament_name: tournament.name,
+          file_type: 'pitching',
+          upload_date: date,
+          player_count: newData.length,
+          player_data: newData
+        });
+      }
+      
+      // Process batting
+      if (batting) {
+        const existingData = updatedTournament.batting || [];
+        const newData = batting.validation.cleanRows;
+        const playerMap = new Map();
+        existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+        
+        newData.forEach(row => {
+          const name = (row.Name || '').trim();
+          const ovr = parseNum(row.OVR);
+          const key = `${name}|${ovr}`;
+          
+          const instance = {
+            id: crypto.randomUUID(),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
+            h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
+            so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+            avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
+            woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
+            babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
+            wraa: row.wRAA || '0.0', war: row.WAR || '0.0',
+            bbPct: parsePct(row['BB%']), sbPct: parsePct(row['SB%']), bsr: row.BsR || '0.0'
+          };
+          
+          if (playerMap.has(key)) {
+            const existing = playerMap.get(key);
+            const oldCount = existing._instanceCount || 1;
+            const newCount = oldCount + 1;
+            
+            playerMap.set(key, {
+              ...existing,
+              _instanceCount: newCount,
+              g: existing.g + instance.g,
+              gs: existing.gs + instance.gs,
+              pa: existing.pa + instance.pa,
+              ab: existing.ab + instance.ab,
+              war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
+              wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
+              bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
+              ovr: instance.ovr, vari: instance.vari,
+              pos: instance.pos || existing.pos, bats: instance.bats || existing.bats,
+              h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
+              doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
+              triples: Math.round(((existing.triples * oldCount) + instance.triples) / newCount),
+              hr: Math.round(((existing.hr * oldCount) + instance.hr) / newCount),
+              so: Math.round(((existing.so * oldCount) + instance.so) / newCount),
+              gidp: Math.round(((existing.gidp * oldCount) + instance.gidp) / newCount),
+              avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(instance.avg || 0)) / newCount).toFixed(3),
+              obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(instance.obp || 0)) / newCount).toFixed(3),
+              slg: (((parseFloat(existing.slg || 0) * oldCount) + parseFloat(instance.slg || 0)) / newCount).toFixed(3),
+              ops: (((parseFloat(existing.ops || 0) * oldCount) + parseFloat(instance.ops || 0)) / newCount).toFixed(3),
+              woba: (((parseFloat(existing.woba || 0) * oldCount) + parseFloat(instance.woba || 0)) / newCount).toFixed(3),
+              babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(instance.babip || 0)) / newCount).toFixed(3),
+              opsPlus: Math.round(((parseFloat(existing.opsPlus || 0) * oldCount) + parseFloat(instance.opsPlus || 0)) / newCount),
+              wrcPlus: Math.round(((parseFloat(existing.wrcPlus || 0) * oldCount) + parseFloat(instance.wrcPlus || 0)) / newCount),
+              bbPct: (((parseFloat(existing.bbPct || 0) * oldCount) + parseFloat(instance.bbPct || 0)) / newCount).toFixed(1),
+              sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(instance.sbPct || 0)) / newCount).toFixed(1)
+            });
+          } else {
+            instance._instanceCount = 1;
+            playerMap.set(key, instance);
+          }
+        });
+        
+        updatedTournament.batting = Array.from(playerMap.values());
+        totalAdded.batting = newData.length;
+        
+        // Save to upload_history
+        await supabase.from('upload_history').insert({
+          tournament_id: tournamentId,
+          tournament_name: tournament.name,
+          file_type: 'batting',
+          upload_date: date,
+          player_count: newData.length,
+          player_data: newData
+        });
+      }
+      
+      // Update uploaded_dates
+      const uploadedDates = [...(updatedTournament.uploaded_dates || [])];
+      if (!uploadedDates.includes(date)) {
+        uploadedDates.push(date);
+      }
+      
+      // Save tournament
+      const { error: updateError } = await supabase.from('tournaments').update({
+        batting: updatedTournament.batting,
+        pitching: updatedTournament.pitching,
+        uploaded_dates: uploadedDates
+      }).eq('id', tournamentId);
+      
+      if (updateError) throw updateError;
+      
+      showNotif(`✓ Direct upload: ${totalAdded.pitching ? totalAdded.pitching + ' pitchers' : ''}${totalAdded.pitching && totalAdded.batting ? ', ' : ''}${totalAdded.batting ? totalAdded.batting + ' batters' : ''}`);
+      
+      // Reset form
+      setAdminConfirmData(null);
+      setPitchingFile(null);
+      setBattingFile(null);
+      setSelectedDate('');
+      setUserNotes('');
+      setSelectedTournamentId('');
+      setSuggestNewEvent(false);
+      setNewEventName('');
+      
+    } catch (e) {
+      console.error('Admin direct upload error:', e);
+      showNotif('Failed to upload: ' + e.message, 'error');
+    }
+    setIsSubmitting(false);
+  };
+
   const groupedTournaments = {
     tournaments: tournaments.filter(t => t.category === 'tournaments' || !t.category),
     drafts: tournaments.filter(t => t.category === 'drafts')
@@ -2518,8 +3089,25 @@ function SubmitDataPage() {
       <div style={styles.submitPageLayout}>
         {/* Left: Upload Form */}
         <div style={styles.submitFormPanel}>
-          <h2 style={styles.submitTitle}>📤 Submit CSV Data</h2>
-          <p style={styles.submitSubtitle}>Submit <strong>one event at a time</strong> — include both Pitching and Batting CSVs for that event.</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h2 style={{...styles.submitTitle, margin: 0}}>📤 Submit CSV Data</h2>
+            <button 
+              onClick={() => { setBulkMode(!bulkMode); setBulkUploads(bulkMode ? [] : [{ id: Date.now(), pitchingFile: null, battingFile: null, date: '' }]); }}
+              style={{
+                background: bulkMode ? theme.accent : 'transparent',
+                color: bulkMode ? '#fff' : theme.textMuted,
+                border: `1px solid ${bulkMode ? theme.accent : theme.border}`,
+                borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer'
+              }}
+            >
+              {bulkMode ? '✓ Bulk Mode' : '📦 Bulk Upload'}
+            </button>
+          </div>
+          <p style={styles.submitSubtitle}>
+            {bulkMode 
+              ? 'Upload multiple files at once for the same tournament. Each row = one date.'
+              : 'Submit one event at a time — include both Pitching and Batting CSVs for that event.'}
+          </p>
 
           {submitResult ? (
             <div style={{...styles.submitResult, borderColor: submitResult.hasCritical ? theme.warning : theme.success}}>
@@ -2537,6 +3125,135 @@ function SubmitDataPage() {
               </div>
               <p style={styles.submitResultNote}>An admin will review and approve your submission shortly.</p>
               <button style={styles.submitAnotherBtn} onClick={() => setSubmitResult(null)}>Submit Another Event</button>
+            </div>
+          ) : bulkMode ? (
+            /* Bulk Upload Form */
+            <div style={styles.submitForm}>
+              {/* Tournament Selection for Bulk */}
+              <div style={styles.formSection}>
+                <label style={styles.formLabel}>Tournament / Draft *</label>
+                <select value={selectedTournamentId} onChange={(e) => setSelectedTournamentId(e.target.value)} style={styles.formSelect}>
+                  <option value="">Select tournament...</option>
+                  {groupedTournaments.tournaments.length > 0 && (
+                    <optgroup label="Tournaments">
+                      {groupedTournaments.tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </optgroup>
+                  )}
+                  {groupedTournaments.drafts.length > 0 && (
+                    <optgroup label="Drafts">
+                      {groupedTournaments.drafts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              {/* Bulk Upload Rows */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <label style={styles.formLabel}>Upload Files ({bulkUploads.length}/10)</label>
+                  <button 
+                    onClick={addBulkUploadRow}
+                    disabled={bulkUploads.length >= 10}
+                    style={{
+                      background: theme.accent, color: '#fff', border: 'none', borderRadius: 6,
+                      padding: '6px 12px', fontSize: 12, cursor: bulkUploads.length >= 10 ? 'not-allowed' : 'pointer',
+                      opacity: bulkUploads.length >= 10 ? 0.5 : 1
+                    }}
+                  >
+                    + Add Row
+                  </button>
+                </div>
+
+                {bulkUploads.map((upload, idx) => (
+                  <div key={upload.id} style={{
+                    background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 8,
+                    border: `1px solid ${theme.border}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ color: theme.textMuted, fontSize: 12, fontWeight: 600 }}>Row {idx + 1}</span>
+                      <button 
+                        onClick={() => removeBulkUploadRow(upload.id)}
+                        style={{ background: 'transparent', border: 'none', color: theme.danger, cursor: 'pointer', fontSize: 14 }}
+                      >✕</button>
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <label style={{
+                        background: theme.cardBg, borderRadius: 6, padding: 8, cursor: 'pointer',
+                        border: `1px dashed ${upload.pitchingFile ? theme.accent : theme.border}`,
+                        fontSize: 11, textAlign: 'center', color: upload.pitchingFile ? theme.textPrimary : theme.textMuted
+                      }}>
+                        <input 
+                          type="file" 
+                          accept=".csv" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => e.target.files[0] && updateBulkUpload(upload.id, 'pitchingFile', e.target.files[0])}
+                        />
+                        {upload.pitchingFile ? `⚾ ${upload.pitchingFile.name.slice(0, 15)}...` : '⚾ Pitching'}
+                      </label>
+                      <label style={{
+                        background: theme.cardBg, borderRadius: 6, padding: 8, cursor: 'pointer',
+                        border: `1px dashed ${upload.battingFile ? theme.success : theme.border}`,
+                        fontSize: 11, textAlign: 'center', color: upload.battingFile ? theme.textPrimary : theme.textMuted
+                      }}>
+                        <input 
+                          type="file" 
+                          accept=".csv" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => e.target.files[0] && updateBulkUpload(upload.id, 'battingFile', e.target.files[0])}
+                        />
+                        {upload.battingFile ? `🏏 ${upload.battingFile.name.slice(0, 15)}...` : '🏏 Batting'}
+                      </label>
+                    </div>
+                    
+                    <input 
+                      type="date" 
+                      value={upload.date}
+                      onChange={(e) => updateBulkUpload(upload.id, 'date', e.target.value)}
+                      style={{
+                        width: '100%', padding: 8, borderRadius: 6, border: `1px solid ${theme.border}`,
+                        background: theme.cardBg, color: theme.textPrimary, fontSize: 12
+                      }}
+                    />
+                  </div>
+                ))}
+
+                {bulkUploads.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 24, color: theme.textMuted }}>
+                    Click "+ Add Row" to start adding files
+                  </div>
+                )}
+              </div>
+
+              {/* Submit Buttons */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {hasAccess('master') ? (
+                  <button 
+                    onClick={handleAdminBulkUpload}
+                    disabled={isSubmitting || bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date).length === 0}
+                    style={{
+                      ...styles.submitBtn,
+                      flex: 1,
+                      background: theme.accent,
+                      ...(isSubmitting || bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date).length === 0 ? styles.submitBtnDisabled : {})
+                    }}
+                  >
+                    {isSubmitting ? 'Uploading...' : `⚡ Direct Upload (${bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date).length} files)`}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleBulkSubmit}
+                    disabled={isSubmitting || bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date).length === 0}
+                    style={{
+                      ...styles.submitBtn,
+                      flex: 1,
+                      ...(isSubmitting || bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date).length === 0 ? styles.submitBtnDisabled : {})
+                    }}
+                  >
+                    {isSubmitting ? 'Processing...' : `📤 Submit ${bulkUploads.filter(u => (u.pitchingFile || u.battingFile) && u.date).length} for Review`}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div style={styles.submitForm}>
@@ -2737,6 +3454,94 @@ function SubmitDataPage() {
           )}
         </div>
       </div>
+
+      {/* Admin Direct Upload Confirmation Modal */}
+      {adminConfirmData && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: theme.cardBg, borderRadius: 12, padding: 24, maxWidth: 500, width: '95%',
+            border: `1px solid ${theme.border}`, boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+          }}>
+            <h3 style={{ color: theme.textPrimary, margin: '0 0 16px 0' }}>⚡ Admin Direct Upload</h3>
+            
+            <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Tournament</div>
+              <div style={{ color: theme.textPrimary, fontWeight: 600 }}>{adminConfirmData.tournament?.name}</div>
+              <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8, marginBottom: 4 }}>Date</div>
+              <div style={{ color: theme.textPrimary }}>{adminConfirmData.date}</div>
+              {adminConfirmData.dateAlreadyUploaded && (
+                <div style={{ color: theme.warning, fontSize: 12, marginTop: 8 }}>⚠️ Data already exists for this date</div>
+              )}
+            </div>
+            
+            {adminConfirmData.pitching && (
+              <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: theme.textPrimary, fontWeight: 600 }}>⚾ Pitching</span>
+                  <span style={{ 
+                    color: adminConfirmData.pitching.matchPercent >= 70 ? theme.success : 
+                           adminConfirmData.pitching.matchPercent >= 40 ? theme.warning : theme.danger,
+                    fontWeight: 600
+                  }}>
+                    {adminConfirmData.pitching.matchPercent}% match
+                  </span>
+                </div>
+                <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
+                  {adminConfirmData.pitching.validation.cleanRows.length} players
+                  {adminConfirmData.pitching.validation.removedRows.length > 0 && 
+                    ` (${adminConfirmData.pitching.validation.removedRows.length} flagged)`}
+                </div>
+              </div>
+            )}
+            
+            {adminConfirmData.batting && (
+              <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: theme.textPrimary, fontWeight: 600 }}>🏏 Batting</span>
+                  <span style={{ 
+                    color: adminConfirmData.batting.matchPercent >= 70 ? theme.success : 
+                           adminConfirmData.batting.matchPercent >= 40 ? theme.warning : theme.danger,
+                    fontWeight: 600
+                  }}>
+                    {adminConfirmData.batting.matchPercent}% match
+                  </span>
+                </div>
+                <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
+                  {adminConfirmData.batting.validation.cleanRows.length} players
+                  {adminConfirmData.batting.validation.removedRows.length > 0 && 
+                    ` (${adminConfirmData.batting.validation.removedRows.length} flagged)`}
+                </div>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button 
+                onClick={() => setAdminConfirmData(null)}
+                style={{
+                  flex: 1, padding: '12px 16px', borderRadius: 8, border: `1px solid ${theme.border}`,
+                  background: 'transparent', color: theme.textPrimary, cursor: 'pointer', fontSize: 14
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAdminDirectUpload}
+                disabled={isSubmitting}
+                style={{
+                  flex: 1, padding: '12px 16px', borderRadius: 8, border: 'none',
+                  background: theme.accent, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                  opacity: isSubmitting ? 0.6 : 1
+                }}
+              >
+                {isSubmitting ? 'Uploading...' : '✓ Confirm Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
