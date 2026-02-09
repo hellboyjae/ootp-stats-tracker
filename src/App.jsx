@@ -1165,135 +1165,237 @@ function InfoPage() {
       
       for (const tournament of tournaments) {
         const tournamentUploads = uploads.filter(u => u.tournament_id === tournament.id);
-        if (tournamentUploads.length === 0) continue;
         
+        // Calculate prior dates (calendar dates not in upload_history)
+        const trackedDates = new Set(tournamentUploads.map(u => u.upload_date));
+        const calendarDates = tournament.uploaded_dates || [];
+        const priorDates = calendarDates.filter(d => !trackedDates.has(d)).length;
+        
+        // Get existing tournament data (contains the prior blob)
+        const existingBatting = tournament.batting || [];
+        const existingPitching = tournament.pitching || [];
+        
+        // Build maps starting with existing data (prior blob) weighted by priorDates
         const battingMap = new Map();
         const pitchingMap = new Map();
         
-        for (const upload of tournamentUploads) {
+        // Add existing players with prior weight
+        if (priorDates > 0) {
+          existingBatting.forEach(p => {
+            const key = `${p.name}|${p.ovr}`;
+            battingMap.set(key, { ...p, _uploadCount: priorDates, _trackedUploads: 0 });
+          });
+          existingPitching.forEach(p => {
+            const key = `${p.name}|${p.ovr}`;
+            pitchingMap.set(key, { ...p, _uploadCount: priorDates, _trackedUploads: 0 });
+          });
+        }
+        
+        // Process each upload - group by upload first, then by player within upload
+        const battingUploads = tournamentUploads.filter(u => u.file_type === 'batting');
+        const pitchingUploads = tournamentUploads.filter(u => u.file_type === 'pitching');
+        
+        // Process batting uploads
+        for (const upload of battingUploads) {
           const playerData = upload.player_data || [];
           
-          for (const row of playerData) {
+          // Group players within this upload
+          const uploadPlayerMap = new Map();
+          playerData.forEach(row => {
             const name = (row.Name || '').trim();
             const ovr = parseNum(row.OVR);
             const key = `${name}|${ovr}`;
+            if (!uploadPlayerMap.has(key)) uploadPlayerMap.set(key, []);
+            uploadPlayerMap.get(key).push(row);
+          });
+          
+          // Average within this upload, then merge with existing
+          uploadPlayerMap.forEach((rows, key) => {
+            const count = rows.length;
+            const uploadAvg = {
+              id: crypto.randomUUID(),
+              name: rows[0].Name?.trim() || 'Unknown',
+              pos: rows[0].POS?.trim() || '',
+              bats: rows[0].B || '',
+              ovr: parseNum(rows[0].OVR),
+              vari: parseNum(rows[0].VAR),
+              // Cumulative
+              g: rows.reduce((sum, r) => sum + parseNum(r.G), 0),
+              gs: rows.reduce((sum, r) => sum + parseNum(r.GS), 0),
+              pa: rows.reduce((sum, r) => sum + parseNum(r.PA), 0),
+              ab: rows.reduce((sum, r) => sum + parseNum(r.AB), 0),
+              war: rows.reduce((sum, r) => sum + parseNum(r.WAR), 0).toFixed(1),
+              wraa: rows.reduce((sum, r) => sum + parseNum(r.wRAA), 0).toFixed(1),
+              bsr: rows.reduce((sum, r) => sum + parseNum(r.BsR), 0).toFixed(1),
+              // Averaged
+              h: Math.round(rows.reduce((sum, r) => sum + parseNum(r.H), 0) / count),
+              doubles: Math.round(rows.reduce((sum, r) => sum + parseNum(r['2B']), 0) / count),
+              triples: Math.round(rows.reduce((sum, r) => sum + parseNum(r['3B']), 0) / count),
+              hr: Math.round(rows.reduce((sum, r) => sum + parseNum(r.HR), 0) / count),
+              so: Math.round(rows.reduce((sum, r) => sum + parseNum(r.SO), 0) / count),
+              gidp: Math.round(rows.reduce((sum, r) => sum + parseNum(r.GIDP), 0) / count),
+              avg: (rows.reduce((sum, r) => sum + parseFloat(r.AVG || 0), 0) / count).toFixed(3),
+              obp: (rows.reduce((sum, r) => sum + parseFloat(r.OBP || 0), 0) / count).toFixed(3),
+              slg: (rows.reduce((sum, r) => sum + parseFloat(r.SLG || 0), 0) / count).toFixed(3),
+              woba: (rows.reduce((sum, r) => sum + parseFloat(r.wOBA || 0), 0) / count).toFixed(3),
+              ops: (rows.reduce((sum, r) => sum + parseFloat(r.OPS || 0), 0) / count).toFixed(3),
+              opsPlus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['OPS+']), 0) / count),
+              babip: (rows.reduce((sum, r) => sum + parseFloat(r.BABIP || 0), 0) / count).toFixed(3),
+              wrcPlus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['wRC+']), 0) / count),
+              bbPct: (rows.reduce((sum, r) => sum + parseFloat(parsePct(r['BB%'])), 0) / count).toFixed(1),
+              sbPct: (rows.reduce((sum, r) => sum + parseFloat(parsePct(r['SB%'])), 0) / count).toFixed(1)
+            };
             
-            if (upload.file_type === 'batting') {
-              const normalized = {
-                id: crypto.randomUUID(),
-                name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
-                g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
-                h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
-                bbPct: parsePct(row['BB%']), so: parseNum(row.SO), gidp: parseNum(row.GIDP),
-                avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
-                woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
-                babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
-                wraa: row.wRAA || '0.0', war: row.WAR || '0.0', sbPct: parsePct(row['SB%']), bsr: row.BsR || '0.0'
-              };
+            if (battingMap.has(key)) {
+              const existing = battingMap.get(key);
+              const existingCount = existing._uploadCount || 1;
+              const newCount = existingCount + 1;
               
-              if (battingMap.has(key)) {
-                const existing = battingMap.get(key);
-                const entryCount = (existing._entryCount || 1) + 1;
-                const oldCount = existing._entryCount || 1;
-                
-                const compounded = {
-                  ...existing, _entryCount: entryCount,
-                  g: existing.g + normalized.g, gs: existing.gs + normalized.gs,
-                  pa: existing.pa + normalized.pa, ab: existing.ab + normalized.ab,
-                  bf: (existing.bf || 0) + (normalized.bf || 0),
-                  war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
-                  wraa: ((parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0))).toFixed(1),
-                  bsr: ((parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0))).toFixed(1),
-                  ovr: normalized.ovr, vari: normalized.vari,
-                  pos: normalized.pos || existing.pos, bats: normalized.bats || existing.bats,
-                  h: Math.round(((existing.h * oldCount) + normalized.h) / entryCount),
-                  doubles: Math.round(((existing.doubles * oldCount) + normalized.doubles) / entryCount),
-                  triples: Math.round(((existing.triples * oldCount) + normalized.triples) / entryCount),
-                  hr: Math.round(((existing.hr * oldCount) + normalized.hr) / entryCount),
-                  so: Math.round(((existing.so * oldCount) + normalized.so) / entryCount),
-                  gidp: Math.round(((existing.gidp * oldCount) + normalized.gidp) / entryCount),
-                  avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3),
-                  obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3),
-                  slg: (((parseFloat(existing.slg || 0) * oldCount) + parseFloat(normalized.slg || 0)) / entryCount).toFixed(3),
-                  ops: (((parseFloat(existing.ops || 0) * oldCount) + parseFloat(normalized.ops || 0)) / entryCount).toFixed(3),
-                  woba: (((parseFloat(existing.woba || 0) * oldCount) + parseFloat(normalized.woba || 0)) / entryCount).toFixed(3),
-                  babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3),
-                  opsPlus: Math.round(((parseFloat(existing.opsPlus || 0) * oldCount) + parseFloat(normalized.opsPlus || 0)) / entryCount),
-                  wrcPlus: Math.round(((parseFloat(existing.wrcPlus || 0) * oldCount) + parseFloat(normalized.wrcPlus || 0)) / entryCount),
-                  bbPct: (((parseFloat(existing.bbPct || 0) * oldCount) + parseFloat(normalized.bbPct || 0)) / entryCount).toFixed(1),
-                  sbPct: (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(normalized.sbPct || 0)) / entryCount).toFixed(1)
-                };
-                battingMap.set(key, compounded);
-              } else {
-                normalized._entryCount = 1;
-                battingMap.set(key, normalized);
-              }
+              const merged = {
+                ...existing,
+                _uploadCount: newCount,
+                _trackedUploads: (existing._trackedUploads || 0) + 1,
+                g: existing.g + uploadAvg.g,
+                gs: existing.gs + uploadAvg.gs,
+                pa: existing.pa + uploadAvg.pa,
+                ab: existing.ab + uploadAvg.ab,
+                war: (parseFloat(existing.war || 0) + parseFloat(uploadAvg.war || 0)).toFixed(1),
+                wraa: (parseFloat(existing.wraa || 0) + parseFloat(uploadAvg.wraa || 0)).toFixed(1),
+                bsr: (parseFloat(existing.bsr || 0) + parseFloat(uploadAvg.bsr || 0)).toFixed(1),
+                ovr: uploadAvg.ovr, vari: uploadAvg.vari,
+                pos: uploadAvg.pos || existing.pos,
+                bats: uploadAvg.bats || existing.bats,
+                h: Math.round(((existing.h * existingCount) + uploadAvg.h) / newCount),
+                doubles: Math.round(((existing.doubles * existingCount) + uploadAvg.doubles) / newCount),
+                triples: Math.round(((existing.triples * existingCount) + uploadAvg.triples) / newCount),
+                hr: Math.round(((existing.hr * existingCount) + uploadAvg.hr) / newCount),
+                so: Math.round(((existing.so * existingCount) + uploadAvg.so) / newCount),
+                gidp: Math.round(((existing.gidp * existingCount) + uploadAvg.gidp) / newCount),
+                avg: (((parseFloat(existing.avg || 0) * existingCount) + parseFloat(uploadAvg.avg)) / newCount).toFixed(3),
+                obp: (((parseFloat(existing.obp || 0) * existingCount) + parseFloat(uploadAvg.obp)) / newCount).toFixed(3),
+                slg: (((parseFloat(existing.slg || 0) * existingCount) + parseFloat(uploadAvg.slg)) / newCount).toFixed(3),
+                woba: (((parseFloat(existing.woba || 0) * existingCount) + parseFloat(uploadAvg.woba)) / newCount).toFixed(3),
+                ops: (((parseFloat(existing.ops || 0) * existingCount) + parseFloat(uploadAvg.ops)) / newCount).toFixed(3),
+                opsPlus: Math.round(((parseFloat(existing.opsPlus || 0) * existingCount) + uploadAvg.opsPlus) / newCount),
+                babip: (((parseFloat(existing.babip || 0) * existingCount) + parseFloat(uploadAvg.babip)) / newCount).toFixed(3),
+                wrcPlus: Math.round(((parseFloat(existing.wrcPlus || 0) * existingCount) + uploadAvg.wrcPlus) / newCount),
+                bbPct: (((parseFloat(existing.bbPct || 0) * existingCount) + parseFloat(uploadAvg.bbPct)) / newCount).toFixed(1),
+                sbPct: (((parseFloat(existing.sbPct || 0) * existingCount) + parseFloat(uploadAvg.sbPct)) / newCount).toFixed(1)
+              };
+              battingMap.set(key, merged);
             } else {
-              const normalized = {
-                id: crypto.randomUUID(),
-                name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
-                g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
-                era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
-                babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
-                braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00',
-                hPer9: row['H/9'] || '0.00', bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00',
-                lobPct: parsePct(row['LOB%']), eraPlus: parseNum(row['ERA+']),
-                fip: row.FIP || '0.00', fipMinus: parseNum(row['FIP-']),
-                war: row.WAR || '0.0', siera: row.SIERA || '0.00'
-              };
-              
-              if (pitchingMap.has(key)) {
-                const existing = pitchingMap.get(key);
-                const entryCount = (existing._entryCount || 1) + 1;
-                const oldCount = existing._entryCount || 1;
-                const oldIP = parseIP(existing.ip);
-                const newIP = parseIP(normalized.ip);
-                
-                const compounded = {
-                  ...existing, _entryCount: entryCount,
-                  g: existing.g + normalized.g, gs: existing.gs + normalized.gs,
-                  ip: formatIP(oldIP + newIP), bf: existing.bf + normalized.bf,
-                  war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
-                  ovr: normalized.ovr, vari: normalized.vari,
-                  pos: normalized.pos || existing.pos, throws: normalized.throws || existing.throws,
-                  era: (((parseFloat(existing.era || 0) * oldCount) + parseFloat(normalized.era || 0)) / entryCount).toFixed(2),
-                  avg: (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3),
-                  obp: (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3),
-                  babip: (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3),
-                  whip: (((parseFloat(existing.whip || 0) * oldCount) + parseFloat(normalized.whip || 0)) / entryCount).toFixed(2),
-                  braPer9: (((parseFloat(existing.braPer9 || 0) * oldCount) + parseFloat(normalized.braPer9 || 0)) / entryCount).toFixed(2),
-                  hrPer9: (((parseFloat(existing.hrPer9 || 0) * oldCount) + parseFloat(normalized.hrPer9 || 0)) / entryCount).toFixed(2),
-                  hPer9: (((parseFloat(existing.hPer9 || 0) * oldCount) + parseFloat(normalized.hPer9 || 0)) / entryCount).toFixed(2),
-                  bbPer9: (((parseFloat(existing.bbPer9 || 0) * oldCount) + parseFloat(normalized.bbPer9 || 0)) / entryCount).toFixed(2),
-                  kPer9: (((parseFloat(existing.kPer9 || 0) * oldCount) + parseFloat(normalized.kPer9 || 0)) / entryCount).toFixed(2),
-                  lobPct: (((parseFloat(existing.lobPct || 0) * oldCount) + parseFloat(normalized.lobPct || 0)) / entryCount).toFixed(1),
-                  eraPlus: Math.round(((parseFloat(existing.eraPlus || 0) * oldCount) + parseFloat(normalized.eraPlus || 0)) / entryCount),
-                  fip: (((parseFloat(existing.fip || 0) * oldCount) + parseFloat(normalized.fip || 0)) / entryCount).toFixed(2),
-                  fipMinus: Math.round(((parseFloat(existing.fipMinus || 0) * oldCount) + parseFloat(normalized.fipMinus || 0)) / entryCount),
-                  siera: (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(normalized.siera || 0)) / entryCount).toFixed(2)
-                };
-                pitchingMap.set(key, compounded);
-              } else {
-                normalized._entryCount = 1;
-                pitchingMap.set(key, normalized);
-              }
+              uploadAvg._uploadCount = 1;
+              uploadAvg._trackedUploads = 1;
+              battingMap.set(key, uploadAvg);
             }
-          }
+          });
         }
         
-        // Update tournament
-        const battingData = Array.from(battingMap.values());
-        const pitchingData = Array.from(pitchingMap.values());
+        // Process pitching uploads
+        for (const upload of pitchingUploads) {
+          const playerData = upload.player_data || [];
+          
+          // Group players within this upload
+          const uploadPlayerMap = new Map();
+          playerData.forEach(row => {
+            const name = (row.Name || '').trim();
+            const ovr = parseNum(row.OVR);
+            const key = `${name}|${ovr}`;
+            if (!uploadPlayerMap.has(key)) uploadPlayerMap.set(key, []);
+            uploadPlayerMap.get(key).push(row);
+          });
+          
+          // Average within this upload, then merge with existing
+          uploadPlayerMap.forEach((rows, key) => {
+            const count = rows.length;
+            const uploadAvg = {
+              id: crypto.randomUUID(),
+              name: rows[0].Name?.trim() || 'Unknown',
+              pos: rows[0].POS?.trim() || '',
+              throws: rows[0].T || '',
+              ovr: parseNum(rows[0].OVR),
+              vari: parseNum(rows[0].VAR),
+              // Cumulative
+              g: rows.reduce((sum, r) => sum + parseNum(r.G), 0),
+              gs: rows.reduce((sum, r) => sum + parseNum(r.GS), 0),
+              ip: formatIP(rows.reduce((sum, r) => sum + parseIP(r.IP), 0)),
+              bf: rows.reduce((sum, r) => sum + parseNum(r.BF), 0),
+              war: rows.reduce((sum, r) => sum + parseNum(r.WAR), 0).toFixed(1),
+              // Averaged
+              era: (rows.reduce((sum, r) => sum + parseFloat(r.ERA || 0), 0) / count).toFixed(2),
+              avg: (rows.reduce((sum, r) => sum + parseFloat(r.AVG || 0), 0) / count).toFixed(3),
+              obp: (rows.reduce((sum, r) => sum + parseFloat(r.OBP || 0), 0) / count).toFixed(3),
+              babip: (rows.reduce((sum, r) => sum + parseFloat(r.BABIP || 0), 0) / count).toFixed(3),
+              whip: (rows.reduce((sum, r) => sum + parseFloat(r.WHIP || 0), 0) / count).toFixed(2),
+              braPer9: (rows.reduce((sum, r) => sum + parseFloat(r['BRA/9'] || 0), 0) / count).toFixed(2),
+              hrPer9: (rows.reduce((sum, r) => sum + parseFloat(r['HR/9'] || 0), 0) / count).toFixed(2),
+              hPer9: (rows.reduce((sum, r) => sum + parseFloat(r['H/9'] || 0), 0) / count).toFixed(2),
+              bbPer9: (rows.reduce((sum, r) => sum + parseFloat(r['BB/9'] || 0), 0) / count).toFixed(2),
+              kPer9: (rows.reduce((sum, r) => sum + parseFloat(r['K/9'] || 0), 0) / count).toFixed(2),
+              lobPct: (rows.reduce((sum, r) => sum + parseFloat(parsePct(r['LOB%'])), 0) / count).toFixed(1),
+              eraPlus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['ERA+']), 0) / count),
+              fip: (rows.reduce((sum, r) => sum + parseFloat(r.FIP || 0), 0) / count).toFixed(2),
+              fipMinus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['FIP-']), 0) / count),
+              siera: (rows.reduce((sum, r) => sum + parseFloat(r.SIERA || 0), 0) / count).toFixed(2)
+            };
+            
+            if (pitchingMap.has(key)) {
+              const existing = pitchingMap.get(key);
+              const existingCount = existing._uploadCount || 1;
+              const newCount = existingCount + 1;
+              
+              const merged = {
+                ...existing,
+                _uploadCount: newCount,
+                _trackedUploads: (existing._trackedUploads || 0) + 1,
+                g: existing.g + uploadAvg.g,
+                gs: existing.gs + uploadAvg.gs,
+                ip: formatIP(parseIP(existing.ip) + parseIP(uploadAvg.ip)),
+                bf: existing.bf + uploadAvg.bf,
+                war: (parseFloat(existing.war || 0) + parseFloat(uploadAvg.war || 0)).toFixed(1),
+                ovr: uploadAvg.ovr, vari: uploadAvg.vari,
+                pos: uploadAvg.pos || existing.pos,
+                throws: uploadAvg.throws || existing.throws,
+                era: (((parseFloat(existing.era || 0) * existingCount) + parseFloat(uploadAvg.era)) / newCount).toFixed(2),
+                avg: (((parseFloat(existing.avg || 0) * existingCount) + parseFloat(uploadAvg.avg)) / newCount).toFixed(3),
+                obp: (((parseFloat(existing.obp || 0) * existingCount) + parseFloat(uploadAvg.obp)) / newCount).toFixed(3),
+                babip: (((parseFloat(existing.babip || 0) * existingCount) + parseFloat(uploadAvg.babip)) / newCount).toFixed(3),
+                whip: (((parseFloat(existing.whip || 0) * existingCount) + parseFloat(uploadAvg.whip)) / newCount).toFixed(2),
+                braPer9: (((parseFloat(existing.braPer9 || 0) * existingCount) + parseFloat(uploadAvg.braPer9)) / newCount).toFixed(2),
+                hrPer9: (((parseFloat(existing.hrPer9 || 0) * existingCount) + parseFloat(uploadAvg.hrPer9)) / newCount).toFixed(2),
+                hPer9: (((parseFloat(existing.hPer9 || 0) * existingCount) + parseFloat(uploadAvg.hPer9)) / newCount).toFixed(2),
+                bbPer9: (((parseFloat(existing.bbPer9 || 0) * existingCount) + parseFloat(uploadAvg.bbPer9)) / newCount).toFixed(2),
+                kPer9: (((parseFloat(existing.kPer9 || 0) * existingCount) + parseFloat(uploadAvg.kPer9)) / newCount).toFixed(2),
+                lobPct: (((parseFloat(existing.lobPct || 0) * existingCount) + parseFloat(uploadAvg.lobPct)) / newCount).toFixed(1),
+                eraPlus: Math.round(((parseFloat(existing.eraPlus || 0) * existingCount) + uploadAvg.eraPlus) / newCount),
+                fip: (((parseFloat(existing.fip || 0) * existingCount) + parseFloat(uploadAvg.fip)) / newCount).toFixed(2),
+                fipMinus: Math.round(((parseFloat(existing.fipMinus || 0) * existingCount) + uploadAvg.fipMinus) / newCount),
+                siera: (((parseFloat(existing.siera || 0) * existingCount) + parseFloat(uploadAvg.siera)) / newCount).toFixed(2)
+              };
+              pitchingMap.set(key, merged);
+            } else {
+              uploadAvg._uploadCount = 1;
+              uploadAvg._trackedUploads = 1;
+              pitchingMap.set(key, uploadAvg);
+            }
+          });
+        }
         
-        const { error: updateError } = await supabase.from('tournaments').update({
-          batting: battingData,
-          pitching: pitchingData
-        }).eq('id', tournament.id);
-        
-        if (updateError) {
-          console.error(`Failed to update ${tournament.name}:`, updateError);
-        } else {
-          rebuiltCount++;
+        // Only update if we have data
+        if (battingMap.size > 0 || pitchingMap.size > 0) {
+          const battingData = Array.from(battingMap.values());
+          const pitchingData = Array.from(pitchingMap.values());
+          
+          const { error: updateError } = await supabase.from('tournaments').update({
+            batting: battingData,
+            pitching: pitchingData
+          }).eq('id', tournament.id);
+          
+          if (updateError) {
+            console.error(`Failed to update ${tournament.name}:`, updateError);
+          } else {
+            rebuiltCount++;
+          }
         }
       }
       
@@ -2848,6 +2950,17 @@ function ReviewQueuePage() {
       const { data: tournament } = await supabase.from('tournaments').select('*').eq('id', assignedTournamentId).single();
       if (!tournament) throw new Error('Tournament not found');
 
+      // Get tracked upload dates for this tournament to calculate prior weight
+      const { data: trackedUploads } = await supabase
+        .from('upload_history')
+        .select('upload_date')
+        .eq('tournament_id', assignedTournamentId)
+        .eq('file_type', upload.file_type);
+      
+      const trackedDates = new Set((trackedUploads || []).map(u => u.upload_date));
+      const calendarDates = tournament.uploaded_dates || [];
+      const priorDates = calendarDates.filter(d => !trackedDates.has(d)).length;
+
       // Add the clean data to the tournament
       const existingData = upload.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
       const newData = upload.clean_data || [];
@@ -2856,184 +2969,195 @@ function ReviewQueuePage() {
       const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
       const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
       
-      // Combine data (merge players by name+ovr)
-      const playerMap = new Map();
-      existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
-      
+      // First, group new data by player and average within this CSV upload
+      const newPlayerMap = new Map();
       newData.forEach(row => {
         const name = (row.Name || '').trim();
         const ovr = parseNum(row.OVR);
         const key = `${name}|${ovr}`;
         
-        // Normalize the row data - MUST match normalizePlayerData exactly
-        const normalized = upload.file_type === 'batting' ? {
-          id: crypto.randomUUID(),
-          name: row.Name?.trim() || 'Unknown',
-          pos: row.POS?.trim() || '',
-          bats: row.B || '',
-          ovr: parseNum(row.OVR),
-          vari: parseNum(row.VAR),
-          g: parseNum(row.G),
-          gs: parseNum(row.GS),
-          pa: parseNum(row.PA),
-          ab: parseNum(row.AB),
-          h: parseNum(row.H),
-          doubles: parseNum(row['2B']),
-          triples: parseNum(row['3B']),
-          hr: parseNum(row.HR),
-          bbPct: parsePct(row['BB%']),
-          so: parseNum(row.SO),
-          gidp: parseNum(row.GIDP),
-          avg: row.AVG || '.000',
-          obp: row.OBP || '.000',
-          slg: row.SLG || '.000',
-          woba: row.wOBA || '.000',
-          ops: row.OPS || '.000',
-          opsPlus: parseNum(row['OPS+']),
-          babip: row.BABIP || '.000',
-          wrcPlus: parseNum(row['wRC+']),
-          wraa: row.wRAA || '0.0',
-          war: row.WAR || '0.0',
-          sbPct: parsePct(row['SB%']),
-          bsr: row.BsR || '0.0',
-          // Store raw counting stats for compounding
-          bb: parseNum(row.BB) || Math.round(parseNum(row.PA) * parseFloat(parsePct(row['BB%'])) / 100),
-          sb: parseNum(row.SB) || 0,
-          cs: parseNum(row.CS) || 0
-        } : {
-          id: crypto.randomUUID(),
-          name: row.Name?.trim() || 'Unknown',
-          pos: row.POS?.trim() || '',
-          throws: row.T || '',
-          ovr: parseNum(row.OVR),
-          vari: parseNum(row.VAR),
-          g: parseNum(row.G),
-          gs: parseNum(row.GS),
-          ip: row.IP || '0',
-          bf: parseNum(row.BF),
-          era: row.ERA || '0.00',
-          avg: row.AVG || '.000',
-          obp: row.OBP || '.000',
-          babip: row.BABIP || '.000',
-          whip: row.WHIP || '0.00',
-          braPer9: row['BRA/9'] || '0.00',
-          hrPer9: row['HR/9'] || '0.00',
-          hPer9: row['H/9'] || '0.00',
-          bbPer9: row['BB/9'] || '0.00',
-          kPer9: row['K/9'] || '0.00',
-          lobPct: parsePct(row['LOB%']),
-          eraPlus: parseNum(row['ERA+']),
-          fip: row.FIP || '0.00',
-          fipMinus: parseNum(row['FIP-']),
-          war: row.WAR || '0.0',
-          siera: row.SIERA || '0.00'
-        };
+        if (!newPlayerMap.has(key)) {
+          newPlayerMap.set(key, []);
+        }
+        newPlayerMap.get(key).push(row);
+      });
+      
+      // Average each player's instances within this upload
+      const newPlayerAverages = new Map();
+      newPlayerMap.forEach((rows, key) => {
+        const count = rows.length;
         
+        if (upload.file_type === 'batting') {
+          const averaged = {
+            id: crypto.randomUUID(),
+            name: rows[0].Name?.trim() || 'Unknown',
+            pos: rows[0].POS?.trim() || '',
+            bats: rows[0].B || '',
+            ovr: parseNum(rows[0].OVR),
+            vari: parseNum(rows[0].VAR),
+            // Cumulative stats - sum them
+            g: rows.reduce((sum, r) => sum + parseNum(r.G), 0),
+            gs: rows.reduce((sum, r) => sum + parseNum(r.GS), 0),
+            pa: rows.reduce((sum, r) => sum + parseNum(r.PA), 0),
+            ab: rows.reduce((sum, r) => sum + parseNum(r.AB), 0),
+            bf: rows.reduce((sum, r) => sum + parseNum(r.BF), 0),
+            war: rows.reduce((sum, r) => sum + parseNum(r.WAR), 0).toFixed(1),
+            wraa: rows.reduce((sum, r) => sum + parseNum(r.wRAA), 0).toFixed(1),
+            bsr: rows.reduce((sum, r) => sum + parseNum(r.BsR), 0).toFixed(1),
+            // Average stats - average them
+            h: Math.round(rows.reduce((sum, r) => sum + parseNum(r.H), 0) / count),
+            doubles: Math.round(rows.reduce((sum, r) => sum + parseNum(r['2B']), 0) / count),
+            triples: Math.round(rows.reduce((sum, r) => sum + parseNum(r['3B']), 0) / count),
+            hr: Math.round(rows.reduce((sum, r) => sum + parseNum(r.HR), 0) / count),
+            so: Math.round(rows.reduce((sum, r) => sum + parseNum(r.SO), 0) / count),
+            gidp: Math.round(rows.reduce((sum, r) => sum + parseNum(r.GIDP), 0) / count),
+            avg: (rows.reduce((sum, r) => sum + parseFloat(r.AVG || 0), 0) / count).toFixed(3),
+            obp: (rows.reduce((sum, r) => sum + parseFloat(r.OBP || 0), 0) / count).toFixed(3),
+            slg: (rows.reduce((sum, r) => sum + parseFloat(r.SLG || 0), 0) / count).toFixed(3),
+            woba: (rows.reduce((sum, r) => sum + parseFloat(r.wOBA || 0), 0) / count).toFixed(3),
+            ops: (rows.reduce((sum, r) => sum + parseFloat(r.OPS || 0), 0) / count).toFixed(3),
+            opsPlus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['OPS+']), 0) / count),
+            babip: (rows.reduce((sum, r) => sum + parseFloat(r.BABIP || 0), 0) / count).toFixed(3),
+            wrcPlus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['wRC+']), 0) / count),
+            bbPct: (rows.reduce((sum, r) => sum + parseFloat(parsePct(r['BB%'])), 0) / count).toFixed(1),
+            sbPct: (rows.reduce((sum, r) => sum + parseFloat(parsePct(r['SB%'])), 0) / count).toFixed(1),
+            bb: rows.reduce((sum, r) => sum + (parseNum(r.BB) || Math.round(parseNum(r.PA) * parseFloat(parsePct(r['BB%'])) / 100)), 0),
+            sb: rows.reduce((sum, r) => sum + parseNum(r.SB), 0),
+            cs: rows.reduce((sum, r) => sum + parseNum(r.CS), 0),
+            _instanceCount: count
+          };
+          newPlayerAverages.set(key, averaged);
+        } else {
+          const parseIP = (ip) => { const str = String(ip); if (str.includes('.')) { const [whole, frac] = str.split('.'); return parseFloat(whole) + (parseFloat(frac) / 3); } return parseFloat(ip) || 0; };
+          const formatIP = (ipDecimal) => { const whole = Math.floor(ipDecimal); const frac = Math.round((ipDecimal - whole) * 3); return frac === 0 ? String(whole) : `${whole}.${frac}`; };
+          
+          const averaged = {
+            id: crypto.randomUUID(),
+            name: rows[0].Name?.trim() || 'Unknown',
+            pos: rows[0].POS?.trim() || '',
+            throws: rows[0].T || '',
+            ovr: parseNum(rows[0].OVR),
+            vari: parseNum(rows[0].VAR),
+            // Cumulative stats - sum them
+            g: rows.reduce((sum, r) => sum + parseNum(r.G), 0),
+            gs: rows.reduce((sum, r) => sum + parseNum(r.GS), 0),
+            ip: formatIP(rows.reduce((sum, r) => sum + parseIP(r.IP), 0)),
+            bf: rows.reduce((sum, r) => sum + parseNum(r.BF), 0),
+            war: rows.reduce((sum, r) => sum + parseNum(r.WAR), 0).toFixed(1),
+            // Average stats - average them
+            era: (rows.reduce((sum, r) => sum + parseFloat(r.ERA || 0), 0) / count).toFixed(2),
+            avg: (rows.reduce((sum, r) => sum + parseFloat(r.AVG || 0), 0) / count).toFixed(3),
+            obp: (rows.reduce((sum, r) => sum + parseFloat(r.OBP || 0), 0) / count).toFixed(3),
+            babip: (rows.reduce((sum, r) => sum + parseFloat(r.BABIP || 0), 0) / count).toFixed(3),
+            whip: (rows.reduce((sum, r) => sum + parseFloat(r.WHIP || 0), 0) / count).toFixed(2),
+            braPer9: (rows.reduce((sum, r) => sum + parseFloat(r['BRA/9'] || 0), 0) / count).toFixed(2),
+            hrPer9: (rows.reduce((sum, r) => sum + parseFloat(r['HR/9'] || 0), 0) / count).toFixed(2),
+            hPer9: (rows.reduce((sum, r) => sum + parseFloat(r['H/9'] || 0), 0) / count).toFixed(2),
+            bbPer9: (rows.reduce((sum, r) => sum + parseFloat(r['BB/9'] || 0), 0) / count).toFixed(2),
+            kPer9: (rows.reduce((sum, r) => sum + parseFloat(r['K/9'] || 0), 0) / count).toFixed(2),
+            lobPct: (rows.reduce((sum, r) => sum + parseFloat(parsePct(r['LOB%'])), 0) / count).toFixed(1),
+            eraPlus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['ERA+']), 0) / count),
+            fip: (rows.reduce((sum, r) => sum + parseFloat(r.FIP || 0), 0) / count).toFixed(2),
+            fipMinus: Math.round(rows.reduce((sum, r) => sum + parseNum(r['FIP-']), 0) / count),
+            siera: (rows.reduce((sum, r) => sum + parseFloat(r.SIERA || 0), 0) / count).toFixed(2),
+            _instanceCount: count
+          };
+          newPlayerAverages.set(key, averaged);
+        }
+      });
+      
+      // Now merge with existing data using upload-based weighting
+      const playerMap = new Map();
+      existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+      
+      newPlayerAverages.forEach((normalized, key) => {
         if (playerMap.has(key)) {
-          // Merge stats: cumulative for some, simple average for others
           const existing = playerMap.get(key);
-          const entryCount = (existing._entryCount || 1) + 1;
+          // Calculate existing upload count: use stored value, or calculate from prior dates
+          const existingUploadCount = existing._uploadCount || (priorDates + (existing._trackedUploads || 0)) || 1;
+          const newUploadCount = existingUploadCount + 1;
           
           if (upload.file_type === 'batting') {
-            // Cumulative stats: G, GS, PA, AB, IP, BF, WAR, wRAA, BsR
             const compounded = {
               ...existing,
-              _entryCount: entryCount,
+              _uploadCount: newUploadCount,
+              _trackedUploads: (existing._trackedUploads || 0) + 1,
               // Cumulative - add together
               g: existing.g + normalized.g,
               gs: existing.gs + normalized.gs,
               pa: existing.pa + normalized.pa,
               ab: existing.ab + normalized.ab,
               bf: (existing.bf || 0) + (normalized.bf || 0),
-              war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
-              wraa: ((parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0))).toFixed(1),
-              bsr: ((parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0))).toFixed(1),
+              war: (parseFloat(existing.war || 0) + parseFloat(normalized.war || 0)).toFixed(1),
+              wraa: (parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0)).toFixed(1),
+              bsr: (parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0)).toFixed(1),
               // Keep latest OVR, VAR, POS
               ovr: normalized.ovr,
               vari: normalized.vari,
               pos: normalized.pos || existing.pos,
-              bats: normalized.bats || existing.bats
+              bats: normalized.bats || existing.bats,
+              // Average stats - weighted by upload count
+              h: Math.round(((existing.h * existingUploadCount) + normalized.h) / newUploadCount),
+              doubles: Math.round(((existing.doubles * existingUploadCount) + normalized.doubles) / newUploadCount),
+              triples: Math.round(((existing.triples * existingUploadCount) + normalized.triples) / newUploadCount),
+              hr: Math.round(((existing.hr * existingUploadCount) + normalized.hr) / newUploadCount),
+              so: Math.round(((existing.so * existingUploadCount) + normalized.so) / newUploadCount),
+              gidp: Math.round(((existing.gidp * existingUploadCount) + normalized.gidp) / newUploadCount),
+              avg: (((parseFloat(existing.avg || 0) * existingUploadCount) + parseFloat(normalized.avg || 0)) / newUploadCount).toFixed(3),
+              obp: (((parseFloat(existing.obp || 0) * existingUploadCount) + parseFloat(normalized.obp || 0)) / newUploadCount).toFixed(3),
+              slg: (((parseFloat(existing.slg || 0) * existingUploadCount) + parseFloat(normalized.slg || 0)) / newUploadCount).toFixed(3),
+              ops: (((parseFloat(existing.ops || 0) * existingUploadCount) + parseFloat(normalized.ops || 0)) / newUploadCount).toFixed(3),
+              woba: (((parseFloat(existing.woba || 0) * existingUploadCount) + parseFloat(normalized.woba || 0)) / newUploadCount).toFixed(3),
+              babip: (((parseFloat(existing.babip || 0) * existingUploadCount) + parseFloat(normalized.babip || 0)) / newUploadCount).toFixed(3),
+              opsPlus: Math.round(((parseFloat(existing.opsPlus || 0) * existingUploadCount) + parseFloat(normalized.opsPlus || 0)) / newUploadCount),
+              wrcPlus: Math.round(((parseFloat(existing.wrcPlus || 0) * existingUploadCount) + parseFloat(normalized.wrcPlus || 0)) / newUploadCount),
+              bbPct: (((parseFloat(existing.bbPct || 0) * existingUploadCount) + parseFloat(normalized.bbPct || 0)) / newUploadCount).toFixed(1),
+              sbPct: (((parseFloat(existing.sbPct || 0) * existingUploadCount) + parseFloat(normalized.sbPct || 0)) / newUploadCount).toFixed(1)
             };
-            
-            // Everything else - simple average
-            const oldCount = existing._entryCount || 1;
-            compounded.h = Math.round(((existing.h * oldCount) + normalized.h) / entryCount);
-            compounded.doubles = Math.round(((existing.doubles * oldCount) + normalized.doubles) / entryCount);
-            compounded.triples = Math.round(((existing.triples * oldCount) + normalized.triples) / entryCount);
-            compounded.hr = Math.round(((existing.hr * oldCount) + normalized.hr) / entryCount);
-            compounded.so = Math.round(((existing.so * oldCount) + normalized.so) / entryCount);
-            compounded.gidp = Math.round(((existing.gidp * oldCount) + normalized.gidp) / entryCount);
-            compounded.avg = (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3);
-            compounded.obp = (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3);
-            compounded.slg = (((parseFloat(existing.slg || 0) * oldCount) + parseFloat(normalized.slg || 0)) / entryCount).toFixed(3);
-            compounded.ops = (((parseFloat(existing.ops || 0) * oldCount) + parseFloat(normalized.ops || 0)) / entryCount).toFixed(3);
-            compounded.woba = (((parseFloat(existing.woba || 0) * oldCount) + parseFloat(normalized.woba || 0)) / entryCount).toFixed(3);
-            compounded.babip = (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3);
-            compounded.opsPlus = Math.round(((parseFloat(existing.opsPlus || 0) * oldCount) + parseFloat(normalized.opsPlus || 0)) / entryCount);
-            compounded.wrcPlus = Math.round(((parseFloat(existing.wrcPlus || 0) * oldCount) + parseFloat(normalized.wrcPlus || 0)) / entryCount);
-            compounded.bbPct = (((parseFloat(existing.bbPct || 0) * oldCount) + parseFloat(normalized.bbPct || 0)) / entryCount).toFixed(1);
-            compounded.sbPct = (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(normalized.sbPct || 0)) / entryCount).toFixed(1);
-            
             playerMap.set(key, compounded);
           } else {
-            // Pitching
-            const parseIP = (ip) => {
-              const str = String(ip);
-              if (str.includes('.')) {
-                const [whole, frac] = str.split('.');
-                return parseFloat(whole) + (parseFloat(frac) / 3);
-              }
-              return parseFloat(ip) || 0;
-            };
-            const formatIP = (ipDecimal) => {
-              const whole = Math.floor(ipDecimal);
-              const frac = Math.round((ipDecimal - whole) * 3);
-              return frac === 0 ? String(whole) : `${whole}.${frac}`;
-            };
+            const parseIP = (ip) => { const str = String(ip); if (str.includes('.')) { const [whole, frac] = str.split('.'); return parseFloat(whole) + (parseFloat(frac) / 3); } return parseFloat(ip) || 0; };
+            const formatIP = (ipDecimal) => { const whole = Math.floor(ipDecimal); const frac = Math.round((ipDecimal - whole) * 3); return frac === 0 ? String(whole) : `${whole}.${frac}`; };
             
-            const oldIP = parseIP(existing.ip);
-            const newIP = parseIP(normalized.ip);
-            
-            // Cumulative stats: G, GS, PA, AB, IP, BF, WAR, wRAA, BsR
             const compounded = {
               ...existing,
-              _entryCount: entryCount,
+              _uploadCount: newUploadCount,
+              _trackedUploads: (existing._trackedUploads || 0) + 1,
               // Cumulative - add together
               g: existing.g + normalized.g,
               gs: existing.gs + normalized.gs,
-              ip: formatIP(oldIP + newIP),
+              ip: formatIP(parseIP(existing.ip) + parseIP(normalized.ip)),
               bf: existing.bf + normalized.bf,
-              war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
+              war: (parseFloat(existing.war || 0) + parseFloat(normalized.war || 0)).toFixed(1),
               // Keep latest OVR, VAR, POS
               ovr: normalized.ovr,
               vari: normalized.vari,
               pos: normalized.pos || existing.pos,
-              throws: normalized.throws || existing.throws
+              throws: normalized.throws || existing.throws,
+              // Average stats - weighted by upload count
+              era: (((parseFloat(existing.era || 0) * existingUploadCount) + parseFloat(normalized.era || 0)) / newUploadCount).toFixed(2),
+              avg: (((parseFloat(existing.avg || 0) * existingUploadCount) + parseFloat(normalized.avg || 0)) / newUploadCount).toFixed(3),
+              obp: (((parseFloat(existing.obp || 0) * existingUploadCount) + parseFloat(normalized.obp || 0)) / newUploadCount).toFixed(3),
+              babip: (((parseFloat(existing.babip || 0) * existingUploadCount) + parseFloat(normalized.babip || 0)) / newUploadCount).toFixed(3),
+              whip: (((parseFloat(existing.whip || 0) * existingUploadCount) + parseFloat(normalized.whip || 0)) / newUploadCount).toFixed(2),
+              braPer9: (((parseFloat(existing.braPer9 || 0) * existingUploadCount) + parseFloat(normalized.braPer9 || 0)) / newUploadCount).toFixed(2),
+              hrPer9: (((parseFloat(existing.hrPer9 || 0) * existingUploadCount) + parseFloat(normalized.hrPer9 || 0)) / newUploadCount).toFixed(2),
+              hPer9: (((parseFloat(existing.hPer9 || 0) * existingUploadCount) + parseFloat(normalized.hPer9 || 0)) / newUploadCount).toFixed(2),
+              bbPer9: (((parseFloat(existing.bbPer9 || 0) * existingUploadCount) + parseFloat(normalized.bbPer9 || 0)) / newUploadCount).toFixed(2),
+              kPer9: (((parseFloat(existing.kPer9 || 0) * existingUploadCount) + parseFloat(normalized.kPer9 || 0)) / newUploadCount).toFixed(2),
+              lobPct: (((parseFloat(existing.lobPct || 0) * existingUploadCount) + parseFloat(normalized.lobPct || 0)) / newUploadCount).toFixed(1),
+              eraPlus: Math.round(((parseFloat(existing.eraPlus || 0) * existingUploadCount) + parseFloat(normalized.eraPlus || 0)) / newUploadCount),
+              fip: (((parseFloat(existing.fip || 0) * existingUploadCount) + parseFloat(normalized.fip || 0)) / newUploadCount).toFixed(2),
+              fipMinus: Math.round(((parseFloat(existing.fipMinus || 0) * existingUploadCount) + parseFloat(normalized.fipMinus || 0)) / newUploadCount),
+              siera: (((parseFloat(existing.siera || 0) * existingUploadCount) + parseFloat(normalized.siera || 0)) / newUploadCount).toFixed(2)
             };
-            
-            // Everything else - simple average
-            const oldCount = existing._entryCount || 1;
-            compounded.era = (((parseFloat(existing.era || 0) * oldCount) + parseFloat(normalized.era || 0)) / entryCount).toFixed(2);
-            compounded.avg = (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3);
-            compounded.obp = (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3);
-            compounded.babip = (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3);
-            compounded.whip = (((parseFloat(existing.whip || 0) * oldCount) + parseFloat(normalized.whip || 0)) / entryCount).toFixed(2);
-            compounded.braPer9 = (((parseFloat(existing.braPer9 || 0) * oldCount) + parseFloat(normalized.braPer9 || 0)) / entryCount).toFixed(2);
-            compounded.hrPer9 = (((parseFloat(existing.hrPer9 || 0) * oldCount) + parseFloat(normalized.hrPer9 || 0)) / entryCount).toFixed(2);
-            compounded.hPer9 = (((parseFloat(existing.hPer9 || 0) * oldCount) + parseFloat(normalized.hPer9 || 0)) / entryCount).toFixed(2);
-            compounded.bbPer9 = (((parseFloat(existing.bbPer9 || 0) * oldCount) + parseFloat(normalized.bbPer9 || 0)) / entryCount).toFixed(2);
-            compounded.kPer9 = (((parseFloat(existing.kPer9 || 0) * oldCount) + parseFloat(normalized.kPer9 || 0)) / entryCount).toFixed(2);
-            compounded.lobPct = (((parseFloat(existing.lobPct || 0) * oldCount) + parseFloat(normalized.lobPct || 0)) / entryCount).toFixed(1);
-            compounded.eraPlus = Math.round(((parseFloat(existing.eraPlus || 0) * oldCount) + parseFloat(normalized.eraPlus || 0)) / entryCount);
-            compounded.fip = (((parseFloat(existing.fip || 0) * oldCount) + parseFloat(normalized.fip || 0)) / entryCount).toFixed(2);
-            compounded.fipMinus = Math.round(((parseFloat(existing.fipMinus || 0) * oldCount) + parseFloat(normalized.fipMinus || 0)) / entryCount);
-            compounded.siera = (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(normalized.siera || 0)) / entryCount).toFixed(2);
-            
             playerMap.set(key, compounded);
           }
         } else {
-          // First entry for this player - add entry count
-          normalized._entryCount = 1;
+          // New player - check if they might have prior data we don't know about
+          // Since they're new to us, they only have this 1 upload
+          normalized._uploadCount = 1;
+          normalized._trackedUploads = 1;
           playerMap.set(key, normalized);
         }
       });
