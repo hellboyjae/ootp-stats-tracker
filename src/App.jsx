@@ -1982,30 +1982,30 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
                 <>
                   <div style={modalStyles.statBox}>
                     <div style={modalStyles.statLabel}>Avg SIERA</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + d.siera, 0) / trendData.length).toFixed(2) : '-'}</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + (d.siera * d.instances), 0) / trendData.reduce((sum, d) => sum + d.instances, 0)).toFixed(2) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
                     <div style={modalStyles.statLabel}>Avg FIP-</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + d.fipMinus, 0) / trendData.length) : '-'}</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + (d.fipMinus * d.instances), 0) / trendData.reduce((sum, d) => sum + d.instances, 0)) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
                     <div style={modalStyles.statLabel}>Avg LOB%</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + d.lobPct, 0) / trendData.length).toFixed(1) + '%' : '-'}</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + (d.lobPct * d.instances), 0) / trendData.reduce((sum, d) => sum + d.instances, 0)).toFixed(1) + '%' : '-'}</div>
                   </div>
                 </>
               ) : (
                 <>
                   <div style={modalStyles.statBox}>
                     <div style={modalStyles.statLabel}>Avg wOBA</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + d.woba, 0) / trendData.length).toFixed(3) : '-'}</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + (d.woba * d.instances), 0) / trendData.reduce((sum, d) => sum + d.instances, 0)).toFixed(3) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
                     <div style={modalStyles.statLabel}>Avg OPS+</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + d.opsPlus, 0) / trendData.length) : '-'}</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + (d.opsPlus * d.instances), 0) / trendData.reduce((sum, d) => sum + d.instances, 0)) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
                     <div style={modalStyles.statLabel}>Avg wRC+</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + d.wrcPlus, 0) / trendData.length) : '-'}</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + (d.wrcPlus * d.instances), 0) / trendData.reduce((sum, d) => sum + d.instances, 0)) : '-'}</div>
                   </div>
                 </>
               )}
