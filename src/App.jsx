@@ -2754,26 +2754,24 @@ function ReviewQueuePage() {
         };
         
         if (playerMap.has(key)) {
-          // COMPOUND stats - add counting stats together, recalculate rate stats
+          // Merge stats: cumulative for some, simple average for others
           const existing = playerMap.get(key);
+          const entryCount = (existing._entryCount || 1) + 1;
           
           if (upload.file_type === 'batting') {
-            // Add counting stats
+            // Cumulative stats: G, GS, PA, AB, IP, BF, WAR, wRAA, BsR
             const compounded = {
               ...existing,
+              _entryCount: entryCount,
+              // Cumulative - add together
               g: existing.g + normalized.g,
               gs: existing.gs + normalized.gs,
               pa: existing.pa + normalized.pa,
               ab: existing.ab + normalized.ab,
-              h: existing.h + normalized.h,
-              doubles: existing.doubles + normalized.doubles,
-              triples: existing.triples + normalized.triples,
-              hr: existing.hr + normalized.hr,
-              so: existing.so + normalized.so,
-              gidp: existing.gidp + normalized.gidp,
-              bb: (existing.bb || 0) + (normalized.bb || 0),
-              sb: (existing.sb || 0) + (normalized.sb || 0),
-              cs: (existing.cs || 0) + (normalized.cs || 0),
+              bf: (existing.bf || 0) + (normalized.bf || 0),
+              war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
+              wraa: ((parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0))).toFixed(1),
+              bsr: ((parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0))).toFixed(1),
               // Keep latest OVR, VAR, POS
               ovr: normalized.ovr,
               vari: normalized.vari,
@@ -2781,40 +2779,28 @@ function ReviewQueuePage() {
               bats: normalized.bats || existing.bats
             };
             
-            // Recalculate rate stats
-            const ab = compounded.ab || 1;
-            const pa = compounded.pa || 1;
-            const h = compounded.h;
-            const bb = compounded.bb || 0;
-            const doubles = compounded.doubles;
-            const triples = compounded.triples;
-            const hr = compounded.hr;
-            const singles = h - doubles - triples - hr;
-            const tb = singles + (doubles * 2) + (triples * 3) + (hr * 4);
-            const hbp = Math.round(pa - ab - bb); // Estimate HBP
-            
-            compounded.avg = ab > 0 ? (h / ab).toFixed(3) : '.000';
-            compounded.obp = pa > 0 ? ((h + bb + Math.max(0, hbp)) / pa).toFixed(3) : '.000';
-            compounded.slg = ab > 0 ? (tb / ab).toFixed(3) : '.000';
-            compounded.ops = (parseFloat(compounded.obp) + parseFloat(compounded.slg)).toFixed(3);
-            compounded.bbPct = pa > 0 ? (bb / pa * 100).toFixed(1) : '0.0';
-            compounded.sbPct = (compounded.sb + compounded.cs) > 0 ? (compounded.sb / (compounded.sb + compounded.cs) * 100).toFixed(1) : '0.0';
-            
-            // These advanced stats are harder to recalculate - use weighted average based on PA
-            const oldPa = existing.pa || 1;
-            const newPa = normalized.pa || 1;
-            const totalPa = compounded.pa || 1;
-            compounded.woba = ((parseFloat(existing.woba || 0) * oldPa + parseFloat(normalized.woba || 0) * newPa) / totalPa).toFixed(3);
-            compounded.babip = ((parseFloat(existing.babip || 0) * oldPa + parseFloat(normalized.babip || 0) * newPa) / totalPa).toFixed(3);
-            compounded.opsPlus = Math.round((parseFloat(existing.opsPlus || 0) * oldPa + parseFloat(normalized.opsPlus || 0) * newPa) / totalPa);
-            compounded.wrcPlus = Math.round((parseFloat(existing.wrcPlus || 0) * oldPa + parseFloat(normalized.wrcPlus || 0) * newPa) / totalPa);
-            compounded.wraa = ((parseFloat(existing.wraa || 0) + parseFloat(normalized.wraa || 0))).toFixed(1);
-            compounded.war = ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1);
-            compounded.bsr = ((parseFloat(existing.bsr || 0) + parseFloat(normalized.bsr || 0))).toFixed(1);
+            // Everything else - simple average
+            const oldCount = existing._entryCount || 1;
+            compounded.h = Math.round(((existing.h * oldCount) + normalized.h) / entryCount);
+            compounded.doubles = Math.round(((existing.doubles * oldCount) + normalized.doubles) / entryCount);
+            compounded.triples = Math.round(((existing.triples * oldCount) + normalized.triples) / entryCount);
+            compounded.hr = Math.round(((existing.hr * oldCount) + normalized.hr) / entryCount);
+            compounded.so = Math.round(((existing.so * oldCount) + normalized.so) / entryCount);
+            compounded.gidp = Math.round(((existing.gidp * oldCount) + normalized.gidp) / entryCount);
+            compounded.avg = (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3);
+            compounded.obp = (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3);
+            compounded.slg = (((parseFloat(existing.slg || 0) * oldCount) + parseFloat(normalized.slg || 0)) / entryCount).toFixed(3);
+            compounded.ops = (((parseFloat(existing.ops || 0) * oldCount) + parseFloat(normalized.ops || 0)) / entryCount).toFixed(3);
+            compounded.woba = (((parseFloat(existing.woba || 0) * oldCount) + parseFloat(normalized.woba || 0)) / entryCount).toFixed(3);
+            compounded.babip = (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3);
+            compounded.opsPlus = Math.round(((parseFloat(existing.opsPlus || 0) * oldCount) + parseFloat(normalized.opsPlus || 0)) / entryCount);
+            compounded.wrcPlus = Math.round(((parseFloat(existing.wrcPlus || 0) * oldCount) + parseFloat(normalized.wrcPlus || 0)) / entryCount);
+            compounded.bbPct = (((parseFloat(existing.bbPct || 0) * oldCount) + parseFloat(normalized.bbPct || 0)) / entryCount).toFixed(1);
+            compounded.sbPct = (((parseFloat(existing.sbPct || 0) * oldCount) + parseFloat(normalized.sbPct || 0)) / entryCount).toFixed(1);
             
             playerMap.set(key, compounded);
           } else {
-            // Pitching - add counting stats, weighted average for rate stats
+            // Pitching
             const parseIP = (ip) => {
               const str = String(ip);
               if (str.includes('.')) {
@@ -2831,14 +2817,15 @@ function ReviewQueuePage() {
             
             const oldIP = parseIP(existing.ip);
             const newIP = parseIP(normalized.ip);
-            const totalIP = oldIP + newIP;
             
+            // Cumulative stats: G, GS, PA, AB, IP, BF, WAR, wRAA, BsR
             const compounded = {
               ...existing,
-              // Counting stats - add together
+              _entryCount: entryCount,
+              // Cumulative - add together
               g: existing.g + normalized.g,
               gs: existing.gs + normalized.gs,
-              ip: formatIP(totalIP),
+              ip: formatIP(oldIP + newIP),
               bf: existing.bf + normalized.bf,
               war: ((parseFloat(existing.war || 0) + parseFloat(normalized.war || 0))).toFixed(1),
               // Keep latest OVR, VAR, POS
@@ -2848,30 +2835,29 @@ function ReviewQueuePage() {
               throws: normalized.throws || existing.throws
             };
             
-            // All rate stats use weighted average based on IP
-            const oldWeight = oldIP || 0;
-            const newWeight = newIP || 0;
-            const totalWeight = totalIP || 1;
-            
-            compounded.era = ((parseFloat(existing.era || 0) * oldWeight + parseFloat(normalized.era || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.avg = ((parseFloat(existing.avg || 0) * oldWeight + parseFloat(normalized.avg || 0) * newWeight) / totalWeight).toFixed(3);
-            compounded.obp = ((parseFloat(existing.obp || 0) * oldWeight + parseFloat(normalized.obp || 0) * newWeight) / totalWeight).toFixed(3);
-            compounded.whip = ((parseFloat(existing.whip || 0) * oldWeight + parseFloat(normalized.whip || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.hPer9 = ((parseFloat(existing.hPer9 || 0) * oldWeight + parseFloat(normalized.hPer9 || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.bbPer9 = ((parseFloat(existing.bbPer9 || 0) * oldWeight + parseFloat(normalized.bbPer9 || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.kPer9 = ((parseFloat(existing.kPer9 || 0) * oldWeight + parseFloat(normalized.kPer9 || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.hrPer9 = ((parseFloat(existing.hrPer9 || 0) * oldWeight + parseFloat(normalized.hrPer9 || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.braPer9 = ((parseFloat(existing.braPer9 || 0) * oldWeight + parseFloat(normalized.braPer9 || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.babip = ((parseFloat(existing.babip || 0) * oldWeight + parseFloat(normalized.babip || 0) * newWeight) / totalWeight).toFixed(3);
-            compounded.lobPct = ((parseFloat(existing.lobPct || 0) * oldWeight + parseFloat(normalized.lobPct || 0) * newWeight) / totalWeight).toFixed(1);
-            compounded.fip = ((parseFloat(existing.fip || 0) * oldWeight + parseFloat(normalized.fip || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.siera = ((parseFloat(existing.siera || 0) * oldWeight + parseFloat(normalized.siera || 0) * newWeight) / totalWeight).toFixed(2);
-            compounded.eraPlus = Math.round((parseFloat(existing.eraPlus || 0) * oldWeight + parseFloat(normalized.eraPlus || 0) * newWeight) / totalWeight);
-            compounded.fipMinus = Math.round((parseFloat(existing.fipMinus || 0) * oldWeight + parseFloat(normalized.fipMinus || 0) * newWeight) / totalWeight);
+            // Everything else - simple average
+            const oldCount = existing._entryCount || 1;
+            compounded.era = (((parseFloat(existing.era || 0) * oldCount) + parseFloat(normalized.era || 0)) / entryCount).toFixed(2);
+            compounded.avg = (((parseFloat(existing.avg || 0) * oldCount) + parseFloat(normalized.avg || 0)) / entryCount).toFixed(3);
+            compounded.obp = (((parseFloat(existing.obp || 0) * oldCount) + parseFloat(normalized.obp || 0)) / entryCount).toFixed(3);
+            compounded.babip = (((parseFloat(existing.babip || 0) * oldCount) + parseFloat(normalized.babip || 0)) / entryCount).toFixed(3);
+            compounded.whip = (((parseFloat(existing.whip || 0) * oldCount) + parseFloat(normalized.whip || 0)) / entryCount).toFixed(2);
+            compounded.braPer9 = (((parseFloat(existing.braPer9 || 0) * oldCount) + parseFloat(normalized.braPer9 || 0)) / entryCount).toFixed(2);
+            compounded.hrPer9 = (((parseFloat(existing.hrPer9 || 0) * oldCount) + parseFloat(normalized.hrPer9 || 0)) / entryCount).toFixed(2);
+            compounded.hPer9 = (((parseFloat(existing.hPer9 || 0) * oldCount) + parseFloat(normalized.hPer9 || 0)) / entryCount).toFixed(2);
+            compounded.bbPer9 = (((parseFloat(existing.bbPer9 || 0) * oldCount) + parseFloat(normalized.bbPer9 || 0)) / entryCount).toFixed(2);
+            compounded.kPer9 = (((parseFloat(existing.kPer9 || 0) * oldCount) + parseFloat(normalized.kPer9 || 0)) / entryCount).toFixed(2);
+            compounded.lobPct = (((parseFloat(existing.lobPct || 0) * oldCount) + parseFloat(normalized.lobPct || 0)) / entryCount).toFixed(1);
+            compounded.eraPlus = Math.round(((parseFloat(existing.eraPlus || 0) * oldCount) + parseFloat(normalized.eraPlus || 0)) / entryCount);
+            compounded.fip = (((parseFloat(existing.fip || 0) * oldCount) + parseFloat(normalized.fip || 0)) / entryCount).toFixed(2);
+            compounded.fipMinus = Math.round(((parseFloat(existing.fipMinus || 0) * oldCount) + parseFloat(normalized.fipMinus || 0)) / entryCount);
+            compounded.siera = (((parseFloat(existing.siera || 0) * oldCount) + parseFloat(normalized.siera || 0)) / entryCount).toFixed(2);
             
             playerMap.set(key, compounded);
           }
         } else {
+          // First entry for this player - add entry count
+          normalized._entryCount = 1;
           playerMap.set(key, normalized);
         }
       });
