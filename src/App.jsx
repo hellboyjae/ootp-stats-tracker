@@ -178,7 +178,7 @@ function ThemeProvider({ children }) {
     return localStorage.getItem('teamTheme') || 'default';
   });
   
-  // Inject keyframes for news banner animation
+  // Inject keyframes for news banner animation and select dropdown styles
   useEffect(() => {
     const styleId = 'news-banner-keyframes';
     if (!document.getElementById(styleId)) {
@@ -188,6 +188,10 @@ function ThemeProvider({ children }) {
         @keyframes scrollBanner {
           0% { transform: translateX(100vw); }
           100% { transform: translateX(-100%); }
+        }
+        select option, select optgroup {
+          background: #1a1a2e;
+          color: #e2e8f0;
         }
       `;
       document.head.appendChild(style);
@@ -3214,7 +3218,7 @@ function getStyles(t) {
     navLink: { padding: '8px 16px', color: t.teamPrimary ? 'rgba(255,255,255,0.8)' : t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 500, fontSize: 13 },
     navLinkActive: { background: t.teamSecondary || t.accent, color: '#fff' },
     themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
-    teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none' },
+    teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none', colorScheme: 'dark' },
     themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, background: t.teamPrimary ? 'rgba(255,255,255,0.1)' : 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.teamPrimary ? '#ffffff' : t.textMuted },
     main: { display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
     sidebar: { width: 240, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
