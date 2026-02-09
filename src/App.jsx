@@ -1523,10 +1523,15 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
             // Average all instances for this upload
             const avgSiera = allMatches.reduce((sum, p) => sum + (parseFloat(p.SIERA || p.siera) || 0), 0) / allMatches.length;
             const avgFipMinus = allMatches.reduce((sum, p) => sum + (parseFloat(p['FIP-'] || p.fipMinus) || 0), 0) / allMatches.length;
+            const avgLobPct = allMatches.reduce((sum, p) => {
+              const val = p['LOB%'] || p.lobPct || p.LOB || '0';
+              return sum + (parseFloat(String(val).replace('%', '')) || 0);
+            }, 0) / allMatches.length;
             dataPoints.push({
               upload: `#${index + 1}`,
               siera: Math.round(avgSiera * 100) / 100,
               fipMinus: Math.round(avgFipMinus),
+              lobPct: Math.round(avgLobPct * 10) / 10,
               instances: allMatches.length,
             });
           } else {
@@ -1536,10 +1541,12 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
               return sum + (parseFloat(String(val).replace('.', '0.')) || 0);
             }, 0) / allMatches.length;
             const avgOpsPlus = allMatches.reduce((sum, p) => sum + (parseFloat(p['OPS+'] || p.opsPlus) || 0), 0) / allMatches.length;
+            const avgWrcPlus = allMatches.reduce((sum, p) => sum + (parseFloat(p['wRC+'] || p.wrcPlus) || 0), 0) / allMatches.length;
             dataPoints.push({
               upload: `#${index + 1}`,
               woba: Math.round(avgWoba * 1000) / 1000,
               opsPlus: Math.round(avgOpsPlus),
+              wrcPlus: Math.round(avgWrcPlus),
               instances: allMatches.length,
             });
           }
@@ -1801,31 +1808,31 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
               {playerType === 'pitching' ? (
                 <>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Latest SIERA</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].siera?.toFixed(2) : '-'}</div>
+                    <div style={modalStyles.statLabel}>Avg SIERA</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + d.siera, 0) / trendData.length).toFixed(2) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Latest FIP-</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].fipMinus : '-'}</div>
+                    <div style={modalStyles.statLabel}>Avg FIP-</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + d.fipMinus, 0) / trendData.length) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Total WAR</div>
-                    <div style={modalStyles.statValue}>{player.war}</div>
+                    <div style={modalStyles.statLabel}>Avg LOB%</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + d.lobPct, 0) / trendData.length).toFixed(1) + '%' : '-'}</div>
                   </div>
                 </>
               ) : (
                 <>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Latest wOBA</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].woba?.toFixed(3) : '-'}</div>
+                    <div style={modalStyles.statLabel}>Avg wOBA</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? (trendData.reduce((sum, d) => sum + d.woba, 0) / trendData.length).toFixed(3) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Latest OPS+</div>
-                    <div style={modalStyles.statValue}>{trendData.length > 0 ? trendData[trendData.length - 1].opsPlus : '-'}</div>
+                    <div style={modalStyles.statLabel}>Avg OPS+</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + d.opsPlus, 0) / trendData.length) : '-'}</div>
                   </div>
                   <div style={modalStyles.statBox}>
-                    <div style={modalStyles.statLabel}>Total WAR</div>
-                    <div style={modalStyles.statValue}>{player.war}</div>
+                    <div style={modalStyles.statLabel}>Avg wRC+</div>
+                    <div style={modalStyles.statValue}>{trendData.length > 0 ? Math.round(trendData.reduce((sum, d) => sum + d.wrcPlus, 0) / trendData.length) : '-'}</div>
                   </div>
                 </>
               )}
