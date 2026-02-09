@@ -1689,7 +1689,7 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
           <>
             <div style={modalStyles.chartContainer}>
               <div style={modalStyles.chartTitle}>
-                Performance Over {trendData.length} Uploads
+                Showing {trendData.length} Upload{trendData.length !== 1 ? 's' : ''}
               </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -1724,20 +1724,20 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
                     <>
                       <Line 
                         yAxisId="left"
-                        type="monotone" 
+                        type="linear" 
                         dataKey="siera" 
                         stroke={primaryColor}
                         strokeWidth={2}
-                        dot={{ fill: primaryColor, strokeWidth: 2 }}
+                        dot={{ fill: primaryColor, strokeWidth: 2, r: 4 }}
                         name="SIERA"
                       />
                       <Line 
                         yAxisId="right"
-                        type="monotone" 
+                        type="linear" 
                         dataKey="fipMinus" 
                         stroke={secondaryColor}
                         strokeWidth={2}
-                        dot={{ fill: secondaryColor, strokeWidth: 2 }}
+                        dot={{ fill: secondaryColor, strokeWidth: 2, r: 4 }}
                         name="FIP-"
                       />
                     </>
@@ -1745,20 +1745,20 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
                     <>
                       <Line 
                         yAxisId="left"
-                        type="monotone" 
+                        type="linear" 
                         dataKey="woba" 
                         stroke={primaryColor}
                         strokeWidth={2}
-                        dot={{ fill: primaryColor, strokeWidth: 2 }}
+                        dot={{ fill: primaryColor, strokeWidth: 2, r: 4 }}
                         name="wOBA"
                       />
                       <Line 
                         yAxisId="right"
-                        type="monotone" 
+                        type="linear" 
                         dataKey="opsPlus" 
                         stroke={secondaryColor}
                         strokeWidth={2}
-                        dot={{ fill: secondaryColor, strokeWidth: 2 }}
+                        dot={{ fill: secondaryColor, strokeWidth: 2, r: 4 }}
                         name="OPS+"
                       />
                     </>
