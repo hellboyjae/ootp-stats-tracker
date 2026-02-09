@@ -491,7 +491,8 @@ function StatsPage() {
         pitching: t.pitching || [], 
         uploadedHashes: t.uploaded_hashes || [],
         eventType: t.event_type || 'daily',
-        uploadedDates: t.uploaded_dates || []
+        uploadedDates: t.uploaded_dates || [],
+        rotatingFormat: t.rotating_format || false
       }));
       setTournaments(parsed);
       const lastSelectedId = localStorage.getItem('selectedTournamentId');
@@ -998,6 +999,28 @@ function StatsPage() {
                     {selectedTournament.eventType === 'weekly' ? 'Weekly event - one upload covers entire week' : 'Daily event - one upload per day'}
                     {hasAccess('master') && <span style={styles.adminHint}> • Click dates to toggle status</span>}
                   </p>
+                  {hasAccess('master') && (
+                    <label style={{ 
+                      display: 'flex', alignItems: 'center', gap: 8, 
+                      marginBottom: 12, padding: '8px 12px', 
+                      background: selectedTournament.rotatingFormat ? theme.warning + '22' : theme.bgSecondary,
+                      borderRadius: 6, cursor: 'pointer', fontSize: 12, color: theme.textPrimary
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedTournament.rotatingFormat || false}
+                        onChange={async (e) => {
+                          const newValue = e.target.checked;
+                          const updated = { ...selectedTournament, rotatingFormat: newValue };
+                          setSelectedTournament(updated);
+                          setTournaments(tournaments.map(t => t.id === selectedTournament.id ? updated : t));
+                          await supabase.from('tournaments').update({ rotating_format: newValue }).eq('id', selectedTournament.id);
+                          showNotif(newValue ? 'Marked as rotating format' : 'Removed rotating format');
+                        }}
+                      />
+                      🔄 Rotating Format {selectedTournament.rotatingFormat && '(enabled)'}
+                    </label>
+                  )}
                   <div style={styles.calendarContainer}>
                     <div style={styles.calendarHeader}>
                       <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
@@ -1070,6 +1093,28 @@ function StatsPage() {
               </div>
             </div>
             <div style={styles.controlBar}>
+              {selectedTournament.rotatingFormat && (
+                <div 
+                  onClick={() => alert('🔄 Rotating Format\n\nThis tournament/draft rotates its park and era runtime settings frequently.\n\nThis means player performance may vary significantly between uploads due to changing environmental factors, not just player skill.\n\nComparing stats across different dates should account for these runtime changes.')}
+                  style={{
+                    background: theme.warning + '22',
+                    border: `1px solid ${theme.warning}`,
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    color: theme.warning,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    marginRight: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}
+                  title="Click for more info"
+                >
+                  🔄 Rotating Format
+                </div>
+              )}
               <div style={styles.controlGroup}>
                 <input type="text" placeholder="Search player..." value={filters.search} onChange={(e) => setFilters(f => ({...f, search: e.target.value}))} style={styles.searchInput} />
                 <select value={filters.position} onChange={(e) => setFilters(f => ({...f, position: e.target.value}))} style={styles.filterSelect}>
@@ -3680,6 +3725,7 @@ function ReviewQueuePage() {
   const [newEventName, setNewEventName] = useState('');
   const [newEventType, setNewEventType] = useState('daily');
   const [newEventCategory, setNewEventCategory] = useState('tournaments');
+  const [newEventRotating, setNewEventRotating] = useState(false);
 
   useEffect(() => {
     if (hasAccess('master')) {
@@ -4017,7 +4063,8 @@ function ReviewQueuePage() {
         pitching: [],
         uploaded_hashes: [],
         event_type: newEventType,
-        uploaded_dates: []
+        uploaded_dates: [],
+        rotating_format: newEventRotating
       };
 
       const { error: createError } = await supabase.from('tournaments').insert(newTournament);
@@ -4030,6 +4077,7 @@ function ReviewQueuePage() {
       setNewEventName('');
       setNewEventType('daily');
       setNewEventCategory('tournaments');
+      setNewEventRotating(false);
     } catch (e) {
       console.error('Create error:', e);
       showNotif('Failed to create event', 'error');
@@ -4182,6 +4230,14 @@ function ReviewQueuePage() {
                                   <option value="tournaments">Tournament</option>
                                   <option value="drafts">Draft</option>
                                 </select>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: theme.textMuted, fontSize: 11, cursor: 'pointer' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={newEventRotating} 
+                                    onChange={(e) => setNewEventRotating(e.target.checked)}
+                                  />
+                                  Rotating
+                                </label>
                                 <button style={styles.approveBtn} onClick={() => handleCreateAndApprove(upload)}>Create & Approve</button>
                                 <button style={styles.cancelSmallBtn} onClick={() => setCreatingNewFor(null)}>Cancel</button>
                               </div>
