@@ -4685,26 +4685,24 @@ function DraftAssistantPage() {
   const [draftSize, setDraftSize] = useState(26);
   const [hasDH, setHasDH] = useState(true);
   const [cardPool, setCardPool] = useState({
-    perfect: true,   // 95+
-    diamond: true,   // 90-94
-    gold: true,      // 85-89
-    silver: true,    // 80-84
-    bronze: true,    // 75-79
-    common: false    // <75
+    perfect: true,   // 100+
+    diamond: true,   // 90-99
+    gold: true,      // 80-89
+    silver: true,    // 70-79
+    bronze: true,    // 60-69
+    iron: false      // <60
   });
   
   // Draft state
   const [draftStarted, setDraftStarted] = useState(false);
   const [tournamentData, setTournamentData] = useState(null);
   const [roster, setRoster] = useState({});
-  const [takenPlayers, setTakenPlayers] = useState(new Set()); // Players taken by others
   const [activePositionTab, setActivePositionTab] = useState('C');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [notification, setNotification] = useState(null);
   const [showPlayerModal, setShowPlayerModal] = useState(null); // Player to show in modal
   const [editingSlot, setEditingSlot] = useState(null); // For position switching
-  const [showLowConfidence, setShowLowConfidence] = useState(false); // Hide low sample players by default
   
   // Position definitions
   const battingPositions = hasDH ? ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'] : ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'];
@@ -4731,21 +4729,21 @@ function DraftAssistantPage() {
   };
 
   const getCardTier = (ovr) => {
-    if (ovr >= 95) return 'perfect';
+    if (ovr >= 100) return 'perfect';
     if (ovr >= 90) return 'diamond';
-    if (ovr >= 85) return 'gold';
-    if (ovr >= 80) return 'silver';
-    if (ovr >= 75) return 'bronze';
-    return 'common';
+    if (ovr >= 80) return 'gold';
+    if (ovr >= 70) return 'silver';
+    if (ovr >= 60) return 'bronze';
+    return 'iron';
   };
 
   const getCardTierLabel = (ovr) => {
-    if (ovr >= 95) return { label: '★', color: '#a855f7' };      // Purple
-    if (ovr >= 90) return { label: '◆', color: '#38bdf8' };      // Diamond blue
-    if (ovr >= 85) return { label: '●', color: '#fbbf24' };      // Gold
-    if (ovr >= 80) return { label: '●', color: '#94a3b8' };      // Silver
-    if (ovr >= 75) return { label: '●', color: '#cd7f32' };      // Bronze
-    return { label: '○', color: '#64748b' };                      // Common
+    if (ovr >= 100) return { label: '★', color: '#a855f7' };     // Purple - Perfect
+    if (ovr >= 90) return { label: '◆', color: '#32EBFC' };      // Cyan - Diamond
+    if (ovr >= 80) return { label: '●', color: '#FFE61F' };      // Yellow - Gold
+    if (ovr >= 70) return { label: '●', color: '#E0E0E0' };      // Gray - Silver
+    if (ovr >= 60) return { label: '●', color: '#664300' };      // Brown - Bronze
+    return { label: '○', color: '#4a4a4a' };                      // Dark gray - Iron
   };
 
   // === HEURISTICS: Sample Size Confidence ===
@@ -4879,15 +4877,13 @@ function DraftAssistantPage() {
 
     setTournamentData(data);
     setRoster({});
-    setTakenPlayers(new Set());
     setDraftStarted(true);
     setActivePositionTab('C');
   };
 
   const resetDraft = () => {
-    if (!confirm('Reset draft? This will clear your roster and all taken players.')) return;
+    if (!confirm('Reset draft? This will clear your roster.')) return;
     setRoster({});
-    setTakenPlayers(new Set());
   };
 
   const exitDraft = () => {
@@ -4895,7 +4891,6 @@ function DraftAssistantPage() {
     setDraftStarted(false);
     setTournamentData(null);
     setRoster({});
-    setTakenPlayers(new Set());
   };
 
   // Get available players for a position
@@ -4907,9 +4902,9 @@ function DraftAssistantPage() {
     if (!data) return [];
 
     // Normalize position for matching
+    // In Perfect Draft, SP's are used for all pitching roles (RP/CL too)
     let posMatch = position;
-    if (position.startsWith('SP')) posMatch = 'SP';
-    else if (position.startsWith('RP')) posMatch = 'RP';
+    if (position.startsWith('SP') || position.startsWith('RP') || position === 'CL') posMatch = 'SP';
     else if (position === 'BENCH' || position.startsWith('BENCH')) posMatch = null; // All positions for bench
 
     // Get roster player keys
@@ -4920,24 +4915,24 @@ function DraftAssistantPage() {
       const tier = getCardTier(p.ovr);
       if (!cardPool[tier]) return false;
       
-      // Filter by position (null = any for bench)
+      // Filter by position (null = any for bench, SP matches all pitching)
       if (posMatch && p.pos?.toUpperCase() !== posMatch) return false;
       
-      // Filter out already taken or on roster
+      // Filter out already on roster
       const key = `${p.name}|${p.ovr}`;
-      if (takenPlayers.has(key) || rosterPlayerKeys.has(key)) return false;
+      if (rosterPlayerKeys.has(key)) return false;
 
-      // Filter out low confidence players unless enabled
-      if (!showLowConfidence) {
-        const confidence = getSampleConfidence(p, isPitching);
-        if (confidence.level === 'low') return false;
-      }
+      // Filter out low confidence players (always hidden in Perfect Draft)
+      const confidence = getSampleConfidence(p, isPitching);
+      if (confidence.level === 'low') return false;
       
       return true;
     });
 
-    // Calculate tiers and add confidence/score
+    // Calculate tiers on ALL eligible players first (before limiting)
     const tiered = calculateTiers(filtered, isPitching);
+    
+    // Add confidence/score
     const withScores = tiered.map(p => ({
       ...p,
       _confidence: getSampleConfidence(p, isPitching),
@@ -4956,23 +4951,33 @@ function DraftAssistantPage() {
     return getAvailablePlayers(position, 999);
   };
 
-  // Check position scarcity
+  // Check position scarcity (SP covers all pitching roles in Perfect Draft)
   const getScarcityAlert = () => {
     const alerts = [];
-    const positions = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'SP', 'RP', 'CL'];
+    // Only check batting positions + SP (SP's are used for RP/CL in Perfect Draft)
+    const positions = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'SP'];
     
     for (const pos of positions) {
       // Skip if already filled
       if (pos === 'SP' && ['SP1','SP2','SP3','SP4','SP5'].every(s => roster[s])) continue;
-      if (pos === 'RP' && ['RP1','RP2','RP3','RP4'].every(s => roster[s])) continue;
-      if (!pos.startsWith('SP') && !pos.startsWith('RP') && roster[pos]) continue;
+      if (!pos.startsWith('SP') && roster[pos]) continue;
 
       const available = getAllAvailableForPosition(pos);
-      const eliteCount = available.filter(p => parseFloat(p.war || 0) >= 2).length;
+      // Elite = top tier performers with good sample size
+      const eliteCount = available.filter(p => {
+        const isPitch = pos === 'SP';
+        if (isPitch) {
+          const siera = parseFloat(p.siera) || parseFloat(p.era) || 5;
+          return siera <= 3.5;
+        } else {
+          const woba = parseFloat(p.woba) || 0;
+          return woba >= 0.350;
+        }
+      }).length;
       
       if (eliteCount <= 3 && eliteCount > 0) {
         alerts.push({ pos, count: eliteCount, type: 'warning' });
-      } else if (eliteCount === 0) {
+      } else if (eliteCount === 0 && available.length > 0) {
         alerts.push({ pos, count: 0, type: 'danger' });
       }
     }
@@ -4994,13 +4999,6 @@ function DraftAssistantPage() {
       delete newRoster[slot];
       return newRoster;
     });
-  };
-
-  // Mark player as taken by another drafter
-  const markAsTaken = (player) => {
-    const key = `${player.name}|${player.ovr}`;
-    setTakenPlayers(prev => new Set([...prev, key]));
-    showNotif(`${player.name} marked as taken`);
   };
 
   // Switch player position
@@ -5030,20 +5028,18 @@ function DraftAssistantPage() {
     
     const batting = (tournamentData.batting || []).filter(p => {
       if (!p.name.toLowerCase().includes(query)) return false;
-      if (takenPlayers.has(`${p.name}|${p.ovr}`)) return false;
       if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
-      // Filter out low confidence unless enabled
-      if (!showLowConfidence && getSampleConfidence(p, false).level === 'low') return false;
+      // Filter out low confidence
+      if (getSampleConfidence(p, false).level === 'low') return false;
       return true;
     });
     const pitching = (tournamentData.pitching || []).filter(p => {
       if (!p.name.toLowerCase().includes(query)) return false;
-      if (takenPlayers.has(`${p.name}|${p.ovr}`)) return false;
       if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
-      // Filter out low confidence unless enabled
-      if (!showLowConfidence && getSampleConfidence(p, true).level === 'low') return false;
+      // Filter out low confidence
+      if (getSampleConfidence(p, true).level === 'low') return false;
       return true;
     });
     
@@ -5051,7 +5047,7 @@ function DraftAssistantPage() {
       ...batting.map(p => ({ ...p, type: 'batting', _confidence: getSampleConfidence(p, false) })),
       ...pitching.map(p => ({ ...p, type: 'pitching', _confidence: getSampleConfidence(p, true) }))
     ].slice(0, 10));
-  }, [searchQuery, tournamentData, takenPlayers, roster, cardPool, showLowConfidence]);
+  }, [searchQuery, tournamentData, roster, cardPool]);
 
   // Get empty slots for a player type
   const getEmptySlots = (playerType) => {
@@ -5168,12 +5164,12 @@ function DraftAssistantPage() {
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {[
-                  { key: 'perfect', label: 'Perfect (95+)', color: '#a855f7' },
-                  { key: 'diamond', label: 'Diamond (90-94)', color: '#38bdf8' },
-                  { key: 'gold', label: 'Gold (85-89)', color: '#fbbf24' },
-                  { key: 'silver', label: 'Silver (80-84)', color: '#94a3b8' },
-                  { key: 'bronze', label: 'Bronze (75-79)', color: '#cd7f32' },
-                  { key: 'common', label: 'Common (<75)', color: '#64748b' },
+                  { key: 'perfect', label: 'Perfect (100+)', color: '#a855f7' },
+                  { key: 'diamond', label: 'Diamond (90-99)', color: '#32EBFC' },
+                  { key: 'gold', label: 'Gold (80-89)', color: '#FFE61F' },
+                  { key: 'silver', label: 'Silver (70-79)', color: '#E0E0E0' },
+                  { key: 'bronze', label: 'Bronze (60-69)', color: '#664300' },
+                  { key: 'iron', label: 'Iron (<60)', color: '#4a4a4a' },
                 ].map(tier => (
                   <label 
                     key={tier.key}
@@ -5260,11 +5256,11 @@ function DraftAssistantPage() {
           <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
           {[
             { key: 'perfect', label: 'Perf', color: '#a855f7' },
-            { key: 'diamond', label: 'Dia', color: '#38bdf8' },
-            { key: 'gold', label: 'Gold', color: '#fbbf24' },
-            { key: 'silver', label: 'Silv', color: '#94a3b8' },
-            { key: 'bronze', label: 'Brnz', color: '#cd7f32' },
-            { key: 'common', label: 'Com', color: '#64748b' },
+            { key: 'diamond', label: 'Dia', color: '#32EBFC' },
+            { key: 'gold', label: 'Gold', color: '#FFE61F' },
+            { key: 'silver', label: 'Silv', color: '#E0E0E0' },
+            { key: 'bronze', label: 'Brnz', color: '#664300' },
+            { key: 'iron', label: 'Iron', color: '#4a4a4a' },
           ].map(tier => (
             <button 
               key={tier.key}
@@ -5272,7 +5268,7 @@ function DraftAssistantPage() {
               style={{
                 padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                 background: cardPool[tier.key] ? tier.color : 'transparent',
-                color: cardPool[tier.key] ? '#fff' : tier.color,
+                color: cardPool[tier.key] ? (tier.key === 'gold' || tier.key === 'silver' ? '#000' : '#fff') : tier.color,
                 border: `1px solid ${tier.color}`,
                 cursor: 'pointer', opacity: cardPool[tier.key] ? 1 : 0.5
               }}
@@ -5287,33 +5283,18 @@ function DraftAssistantPage() {
           display: 'flex', gap: 16, marginBottom: 16, padding: '8px 12px', 
           background: theme.panelBg, borderRadius: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center'
         }}>
-          <span style={{ color: theme.textMuted }}>Sample Confidence:</span>
-          <span><span style={{ color: '#22c55e' }}>✓</span> High (trusted)</span>
+          <span style={{ color: theme.textMuted }}>Confidence:</span>
+          <span><span style={{ color: '#22c55e' }}>✓</span> High</span>
           <span><span style={{ color: '#86efac' }}>✓</span> Good</span>
-          <span><span style={{ color: '#fbbf24' }}>~</span> Signal only</span>
-          <span><span style={{ color: '#f87171' }}>⚠</span> Low sample</span>
+          <span><span style={{ color: '#fbbf24' }}>~</span> Signal</span>
           <span style={{ color: theme.textMuted }}>|</span>
           <span style={{ color: theme.textMuted }}>Tier:</span>
           <span><span style={{ color: '#22c55e' }}>T1</span> Elite</span>
           <span><span style={{ color: '#fbbf24' }}>T2</span> Good</span>
-          <span><span style={{ color: theme.textMuted }}>T3+</span> Below</span>
-          <span style={{ color: theme.textMuted }}>|</span>
-          <label style={{ 
-            display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-            padding: '2px 8px', borderRadius: 4,
-            background: showLowConfidence ? theme.warning + '33' : 'transparent',
-            border: `1px solid ${showLowConfidence ? theme.warning : theme.border}`
-          }}>
-            <input 
-              type="checkbox" 
-              checked={showLowConfidence} 
-              onChange={(e) => setShowLowConfidence(e.target.checked)}
-              style={{ margin: 0 }}
-            />
-            <span style={{ color: showLowConfidence ? theme.warning : theme.textMuted }}>
-              Show Low Confidence
-            </span>
-          </label>
+          <span><span style={{ color: theme.textMuted }}>T3+</span> Below gap</span>
+          <span style={{ color: theme.textMuted, marginLeft: 'auto', fontSize: 10 }}>
+            Low sample players hidden • SP's shown for all pitching slots
+          </span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
@@ -5432,6 +5413,7 @@ function DraftAssistantPage() {
                 }}>
                   {searchResults.map((p, i) => {
                     const tier = getCardTierLabel(p.ovr);
+                    const isPitch = p.type === 'pitching';
                     return (
                       <div key={i} style={{ 
                         display: 'flex', alignItems: 'center', gap: 8, padding: 10,
@@ -5443,10 +5425,12 @@ function DraftAssistantPage() {
                         <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
                         <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
                         <span style={{ color: theme.textMuted, fontSize: 12 }}>{p.pos}</span>
-                        <span style={{ color: theme.textMuted, fontSize: 12 }}>
-                          {p.type === 'batting' ? `${p.wrcPlus || '—'} wRC+` : `${p.era || '—'} ERA`}
+                        <span style={{ color: theme.textSecondary, fontSize: 11 }}>
+                          {isPitch 
+                            ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
+                            : `${p.woba || '—'} wOBA · ${p.pa || p.ab || '—'} PA`
+                          }
                         </span>
-                        <span style={{ color: theme.accent, fontSize: 12 }}>{p.war} WAR</span>
                       </div>
                     );
                   })}
@@ -5536,16 +5520,10 @@ function DraftAssistantPage() {
                     </div>
                     
                     {/* Actions */}
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button 
-                        onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
-                        style={{ padding: '6px 10px', borderRadius: 4, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11 }}
-                      >Draft</button>
-                      <button 
-                        onClick={() => markAsTaken(p)}
-                        style={{ padding: '6px 10px', borderRadius: 4, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 11 }}
-                      >Taken</button>
-                    </div>
+                    <button 
+                      onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
+                      style={{ padding: '6px 12px', borderRadius: 4, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11 }}
+                    >View</button>
                   </div>
                 );
               })}
@@ -5649,11 +5627,6 @@ function DraftAssistantPage() {
                   ))}
                 </div>
               </div>
-
-              <button 
-                onClick={() => { markAsTaken(showPlayerModal); setShowPlayerModal(null); }}
-                style={{ width: '100%', padding: 10, borderRadius: 6, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer' }}
-              >Mark as Taken (by opponent)</button>
             </div>
           </div>
         )}
