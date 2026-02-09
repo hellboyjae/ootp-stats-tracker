@@ -1883,6 +1883,9 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
                 Showing {trendData.length} Upload{trendData.length !== 1 ? 's' : ''} 
                 <span style={{fontSize: 11, color: theme.textDim, marginLeft: 8}}>(number in parentheses = draft instances averaged)</span>
               </div>
+              <div style={{fontSize: 10, color: theme.textMuted, marginBottom: 8, fontStyle: 'italic'}}>
+                Note: Graph only shows uploads tracked after Feb 9th, 2026
+              </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={trendData.map((d, i) => ({...d, label: `Upl. ${i + 1} (${d.instances})`}))} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
