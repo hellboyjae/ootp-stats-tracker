@@ -1471,7 +1471,7 @@ function SubmitDataPage() {
   }, []);
 
   const loadTournaments = async () => {
-    const { data } = await supabase.from('tournaments').select('id, name, category').order('name');
+    const { data } = await supabase.from('tournaments').select('id, name, category, uploaded_dates, event_type').order('name');
     setTournaments(data || []);
   };
 
@@ -1525,20 +1525,84 @@ function SubmitDataPage() {
     return days;
   };
 
-  const handlePitchingFileChange = (e) => {
+  // Get the selected tournament's data
+  const getSelectedTournament = () => {
+    if (!selectedTournamentId) return null;
+    return tournaments.find(t => t.id === selectedTournamentId);
+  };
+
+  // Check if a date has data uploaded for the selected tournament
+  const hasDataForDate = (dateStr) => {
+    const tournament = getSelectedTournament();
+    if (!tournament || !tournament.uploaded_dates || tournament.uploaded_dates.length === 0) return false;
+    
+    const eventType = tournament.event_type || 'daily';
+    if (eventType === 'weekly') {
+      const targetDate = new Date(dateStr + 'T12:00:00');
+      const targetWeekStart = new Date(targetDate);
+      targetWeekStart.setDate(targetDate.getDate() - targetDate.getDay());
+      
+      return tournament.uploaded_dates.some(ud => {
+        const uploadDate = new Date(ud + 'T12:00:00');
+        const uploadWeekStart = new Date(uploadDate);
+        uploadWeekStart.setDate(uploadDate.getDate() - uploadDate.getDay());
+        return uploadWeekStart.toDateString() === targetWeekStart.toDateString();
+      });
+    }
+    return tournament.uploaded_dates.includes(dateStr);
+  };
+
+  // Detect file type from CSV content
+  const detectFileType = async (file) => {
+    const content = await file.text();
+    const parsed = Papa.parse(content, { header: true, skipEmptyLines: true });
+    const headers = parsed.meta.fields || [];
+    
+    const battingHeaders = ['PA', 'AB', 'H', '2B', '3B', 'HR', 'wOBA', 'wRC+', 'OPS'];
+    const pitchingHeaders = ['IP', 'ERA', 'WHIP', 'FIP', 'K/9', 'BB/9', 'SIERA'];
+    
+    const hasBatting = battingHeaders.filter(h => headers.includes(h)).length >= 4;
+    const hasPitching = pitchingHeaders.filter(h => headers.includes(h)).length >= 4;
+    
+    if (hasBatting && !hasPitching) return 'batting';
+    if (hasPitching && !hasBatting) return 'pitching';
+    return 'unknown';
+  };
+
+  const handlePitchingFileChange = async (e) => {
     const f = e.target.files[0];
     if (f && f.name.endsWith('.csv')) {
-      setPitchingFile(f);
+      // Detect actual file type
+      const detectedType = await detectFileType(f);
+      
+      if (detectedType === 'batting') {
+        // User put batting file in pitching slot - swap it
+        setBattingFile(f);
+        setPitchingFile(null);
+        showNotif('📋 That looks like a Batting file - we moved it to the correct slot for you!', 'success');
+      } else {
+        setPitchingFile(f);
+      }
       setSubmitResult(null);
     } else if (f) {
       showNotif('Please select a CSV file', 'error');
     }
   };
 
-  const handleBattingFileChange = (e) => {
+  const handleBattingFileChange = async (e) => {
     const f = e.target.files[0];
     if (f && f.name.endsWith('.csv')) {
-      setBattingFile(f);
+      // Detect actual file type
+      const detectedType = await detectFileType(f);
+      
+      if (detectedType === 'pitching') {
+        // User put pitching file in batting slot - swap it
+        setPitchingFile(f);
+        setBattingFile(null);
+        showNotif('📋 That looks like a Pitching file - we moved it to the correct slot for you!', 'success');
+      } else {
+        setBattingFile(f);
+      }
       setSubmitResult(null);
     } else if (f) {
       showNotif('Please select a CSV file', 'error');
@@ -1764,23 +1828,29 @@ function SubmitDataPage() {
               {/* Date Selection */}
               <div style={styles.formSection}>
                 <label style={styles.formLabel}>Data Date *</label>
-                <p style={styles.formHint}>What date is this CSV data for?</p>
+                <p style={styles.formHint}>What date is this CSV data for? {selectedTournamentId && <span style={{color: theme.success}}>✓ = already has data</span>}</p>
                 <div style={styles.dateGrid}>
-                  {generate21DayCalendar().map((day, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      style={{
-                        ...styles.dateBtn,
-                        ...(selectedDate === day.dateStr ? styles.dateBtnSelected : {}),
-                        ...(day.isToday ? styles.dateBtnToday : {})
-                      }}
-                      onClick={() => setSelectedDate(day.dateStr)}
-                    >
-                      <span style={styles.dateBtnDay}>{day.dayOfMonth}</span>
-                      <span style={styles.dateBtnLabel}>{['S','M','T','W','T','F','S'][day.dayOfWeek]}</span>
-                    </button>
-                  ))}
+                  {generate21DayCalendar().map((day, idx) => {
+                    const isUploaded = hasDataForDate(day.dateStr);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        style={{
+                          ...styles.dateBtn,
+                          ...(selectedDate === day.dateStr ? styles.dateBtnSelected : {}),
+                          ...(day.isToday ? styles.dateBtnToday : {}),
+                          ...(isUploaded && selectedDate !== day.dateStr ? styles.dateBtnUploaded : {})
+                        }}
+                        onClick={() => setSelectedDate(day.dateStr)}
+                      >
+                        <span style={styles.dateBtnDay}>{day.dayOfMonth}</span>
+                        <span style={styles.dateBtnLabel}>
+                          {isUploaded ? '✓' : ['S','M','T','W','T','F','S'][day.dayOfWeek]}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -3130,6 +3200,7 @@ function getStyles(t) {
     dateBtn: { padding: '10px 4px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' },
     dateBtnSelected: { background: t.accent, borderColor: t.accent, color: '#fff' },
     dateBtnToday: { boxShadow: `0 0 0 2px ${t.accent}` },
+    dateBtnUploaded: { background: `${t.success}22`, borderColor: t.success },
     dateBtnDay: { display: 'block', fontSize: 14, fontWeight: 600, color: t.textPrimary },
     dateBtnLabel: { display: 'block', fontSize: 10, color: t.textMuted, marginTop: 2 },
     submitBtn: { padding: '14px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'all 0.2s' },
