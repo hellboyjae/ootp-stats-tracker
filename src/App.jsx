@@ -4831,17 +4831,15 @@ function DraftAssistantPage() {
     if (isPitching) {
       // Parse IP (handles "123.2" format)
       const ip = parseFloat(player.ip) || 0;
-      if (ip >= 250) return { level: 'high', label: '✓', color: '#22c55e', desc: 'Measurement-grade (250+ IP)' };
-      if (ip >= 100) return { level: 'good', label: '✓', color: '#86efac', desc: 'Decision-grade (100+ IP)' };
-      if (ip >= 50) return { level: 'ok', label: '~', color: '#fbbf24', desc: 'Stronger signal (50+ IP)' };
-      return { level: 'low', label: '⚠', color: '#f87171', desc: 'Low sample (<50 IP) - use for extremes only' };
+      if (ip >= 100) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (100+ IP)' };
+      if (ip >= 50) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (50+ IP)' };
+      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<50 IP)' };
     } else {
       const ab = parseInt(player.ab) || 0;
       const pa = parseInt(player.pa) || ab;
-      if (pa >= 1500) return { level: 'high', label: '✓', color: '#22c55e', desc: 'Measurement-grade (1500+ PA)' };
-      if (pa >= 600) return { level: 'good', label: '✓', color: '#86efac', desc: 'Decision-grade (600+ PA)' };
-      if (pa >= 300) return { level: 'ok', label: '~', color: '#fbbf24', desc: 'Stronger signal (300+ PA)' };
-      return { level: 'low', label: '⚠', color: '#f87171', desc: 'Low sample (<300 PA) - big gaps only' };
+      if (pa >= 600) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (600+ PA)' };
+      if (pa >= 300) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (300+ PA)' };
+      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<300 PA)' };
     }
   };
 
@@ -4928,9 +4926,8 @@ function DraftAssistantPage() {
     
     // Apply confidence multiplier - low confidence gets significant penalty
     const confidenceMultiplier = {
-      high: 1.0,
-      good: 0.95,
-      ok: 0.85,
+      trusted: 1.0,
+      high: 0.92,
       low: 0.60  // Significant penalty for low sample
     };
     
@@ -5370,16 +5367,15 @@ function DraftAssistantPage() {
           background: theme.panelBg, borderRadius: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center'
         }}>
           <span style={{ color: theme.textMuted }}>Confidence:</span>
-          <span><span style={{ color: '#22c55e' }}>✓</span> High</span>
-          <span><span style={{ color: '#86efac' }}>✓</span> Good</span>
-          <span><span style={{ color: '#fbbf24' }}>~</span> Signal</span>
+          <span><span style={{ color: '#22c55e' }}>◆</span> Trusted</span>
+          <span><span style={{ color: '#86efac' }}>●</span> High</span>
           <span style={{ color: theme.textMuted }}>|</span>
           <span style={{ color: theme.textMuted }}>Tier:</span>
           <span><span style={{ color: '#22c55e' }}>T1</span> Elite</span>
           <span><span style={{ color: '#fbbf24' }}>T2</span> Good</span>
           <span><span style={{ color: theme.textMuted }}>T3+</span> Below gap</span>
           <span style={{ color: theme.textMuted, marginLeft: 'auto', fontSize: 10 }}>
-            Low sample players hidden • SP's shown for all pitching slots
+            Low confidence hidden • SP's shown for all pitching slots
           </span>
         </div>
 
