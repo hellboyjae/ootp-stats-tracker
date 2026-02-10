@@ -5384,238 +5384,349 @@ function DraftAssistantPage() {
         </div>
         )}
 
+
         <div style={{ display: 'grid', gridTemplateColumns: isCompactMode ? '1fr' : '320px 1fr', gap: isCompactMode ? 12 : 20 }}>
-          {/* Left: Roster */}
-          <div style={{ background: theme.cardBg, borderRadius: 12, padding: isCompactMode ? 12 : 16, border: `1px solid ${theme.border}` }}>
-            <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: isCompactMode ? 14 : 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
-            
-            {/* Batting */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>BATTING</div>
-              {battingPositions.map(pos => (
-                <div key={pos} style={{ 
-                  display: 'flex', alignItems: 'center', gap: 6, padding: isCompactMode ? 6 : 8, 
-                  background: roster[pos] ? theme.success + '22' : theme.inputBg, 
-                  borderRadius: 6, marginBottom: 3, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
-                }}>
-                  <span style={{ width: 26, fontWeight: 600, color: theme.textMuted, fontSize: 11 }}>{pos}</span>
-                  {roster[pos] ? (
-                    <>
-                      <span style={{ flex: 1, color: theme.textPrimary, fontSize: isCompactMode ? 11 : 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {roster[pos].name} 
-                        <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
-                          {roster[pos].ovr}
-                        </span>
-                      </span>
-                      <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11 }}>✎</button>
-                      <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 11 }}>×</button>
-                    </>
-                  ) : (
-                    <span 
-                      onClick={() => setActivePositionTab(pos === 'DH' ? 'DH' : pos)}
-                      style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
-                    >Empty - Click to view</span>
+          {/* In compact mode: Available Players first, then Roster */}
+          {/* In normal mode: Roster first, then Available Players */}
+          
+          {isCompactMode ? (
+            <>
+              {/* Available Players Panel - FIRST in compact */}
+              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}` }}>
+                {/* Search */}
+                <div style={{ marginBottom: 12 }}>
+                  <input 
+                    type="text"
+                    placeholder="🔍 Search player..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    autoComplete="off"
+                    style={{
+                      width: '100%', padding: 8, borderRadius: 8,
+                      background: theme.inputBg, color: theme.textPrimary,
+                      border: `1px solid ${theme.border}`, fontSize: 12
+                    }}
+                  />
+                  {searchResults.length > 0 && (
+                    <div style={{ 
+                      marginTop: 6, background: theme.panelBg, borderRadius: 8, 
+                      border: `1px solid ${theme.border}`, maxHeight: 200, overflowY: 'auto' 
+                    }}>
+                      {searchResults.map((p, i) => {
+                        const tier = getCardTierLabel(p.ovr);
+                        const isPitch = p.type === 'pitching';
+                        return (
+                          <div key={i} style={{ 
+                            display: 'flex', alignItems: 'center', gap: 6, padding: 6,
+                            borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
+                            cursor: 'pointer', fontSize: 11
+                          }}
+                          onClick={() => setShowPlayerModal(p)}
+                          >
+                            <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
+                            <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
+                            <span style={{ color: theme.textMuted, fontSize: 10 }}>{p.pos}</span>
+                            <span style={{ color: theme.textSecondary, fontSize: 10 }}>
+                              {isPitch ? `${p.siera || p.era} SIERA` : `${p.woba} wOBA`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              ))}
-            </div>
 
-            {/* Pitching */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>PITCHING</div>
-              {pitchingPositions.map(pos => (
-                <div key={pos} style={{ 
-                  display: 'flex', alignItems: 'center', gap: 8, padding: 8, 
-                  background: roster[pos] ? theme.success + '22' : theme.inputBg, 
-                  borderRadius: 6, marginBottom: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
-                }}>
-                  <span style={{ width: 28, fontWeight: 600, color: theme.textMuted, fontSize: 12 }}>{pos}</span>
-                  {roster[pos] ? (
-                    <>
-                      <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13 }}>
-                        {roster[pos].name}
-                        <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
-                          {roster[pos].ovr}
-                        </span>
-                      </span>
-                      <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>
-                      <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 12 }}>×</button>
-                    </>
-                  ) : (
-                    <span 
-                      onClick={() => setActivePositionTab(pos.startsWith('SP') ? 'SP' : pos.startsWith('RP') ? 'RP' : 'CL')}
-                      style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
-                    >Empty - Click to view</span>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Bench */}
-            <div>
-              <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>BENCH ({Object.keys(roster).filter(k => k.startsWith('BENCH')).length}/{benchCount})</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {benchSlots.map(slot => (
-                  <div key={slot} style={{ 
-                    width: 'calc(50% - 2px)', padding: 6, 
-                    background: roster[slot] ? theme.success + '22' : theme.inputBg, 
-                    borderRadius: 4, border: `1px solid ${roster[slot] ? theme.success : theme.border}`,
-                    fontSize: 11
-                  }}>
-                    {roster[slot] ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ flex: 1, color: theme.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {roster[slot].name}
-                        </span>
-                        <button onClick={() => removeFromRoster(slot)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 10, padding: 0 }}>×</button>
-                      </div>
-                    ) : (
-                      <span style={{ color: theme.textMuted }}>—</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Available Players */}
-          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
-            {/* Search */}
-            <div style={{ marginBottom: 16 }}>
-              <input 
-                type="text"
-                placeholder="🔍 Quick search any player..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%', padding: 12, borderRadius: 8,
-                  background: theme.inputBg, color: theme.textPrimary,
-                  border: `1px solid ${theme.border}`, fontSize: 14
-                }}
-              />
-              {searchResults.length > 0 && (
-                <div style={{ 
-                  marginTop: 8, background: theme.panelBg, borderRadius: 8, 
-                  border: `1px solid ${theme.border}`, maxHeight: 300, overflowY: 'auto' 
-                }}>
-                  {searchResults.map((p, i) => {
-                    const tier = getCardTierLabel(p.ovr);
-                    const isPitch = p.type === 'pitching';
+                {/* Position Tabs */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 10 }}>
+                  {positionTabs.map(pos => {
+                    const isActive = activePositionTab === pos;
                     return (
-                      <div key={i} style={{ 
-                        display: 'flex', alignItems: 'center', gap: 8, padding: 10,
-                        borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
-                        cursor: 'pointer'
+                      <button
+                        key={pos}
+                        onClick={() => { setActivePositionTab(pos); setSearchQuery(''); }}
+                        style={{
+                          padding: '4px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                          background: isActive ? theme.accent : theme.inputBg,
+                          color: isActive ? '#fff' : theme.textMuted,
+                          border: `1px solid ${isActive ? theme.accent : theme.border}`,
+                          cursor: 'pointer'
+                        }}
+                      >{pos}</button>
+                    );
+                  })}
+                </div>
+
+                {/* Best Available List - Compact */}
+                <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 6 }}>
+                  Best {activePositionTab} ({currentAvailable.length})
+                </div>
+                <div style={{ maxHeight: 250, overflowY: 'auto' }}>
+                  {currentAvailable.map((p, i) => {
+                    const tier = getCardTierLabel(p.ovr);
+                    const isPitching = p._isPitching;
+                    return (
+                      <div key={p.id || i} style={{ 
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', 
+                        background: theme.panelBg, borderRadius: 6, marginBottom: 4, cursor: 'pointer',
+                        border: `1px solid ${theme.border}`
                       }}
-                      onClick={() => setShowPlayerModal(p)}
+                      onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
                       >
-                        <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
-                        <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
-                        <span style={{ color: theme.textMuted, fontSize: 12 }}>{p.pos}</span>
-                        <span style={{ color: theme.textSecondary, fontSize: 11 }}>
-                          {isPitch 
-                            ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
-                            : `${p.woba || '—'} wOBA · ${p.pa || p.ab || '—'} PA`
-                          }
+                        <span style={{ color: tier.color, fontWeight: 700, fontSize: 11 }}>{p.ovr}</span>
+                        <span style={{ color: theme.textPrimary, flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                        <span style={{ color: theme.textSecondary, fontSize: 10 }}>
+                          {isPitching ? p.siera || p.era : p.woba}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Position Tabs */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
-              {positionTabs.map(pos => {
-                const hasScarcity = scarcityAlerts.some(a => a.pos === pos);
-                return (
-                  <button 
-                    key={pos}
-                    onClick={() => setActivePositionTab(pos)}
-                    style={{
-                      padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                      background: activePositionTab === pos ? theme.accent : theme.inputBg,
-                      color: activePositionTab === pos ? '#fff' : theme.textPrimary,
-                      border: `1px solid ${hasScarcity ? theme.warning : theme.border}`,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {pos} {hasScarcity && '⚠️'}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Available Players List */}
-            <h4 style={{ color: theme.textPrimary, margin: '0 0 8px 0' }}>
-              Best Available - {activePositionTab} ({activePositionTab === 'SP' ? 'Top 10' : 'Top 5'})
-            </h4>
-            <p style={{ color: theme.textMuted, fontSize: 11, margin: '0 0 12px 0' }}>
-              Sorted by sample-adjusted performance (wOBA for batters, SIERA for pitchers)
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {currentAvailable.length === 0 ? (
-                <div style={{ color: theme.textMuted, textAlign: 'center', padding: 20 }}>
-                  No available players for this position in current card pool
+              {/* Roster Panel - SECOND in compact */}
+              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}` }}>
+                <h3 style={{ color: theme.textPrimary, margin: '0 0 10px 0', fontSize: 13 }}>Roster ({filledCount}/{draftSize})</h3>
+                
+                {/* Compact roster - 3 columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, fontSize: 10 }}>
+                  {[...battingPositions, ...pitchingPositions].map(pos => (
+                    <div key={pos} style={{ 
+                      padding: 4, background: roster[pos] ? theme.success + '22' : theme.inputBg, 
+                      borderRadius: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`,
+                      overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis'
+                    }}>
+                      <span style={{ color: theme.textMuted, fontWeight: 600 }}>{pos}: </span>
+                      {roster[pos] ? (
+                        <span style={{ color: theme.textPrimary }}>{roster[pos].name.split(' ').pop()}</span>
+                      ) : (
+                        <span style={{ color: theme.textMuted }}>—</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ) : currentAvailable.map((p, i) => {
-                const cardTier = getCardTierLabel(p.ovr);
-                const isPitching = p._isPitching;
-                const confidence = p._confidence;
-                const performanceTier = p._tier;
-                return (
-                  <div key={i} style={{ 
-                    display: 'flex', alignItems: 'center', gap: 10, padding: 12,
-                    background: theme.panelBg, borderRadius: 8, 
-                    border: `1px solid ${confidence.level === 'low' ? theme.warning + '66' : theme.border}`
-                  }}>
-                    {/* Rank + Tier Badge */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                      <span style={{ 
-                        width: 22, height: 22, borderRadius: '50%', 
-                        background: theme.inputBg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: theme.textMuted, fontSize: 11, fontWeight: 600 
-                      }}>{i + 1}</span>
-                      <span style={{ 
-                        fontSize: 9, fontWeight: 700, color: performanceTier === 1 ? '#22c55e' : performanceTier === 2 ? '#fbbf24' : theme.textMuted 
-                      }}>T{performanceTier}</span>
-                    </div>
-                    
-                    {/* OVR */}
-                    <span style={{ color: cardTier.color, fontWeight: 700, fontSize: 14 }}>{p.ovr}</span>
-                    
-                    {/* Player Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: theme.textPrimary, fontWeight: 500 }}>{p.name}</span>
-                        {/* Sample Size Confidence Badge */}
+                
+                {/* Bench count */}
+                <div style={{ marginTop: 6, fontSize: 10, color: theme.textMuted }}>
+                  Bench: {Object.keys(roster).filter(k => k.startsWith('BENCH')).length}/{benchCount}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* NORMAL MODE - Roster First */}
+              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
+                <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
+                
+                {/* Batting */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>BATTING</div>
+                  {battingPositions.map(pos => (
+                    <div key={pos} style={{ 
+                      display: 'flex', alignItems: 'center', gap: 6, padding: 8, 
+                      background: roster[pos] ? theme.success + '22' : theme.inputBg, 
+                      borderRadius: 6, marginBottom: 3, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
+                    }}>
+                      <span style={{ width: 26, fontWeight: 600, color: theme.textMuted, fontSize: 11 }}>{pos}</span>
+                      {roster[pos] ? (
+                        <>
+                          <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {roster[pos].name} 
+                            <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
+                              {roster[pos].ovr}
+                            </span>
+                          </span>
+                          <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11 }}>✎</button>
+                          <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 11 }}>×</button>
+                        </>
+                      ) : (
                         <span 
-                          title={confidence.desc}
-                          style={{ 
-                            fontSize: 10, fontWeight: 600, color: confidence.color,
-                            cursor: 'help'
-                          }}
-                        >{confidence.label}</span>
-                      </div>
-                      <div style={{ color: theme.textMuted, fontSize: 11 }}>
-                        {isPitching 
-                          ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
-                          : `${p.woba || '—'} wOBA · ${p.opsPlus || '—'} OPS+ · ${p.pa || p.ab || '—'} PA`
-                        }
-                      </div>
+                          onClick={() => setActivePositionTab(pos === 'DH' ? 'DH' : pos)}
+                          style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
+                        >Empty - Click to view</span>
+                      )}
                     </div>
-                    
-                    {/* Actions */}
-                    <button 
-                      onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
-                      style={{ padding: '6px 12px', borderRadius: 4, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11 }}
-                    >View</button>
+                  ))}
+                </div>
+
+                {/* Pitching */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>PITCHING</div>
+                  {pitchingPositions.map(pos => (
+                    <div key={pos} style={{ 
+                      display: 'flex', alignItems: 'center', gap: 8, padding: 8, 
+                      background: roster[pos] ? theme.success + '22' : theme.inputBg, 
+                      borderRadius: 6, marginBottom: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
+                    }}>
+                      <span style={{ width: 28, fontWeight: 600, color: theme.textMuted, fontSize: 12 }}>{pos}</span>
+                      {roster[pos] ? (
+                        <>
+                          <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13 }}>
+                            {roster[pos].name}
+                            <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
+                              {roster[pos].ovr}
+                            </span>
+                          </span>
+                          <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>
+                          <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 12 }}>×</button>
+                        </>
+                      ) : (
+                        <span 
+                          onClick={() => setActivePositionTab(pos.startsWith('SP') ? 'SP' : pos.startsWith('RP') ? 'RP' : 'CL')}
+                          style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
+                        >Empty - Click to view</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bench */}
+                <div>
+                  <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>BENCH ({Object.keys(roster).filter(k => k.startsWith('BENCH')).length}/{benchCount})</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {benchSlots.map(slot => (
+                      <div key={slot} style={{ 
+                        width: 'calc(50% - 2px)', padding: 6, 
+                        background: roster[slot] ? theme.success + '22' : theme.inputBg, 
+                        borderRadius: 4, border: `1px solid ${roster[slot] ? theme.success : theme.border}`,
+                        fontSize: 11
+                      }}>
+                        {roster[slot] ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ flex: 1, color: theme.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {roster[slot].name}
+                            </span>
+                            <button onClick={() => removeFromRoster(slot)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 10, padding: 0 }}>×</button>
+                          </div>
+                        ) : (
+                          <span style={{ color: theme.textMuted }}>—</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              </div>
+
+              {/* NORMAL MODE - Available Players Second */}
+              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
+                {/* Search */}
+                <div style={{ marginBottom: 16 }}>
+                  <input 
+                    type="text"
+                    placeholder="🔍 Quick search any player..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoComplete="off"
+                    style={{
+                      width: '100%', padding: 12, borderRadius: 8,
+                      background: theme.inputBg, color: theme.textPrimary,
+                      border: `1px solid ${theme.border}`, fontSize: 14
+                    }}
+                  />
+                  {searchResults.length > 0 && (
+                    <div style={{ 
+                      marginTop: 8, background: theme.panelBg, borderRadius: 8, 
+                      border: `1px solid ${theme.border}`, maxHeight: 300, overflowY: 'auto' 
+                    }}>
+                      {searchResults.map((p, i) => {
+                        const tier = getCardTierLabel(p.ovr);
+                        const isPitch = p.type === 'pitching';
+                        return (
+                          <div key={i} style={{ 
+                            display: 'flex', alignItems: 'center', gap: 8, padding: 10,
+                            borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => setShowPlayerModal(p)}
+                          >
+                            <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
+                            <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
+                            <span style={{ color: theme.textMuted, fontSize: 12 }}>{p.pos}</span>
+                            <span style={{ color: theme.textSecondary, fontSize: 11 }}>
+                              {isPitch 
+                                ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
+                                : `${p.woba || '—'} wOBA · ${p.pa || p.ab || '—'} PA`
+                              }
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Position Tabs */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+                  {positionTabs.map(pos => {
+                    const isActive = activePositionTab === pos;
+                    return (
+                      <button
+                        key={pos}
+                        onClick={() => { setActivePositionTab(pos); setSearchQuery(''); }}
+                        style={{
+                          padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                          background: isActive ? theme.accent : theme.inputBg,
+                          color: isActive ? '#fff' : theme.textMuted,
+                          border: `1px solid ${isActive ? theme.accent : theme.border}`,
+                          cursor: 'pointer'
+                        }}
+                      >{pos}</button>
+                    );
+                  })}
+                </div>
+
+                {/* Best Available List */}
+                <div style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>
+                  Best Available - {activePositionTab} (Top {currentAvailable.length})
+                </div>
+                <div>
+                  {currentAvailable.map((p, i) => {
+                    const tier = getCardTierLabel(p.ovr);
+                    const tierBadge = p._tier <= 2 ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } : null;
+                    const conf = p._confidence;
+                    const isPitching = p._isPitching;
+                    
+                    return (
+                      <div key={p.id || i} style={{ 
+                        display: 'flex', alignItems: 'center', gap: 10, padding: 10, 
+                        background: theme.panelBg, borderRadius: 8, marginBottom: 6,
+                        border: `1px solid ${theme.border}`
+                      }}>
+                        {/* Rank + Tier */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 30 }}>
+                          <span style={{ color: theme.textMuted, fontSize: 11 }}>#{i + 1}</span>
+                          {tierBadge && <span style={{ color: tierBadge.color, fontSize: 10, fontWeight: 600 }}>{tierBadge.label}</span>}
+                        </div>
+                        
+                        {/* OVR Badge */}
+                        <span style={{ color: tier.color, fontWeight: 700, fontSize: 16 }}>{p.ovr}</span>
+                        
+                        {/* Player Info */}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ color: theme.textPrimary, fontWeight: 500 }}>{p.name}</span>
+                            <span style={{ color: conf.color, fontSize: 12 }} title={conf.desc}>{conf.label}</span>
+                          </div>
+                          <div style={{ color: theme.textMuted, fontSize: 11 }}>
+                            {isPitching 
+                              ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
+                              : `${p.woba || '—'} wOBA · ${p.opsPlus || '—'} OPS+ · ${p.pa || p.ab || '—'} PA`
+                            }
+                          </div>
+                        </div>
+                        
+                        {/* Actions */}
+                        <button 
+                          onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
+                          style={{ padding: '6px 12px', borderRadius: 4, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11 }}
+                        >View</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Player Modal */}
