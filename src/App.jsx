@@ -4758,6 +4758,9 @@ function DraftAssistantPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   
+  // Check if in compact/popout mode via URL parameter
+  const isCompactMode = new URLSearchParams(window.location.search).get('compact') === '1';
+  
   // Setup state
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState('');
@@ -4783,6 +4786,19 @@ function DraftAssistantPage() {
   const [showPlayerModal, setShowPlayerModal] = useState(null); // Player to show in modal
   const [editingSlot, setEditingSlot] = useState(null); // For position switching
   const [showQuickGuide, setShowQuickGuide] = useState(false); // Quick start guide popup
+  
+  // Pop out to new window
+  const popOutWindow = () => {
+    const width = 500;
+    const height = 800;
+    const left = window.screen.width - width - 50;
+    const top = 50;
+    window.open(
+      '/draft-assistant?compact=1',
+      'DraftAssistant',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+  };
   
   // Position definitions
   const battingPositions = hasDH ? ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'] : ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'];
@@ -5269,23 +5285,41 @@ function DraftAssistantPage() {
     activePositionTab === 'SP' ? 10 : 5
   );
 
+  // Compact mode wrapper (no sidebar/navigation)
+  const CompactWrapper = ({ children }) => (
+    <div style={{ background: theme.mainBg, minHeight: '100vh', color: theme.textPrimary }}>
+      {notification && (
+        <div style={{ position: 'fixed', top: 16, right: 16, padding: '12px 20px', borderRadius: 8, zIndex: 1001, background: notification.type === 'error' ? theme.error : theme.success, color: '#fff' }}>
+          {notification.message}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+
+  const Wrapper = isCompactMode ? CompactWrapper : Layout;
+  const wrapperProps = isCompactMode ? {} : { notification };
+
   return (
-    <Layout notification={notification}>
-      <div style={{ padding: 20, maxWidth: 1400, margin: '0 auto' }}>
+    <Wrapper {...wrapperProps}>
+      <div style={{ padding: isCompactMode ? 12 : 20, maxWidth: isCompactMode ? '100%' : 1400, margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 24 }}>
-              🎯 Draft Assistant - {tournamentData?.name}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isCompactMode ? 10 : 16, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: isCompactMode ? 16 : 24, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              🎯 {isCompactMode ? '' : 'Draft Assistant - '}{tournamentData?.name}
             </h1>
-            <p style={{ color: theme.textMuted, margin: '4px 0 0 0', fontSize: 13 }}>
+            <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: isCompactMode ? 11 : 13 }}>
               {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer' }}>❓ Help</button>
-            <button onClick={resetDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer' }}>Reset</button>
-            <button onClick={exitDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer' }}>Exit Draft</button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            {!isCompactMode && (
+              <button onClick={popOutWindow} style={{ padding: '8px 16px', borderRadius: 6, background: theme.panelBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, cursor: 'pointer' }} title="Open in smaller window for side-by-side use">↗️ Pop Out</button>
+            )}
+            <button onClick={() => setShowQuickGuide(true)} style={{ padding: isCompactMode ? '6px 10px' : '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: isCompactMode ? 12 : 14 }}>❓</button>
+            <button onClick={resetDraft} style={{ padding: isCompactMode ? '6px 10px' : '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: isCompactMode ? 12 : 14 }}>{isCompactMode ? '↺' : 'Reset'}</button>
+            <button onClick={exitDraft} style={{ padding: isCompactMode ? '6px 10px' : '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: isCompactMode ? 12 : 14 }}>{isCompactMode ? '✕' : 'Exit Draft'}</button>
           </div>
         </div>
 
@@ -5293,19 +5327,19 @@ function DraftAssistantPage() {
         {scarcityAlerts.length > 0 && (
           <div style={{ 
             background: theme.warning + '22', border: `1px solid ${theme.warning}`, 
-            borderRadius: 8, padding: 12, marginBottom: 16 
+            borderRadius: 8, padding: isCompactMode ? 8 : 12, marginBottom: isCompactMode ? 10 : 16 
           }}>
             {scarcityAlerts.map((alert, i) => (
-              <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 13 }}>
-                ⚠️ {alert.count === 0 ? `No elite ${alert.pos} remaining!` : `Only ${alert.count} elite ${alert.pos} remaining in pool!`}
+              <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: isCompactMode ? 11 : 13 }}>
+                ⚠️ {alert.count === 0 ? `No elite ${alert.pos}!` : `Only ${alert.count} elite ${alert.pos} left!`}
               </div>
             ))}
           </div>
         )}
 
         {/* Card Pool Toggles */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
+        <div style={{ display: 'flex', gap: isCompactMode ? 4 : 8, marginBottom: isCompactMode ? 8 : 12, flexWrap: 'wrap' }}>
+          <span style={{ color: theme.textMuted, fontSize: isCompactMode ? 10 : 12, alignSelf: 'center' }}>Pool:</span>
           {[
             { key: 'perfect', label: 'Perf', color: '#a855f7' },
             { key: 'diamond', label: 'Dia', color: '#32EBFC' },
@@ -5318,7 +5352,7 @@ function DraftAssistantPage() {
               key={tier.key}
               onClick={() => setCardPool(prev => ({ ...prev, [tier.key]: !prev[tier.key] }))}
               style={{
-                padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                padding: isCompactMode ? '2px 6px' : '4px 10px', borderRadius: 4, fontSize: isCompactMode ? 10 : 11, fontWeight: 600,
                 background: cardPool[tier.key] ? tier.color : 'transparent',
                 color: cardPool[tier.key] ? (tier.key === 'gold' || tier.key === 'silver' ? '#000' : '#fff') : tier.color,
                 border: `1px solid ${tier.color}`,
@@ -5330,7 +5364,8 @@ function DraftAssistantPage() {
           ))}
         </div>
 
-        {/* Heuristics Legend */}
+        {/* Heuristics Legend - hidden in compact mode */}
+        {!isCompactMode && (
         <div style={{ 
           display: 'flex', gap: 16, marginBottom: 16, padding: '8px 12px', 
           background: theme.panelBg, borderRadius: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center'
@@ -5347,32 +5382,33 @@ function DraftAssistantPage() {
             Low confidence hidden • SP's shown for all pitching slots
           </span>
         </div>
+        )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isCompactMode ? '1fr' : '320px 1fr', gap: isCompactMode ? 12 : 20 }}>
           {/* Left: Roster */}
-          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
-            <h3 style={{ color: theme.textPrimary, margin: '0 0 16px 0', fontSize: 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: isCompactMode ? 12 : 16, border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: isCompactMode ? 14 : 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
             
             {/* Batting */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>BATTING</div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>BATTING</div>
               {battingPositions.map(pos => (
                 <div key={pos} style={{ 
-                  display: 'flex', alignItems: 'center', gap: 8, padding: 8, 
+                  display: 'flex', alignItems: 'center', gap: 6, padding: isCompactMode ? 6 : 8, 
                   background: roster[pos] ? theme.success + '22' : theme.inputBg, 
-                  borderRadius: 6, marginBottom: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
+                  borderRadius: 6, marginBottom: 3, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
                 }}>
-                  <span style={{ width: 28, fontWeight: 600, color: theme.textMuted, fontSize: 12 }}>{pos}</span>
+                  <span style={{ width: 26, fontWeight: 600, color: theme.textMuted, fontSize: 11 }}>{pos}</span>
                   {roster[pos] ? (
                     <>
-                      <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13 }}>
+                      <span style={{ flex: 1, color: theme.textPrimary, fontSize: isCompactMode ? 11 : 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {roster[pos].name} 
                         <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
                           {roster[pos].ovr}
                         </span>
                       </span>
-                      <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>
-                      <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 12 }}>×</button>
+                      <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11 }}>✎</button>
+                      <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 11 }}>×</button>
                     </>
                   ) : (
                     <span 
@@ -5818,7 +5854,7 @@ function DraftAssistantPage() {
           </div>
         )}
       </div>
-    </Layout>
+    </Wrapper>
   );
 }
 
