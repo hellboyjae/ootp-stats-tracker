@@ -4782,6 +4782,7 @@ function DraftAssistantPage() {
   const [notification, setNotification] = useState(null);
   const [showPlayerModal, setShowPlayerModal] = useState(null); // Player to show in modal
   const [editingSlot, setEditingSlot] = useState(null); // For position switching
+  const [showQuickGuide, setShowQuickGuide] = useState(false); // Quick start guide popup
   
   // Position definitions
   const battingPositions = hasDH ? ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'] : ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'];
@@ -4955,6 +4956,7 @@ function DraftAssistantPage() {
     setRoster({});
     setDraftStarted(true);
     setActivePositionTab('C');
+    setShowQuickGuide(true); // Show guide on start
   };
 
   const resetDraft = () => {
@@ -5315,6 +5317,7 @@ function DraftAssistantPage() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer' }}>❓ Help</button>
             <button onClick={resetDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer' }}>Reset</button>
             <button onClick={exitDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer' }}>Exit Draft</button>
           </div>
@@ -5744,6 +5747,107 @@ function DraftAssistantPage() {
                 onClick={() => setEditingSlot(null)}
                 style={{ width: '100%', marginTop: 16, padding: 10, borderRadius: 6, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer' }}
               >Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Start Guide Modal */}
+        {showQuickGuide && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setShowQuickGuide(false)}
+          >
+            <div 
+              style={{ 
+                background: theme.cardBg, borderRadius: 16, padding: 28, maxWidth: 600, width: '95%', 
+                border: `1px solid ${theme.border}`, maxHeight: '90vh', overflowY: 'auto' 
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 22 }}>📋 Quick Start Guide</h2>
+                <button onClick={() => setShowQuickGuide(false)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 24, cursor: 'pointer' }}>×</button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Layout Overview */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🖥️ Layout</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    <strong style={{ color: theme.textPrimary }}>Left Panel:</strong> Your roster with all slots<br/>
+                    <strong style={{ color: theme.textPrimary }}>Right Panel:</strong> Available players by position
+                  </p>
+                </div>
+
+                {/* Position Tabs */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🏷️ Position Tabs</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    Click position tabs (C, 1B, SS, SP, etc.) to see the best available players for that position. 
+                    Players are ranked by a composite score using <strong style={{ color: theme.textPrimary }}>wOBA + OPS+</strong> for batters and <strong style={{ color: theme.textPrimary }}>SIERA + FIP-</strong> for pitchers.
+                  </p>
+                </div>
+
+                {/* Card Pool Filters */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🎴 Card Pool Toggles</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    Toggle card tiers on/off to match your draft's available packs. Click <strong style={{ color: '#a855f7' }}>Perf</strong>, <strong style={{ color: '#32EBFC' }}>Dia</strong>, <strong style={{ color: '#FFE61F' }}>Gold</strong>, etc. to show/hide those tiers.
+                  </p>
+                </div>
+
+                {/* Confidence & Tiers */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>📊 Confidence & Tiers</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    <span style={{ color: '#22c55e' }}>◆ Trusted</span> = Large sample size (600+ PA / 100+ IP)<br/>
+                    <span style={{ color: '#86efac' }}>● High</span> = Good sample size (300+ PA / 50+ IP)<br/>
+                    <span style={{ color: '#22c55e' }}>T1</span> = Elite tier, <span style={{ color: '#fbbf24' }}>T2</span> = Good tier, <span style={{ color: theme.textMuted }}>T3+</span> = Below performance gap<br/>
+                    <em style={{ color: theme.textMuted, fontSize: 12 }}>Low confidence players are hidden by default.</em>
+                  </p>
+                </div>
+
+                {/* Player Actions */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>👆 Player Actions</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    <strong style={{ color: theme.textPrimary }}>View:</strong> Click to see full stats and add to a roster slot<br/>
+                    <strong style={{ color: theme.textPrimary }}>Search:</strong> Use the search bar to find any player by name<br/>
+                    <strong style={{ color: theme.textPrimary }}>Click empty slot:</strong> Jumps to that position's available players
+                  </p>
+                </div>
+
+                {/* Roster Management */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>📝 Roster Management</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    <strong style={{ color: theme.textPrimary }}>✎</strong> = Move player to different slot<br/>
+                    <strong style={{ color: theme.error }}>×</strong> = Remove player from roster<br/>
+                    Players you draft are removed from the available pool.
+                  </p>
+                </div>
+
+                {/* Tips */}
+                <div style={{ background: theme.accent + '15', borderRadius: 10, padding: 14, border: `1px solid ${theme.accent}33` }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>💡 Pro Tips</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    • SP's are shown for RP/CL slots since starters are typically best for all roles<br/>
+                    • Watch for scarcity alerts when elite players at a position are running low<br/>
+                    • Use BENCH slots for versatile players who can fill multiple positions
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowQuickGuide(false)}
+                style={{ 
+                  width: '100%', marginTop: 20, padding: 14, borderRadius: 8, 
+                  background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer',
+                  fontSize: 15, fontWeight: 600
+                }}
+              >Got it, let's draft!</button>
             </div>
           </div>
         )}
