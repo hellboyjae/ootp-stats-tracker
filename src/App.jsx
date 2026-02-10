@@ -4786,6 +4786,8 @@ function DraftAssistantPage() {
   const [showPlayerModal, setShowPlayerModal] = useState(null); // Player to show in modal
   const [editingSlot, setEditingSlot] = useState(null); // For position switching
   const [showQuickGuide, setShowQuickGuide] = useState(false); // Quick start guide popup
+  const [showPlaceholderModal, setShowPlaceholderModal] = useState(null); // Slot to add placeholder to
+  const [placeholderName, setPlaceholderName] = useState(''); // Name input for placeholder
   
   // Pop out to new window
   const popOutWindow = () => {
@@ -5047,6 +5049,20 @@ function DraftAssistantPage() {
     setRoster(prev => ({ ...prev, [slot]: player }));
     setShowPlayerModal(null);
     showNotif(`${player.name} added to ${slot}`);
+  };
+
+  // Add placeholder player to roster (for players not in database)
+  const addPlaceholder = (slot, name) => {
+    const placeholderPlayer = {
+      name: name || 'Unknown Player',
+      ovr: '?',
+      pos: slot.replace(/[0-9]/g, ''), // Extract position from slot (SP1 -> SP)
+      isPlaceholder: true
+    };
+    setRoster(prev => ({ ...prev, [slot]: placeholderPlayer }));
+    setShowPlaceholderModal(null);
+    setPlaceholderName('');
+    showNotif(`${placeholderPlayer.name} added to ${slot}`);
   };
 
   // Remove player from roster (back to available)
@@ -5358,7 +5374,7 @@ function DraftAssistantPage() {
                   border: `1px solid ${theme.border}`, fontSize: 12
                 }}
               />
-              {searchResults.length > 0 && (
+              {searchQuery.trim() && (
                 <div 
                   style={{ 
                     marginTop: 6, background: theme.panelBg, borderRadius: 8, 
@@ -5372,7 +5388,7 @@ function DraftAssistantPage() {
                     return (
                       <div key={i} style={{ 
                         display: 'flex', alignItems: 'center', gap: 6, padding: 6,
-                        borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
+                        borderBottom: `1px solid ${theme.border}`,
                         cursor: 'pointer', fontSize: 11
                       }}
                       onClick={() => setShowPlayerModal(p)}
@@ -5386,6 +5402,19 @@ function DraftAssistantPage() {
                       </div>
                     );
                   })}
+                  {/* Add placeholder option */}
+                  <div 
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 6, padding: 6,
+                      cursor: 'pointer', background: theme.inputBg, fontSize: 11
+                    }}
+                    onClick={() => { setShowPlaceholderModal('search'); setPlaceholderName(searchQuery); }}
+                  >
+                    <span style={{ color: theme.warning, fontWeight: 600 }}>+</span>
+                    <span style={{ color: theme.textSecondary }}>
+                      {searchResults.length === 0 ? `Add "${searchQuery}" as custom...` : `Add custom player...`}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -5532,6 +5561,77 @@ function DraftAssistantPage() {
           </div>
         )}
 
+        {/* Placeholder Player Modal */}
+        {showPlaceholderModal && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setShowPlaceholderModal(null)}
+          >
+            <div 
+              style={{ background: theme.cardBg, borderRadius: 12, padding: 20, maxWidth: 320, width: '95%', border: `1px solid ${theme.border}` }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: 16 }}>Add Custom Player</h3>
+              
+              <div style={{ marginBottom: 12 }}>
+                <input 
+                  type="text"
+                  placeholder="Player name..."
+                  value={placeholderName}
+                  onChange={(e) => setPlaceholderName(e.target.value)}
+                  autoFocus
+                  style={{
+                    width: '100%', padding: 8, borderRadius: 6,
+                    background: theme.inputBg, color: theme.textPrimary,
+                    border: `1px solid ${theme.border}`, fontSize: 12
+                  }}
+                />
+              </div>
+
+              {showPlaceholderModal === 'search' ? (
+                <>
+                  <p style={{ color: theme.textMuted, fontSize: 11, marginBottom: 6 }}>Select position:</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+                    {allSlots.filter(s => !roster[s]).slice(0, 15).map(slot => (
+                      <button 
+                        key={slot}
+                        onClick={() => addPlaceholder(slot, placeholderName)}
+                        disabled={!placeholderName.trim()}
+                        style={{
+                          padding: '4px 8px', borderRadius: 4, fontSize: 10,
+                          background: placeholderName.trim() ? theme.accent : theme.inputBg, 
+                          color: placeholderName.trim() ? '#fff' : theme.textMuted,
+                          border: `1px solid ${placeholderName.trim() ? theme.accent : theme.border}`, 
+                          cursor: placeholderName.trim() ? 'pointer' : 'not-allowed'
+                        }}
+                      >{slot.replace('BENCH', 'B')}</button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <button 
+                  onClick={() => addPlaceholder(showPlaceholderModal, placeholderName)}
+                  disabled={!placeholderName.trim()}
+                  style={{
+                    width: '100%', padding: 10, borderRadius: 6,
+                    background: placeholderName.trim() ? theme.accent : theme.inputBg,
+                    color: placeholderName.trim() ? '#fff' : theme.textMuted,
+                    border: 'none', cursor: placeholderName.trim() ? 'pointer' : 'not-allowed',
+                    fontSize: 12, fontWeight: 600, marginBottom: 8
+                  }}
+                >Add to {showPlaceholderModal}</button>
+              )}
+              
+              <button 
+                onClick={() => setShowPlaceholderModal(null)}
+                style={{ width: '100%', padding: 8, borderRadius: 6, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 11 }}
+              >Cancel</button>
+            </div>
+          </div>
+        )}
+
         {/* Quick Start Guide Modal */}
         {showQuickGuide && (
           <div style={{ 
@@ -5672,18 +5772,28 @@ function DraftAssistantPage() {
                         <>
                           <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {roster[pos].name} 
-                            <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
-                              {roster[pos].ovr}
-                            </span>
+                            {roster[pos].isPlaceholder ? (
+                              <span style={{ color: theme.warning, marginLeft: 4, fontSize: 10 }}>(custom)</span>
+                            ) : (
+                              <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
+                                {roster[pos].ovr}
+                              </span>
+                            )}
                           </span>
-                          <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11 }}>✎</button>
+                          {!roster[pos].isPlaceholder && <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 11 }}>✎</button>}
                           <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 11 }}>×</button>
                         </>
                       ) : (
-                        <span 
-                          onClick={() => setActivePositionTab(pos === 'DH' ? 'DH' : pos)}
-                          style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
-                        >Empty - Click to view</span>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span 
+                            onClick={() => setActivePositionTab(pos === 'DH' ? 'DH' : pos)}
+                            style={{ color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
+                          >Empty</span>
+                          <button 
+                            onClick={() => { setShowPlaceholderModal(pos); setPlaceholderName(''); }}
+                            style={{ padding: '2px 6px', borderRadius: 4, background: theme.panelBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 10 }}
+                          >+ Custom</button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -5703,18 +5813,28 @@ function DraftAssistantPage() {
                         <>
                           <span style={{ flex: 1, color: theme.textPrimary, fontSize: 13 }}>
                             {roster[pos].name}
-                            <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
-                              {roster[pos].ovr}
-                            </span>
+                            {roster[pos].isPlaceholder ? (
+                              <span style={{ color: theme.warning, marginLeft: 4, fontSize: 10 }}>(custom)</span>
+                            ) : (
+                              <span style={{ color: getCardTierLabel(roster[pos].ovr).color, marginLeft: 4 }}>
+                                {roster[pos].ovr}
+                              </span>
+                            )}
                           </span>
-                          <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>
+                          {!roster[pos].isPlaceholder && <button onClick={() => setEditingSlot(pos)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 12 }}>✎</button>}
                           <button onClick={() => removeFromRoster(pos)} style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontSize: 12 }}>×</button>
                         </>
                       ) : (
-                        <span 
-                          onClick={() => setActivePositionTab(pos.startsWith('SP') ? 'SP' : pos.startsWith('RP') ? 'RP' : 'CL')}
-                          style={{ flex: 1, color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
-                        >Empty - Click to view</span>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span 
+                            onClick={() => setActivePositionTab(pos.startsWith('SP') ? 'SP' : pos.startsWith('RP') ? 'RP' : 'CL')}
+                            style={{ color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
+                          >Empty</span>
+                          <button 
+                            onClick={() => { setShowPlaceholderModal(pos); setPlaceholderName(''); }}
+                            style={{ padding: '2px 6px', borderRadius: 4, background: theme.panelBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 10 }}
+                          >+ Custom</button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -5763,7 +5883,7 @@ function DraftAssistantPage() {
                       border: `1px solid ${theme.border}`, fontSize: 14
                     }}
                   />
-                  {searchResults.length > 0 && (
+                  {searchQuery.trim() && (
                     <div 
                       style={{ 
                         marginTop: 8, background: theme.panelBg, borderRadius: 8, 
@@ -5777,7 +5897,7 @@ function DraftAssistantPage() {
                         return (
                           <div key={i} style={{ 
                             display: 'flex', alignItems: 'center', gap: 8, padding: 10,
-                            borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
+                            borderBottom: `1px solid ${theme.border}`,
                             cursor: 'pointer'
                           }}
                           onClick={() => setShowPlayerModal(p)}
@@ -5794,6 +5914,22 @@ function DraftAssistantPage() {
                           </div>
                         );
                       })}
+                      {/* Add placeholder option */}
+                      <div 
+                        style={{ 
+                          display: 'flex', alignItems: 'center', gap: 8, padding: 10,
+                          cursor: 'pointer', background: theme.inputBg
+                        }}
+                        onClick={() => { setShowPlaceholderModal('search'); setPlaceholderName(searchQuery); }}
+                      >
+                        <span style={{ color: theme.warning, fontWeight: 600 }}>+</span>
+                        <span style={{ flex: 1, color: theme.textSecondary }}>
+                          {searchResults.length === 0 
+                            ? `Add "${searchQuery}" as custom player...`
+                            : `Can't find player? Add "${searchQuery}" as custom...`
+                          }
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -5966,6 +6102,81 @@ function DraftAssistantPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Placeholder Player Modal */}
+        {showPlaceholderModal && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setShowPlaceholderModal(null)}
+          >
+            <div 
+              style={{ background: theme.cardBg, borderRadius: 12, padding: 24, maxWidth: 350, width: '90%', border: `1px solid ${theme.border}` }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 style={{ color: theme.textPrimary, margin: '0 0 16px 0' }}>Add Custom Player</h3>
+              <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16 }}>
+                Add a player that's not in the database (e.g., from a pack you just opened).
+              </p>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 6, fontSize: 12 }}>Player Name</label>
+                <input 
+                  type="text"
+                  placeholder="Enter player name..."
+                  value={placeholderName}
+                  onChange={(e) => setPlaceholderName(e.target.value)}
+                  autoFocus
+                  style={{
+                    width: '100%', padding: 10, borderRadius: 6,
+                    background: theme.inputBg, color: theme.textPrimary,
+                    border: `1px solid ${theme.border}`, fontSize: 14
+                  }}
+                />
+              </div>
+
+              {showPlaceholderModal === 'search' ? (
+                <>
+                  <p style={{ color: theme.textMuted, fontSize: 12, marginBottom: 8 }}>Select position:</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+                    {allSlots.filter(s => !roster[s]).map(slot => (
+                      <button 
+                        key={slot}
+                        onClick={() => addPlaceholder(slot, placeholderName)}
+                        disabled={!placeholderName.trim()}
+                        style={{
+                          padding: '6px 10px', borderRadius: 4, fontSize: 11,
+                          background: placeholderName.trim() ? theme.accent : theme.inputBg, 
+                          color: placeholderName.trim() ? '#fff' : theme.textMuted,
+                          border: `1px solid ${placeholderName.trim() ? theme.accent : theme.border}`, 
+                          cursor: placeholderName.trim() ? 'pointer' : 'not-allowed'
+                        }}
+                      >{slot.replace('BENCH', 'B')}</button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <button 
+                  onClick={() => addPlaceholder(showPlaceholderModal, placeholderName)}
+                  disabled={!placeholderName.trim()}
+                  style={{
+                    width: '100%', padding: 12, borderRadius: 6,
+                    background: placeholderName.trim() ? theme.accent : theme.inputBg,
+                    color: placeholderName.trim() ? '#fff' : theme.textMuted,
+                    border: 'none', cursor: placeholderName.trim() ? 'pointer' : 'not-allowed',
+                    fontSize: 14, fontWeight: 600, marginBottom: 8
+                  }}
+                >Add to {showPlaceholderModal}</button>
+              )}
+              
+              <button 
+                onClick={() => setShowPlaceholderModal(null)}
+                style={{ width: '100%', padding: 10, borderRadius: 6, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, cursor: 'pointer' }}
+              >Cancel</button>
             </div>
           </div>
         )}
