@@ -5293,21 +5293,21 @@ function DraftAssistantPage() {
             {notification.message}
           </div>
         )}
-        <div style={{ padding: 12, maxWidth: '100%', margin: '0 auto' }}>
+        <div style={{ padding: 14, maxWidth: '100%', margin: '0 auto' }}>
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div style={{ minWidth: 0 }}>
-              <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 🎯 {tournamentData?.name}
               </h1>
-              <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 11 }}>
+              <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 13 }}>
                 {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
               </p>
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button onClick={() => setShowQuickGuide(true)} style={{ padding: '6px 10px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12 }}>❓</button>
-              <button onClick={resetDraft} style={{ padding: '6px 10px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12 }}>↺</button>
-              <button onClick={exitDraft} style={{ padding: '6px 10px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12 }}>✕</button>
+              <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 12px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>❓</button>
+              <button onClick={resetDraft} style={{ padding: '8px 12px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>↺</button>
+              <button onClick={exitDraft} style={{ padding: '8px 12px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
             </div>
           </div>
 
@@ -5315,10 +5315,10 @@ function DraftAssistantPage() {
           {scarcityAlerts.length > 0 && (
             <div style={{ 
               background: theme.warning + '22', border: `1px solid ${theme.warning}`, 
-              borderRadius: 8, padding: 8, marginBottom: 10 
+              borderRadius: 8, padding: 10, marginBottom: 12 
             }}>
               {scarcityAlerts.map((alert, i) => (
-                <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 11 }}>
+                <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 13 }}>
                   ⚠️ {alert.count === 0 ? `No elite ${alert.pos}!` : `Only ${alert.count} elite ${alert.pos} left!`}
                 </div>
               ))}
@@ -5326,8 +5326,8 @@ function DraftAssistantPage() {
           )}
 
           {/* Card Pool Toggles */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
-            <span style={{ color: theme.textMuted, fontSize: 10, alignSelf: 'center' }}>Pool:</span>
+          <div style={{ display: 'flex', gap: 5, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
             {[
               { key: 'perfect', label: 'Perf', color: '#a855f7' },
               { key: 'diamond', label: 'Dia', color: '#32EBFC' },
@@ -5340,7 +5340,7 @@ function DraftAssistantPage() {
                 key={tier.key}
                 onClick={() => setCardPool(prev => ({ ...prev, [tier.key]: !prev[tier.key] }))}
                 style={{
-                  padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                  padding: '4px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600,
                   background: cardPool[tier.key] ? tier.color : 'transparent',
                   color: cardPool[tier.key] ? (tier.key === 'gold' || tier.key === 'silver' ? '#000' : '#fff') : tier.color,
                   border: `1px solid ${tier.color}`,
@@ -5353,7 +5353,7 @@ function DraftAssistantPage() {
           </div>
 
           {/* Available Players Panel */}
-          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}`, marginBottom: 12 }}>
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 14, border: `1px solid ${theme.border}`, marginBottom: 12 }}>
             {/* Search */}
             <div style={{ marginBottom: 12 }}>
               <input 
@@ -5366,16 +5366,16 @@ function DraftAssistantPage() {
                 autoCapitalize="off"
                 spellCheck={false}
                 style={{
-                  width: '100%', padding: 8, borderRadius: 8,
+                  width: '100%', padding: 10, borderRadius: 8,
                   background: theme.inputBg, color: theme.textPrimary,
-                  border: `1px solid ${theme.border}`, fontSize: 12
+                  border: `1px solid ${theme.border}`, fontSize: 14
                 }}
               />
               {searchQuery.trim() && (
                 <div 
                   style={{ 
                     marginTop: 6, background: theme.panelBg, borderRadius: 8, 
-                    border: `1px solid ${theme.border}`, maxHeight: 200, overflowY: 'auto' 
+                    border: `1px solid ${theme.border}`, maxHeight: 220, overflowY: 'auto' 
                   }}
                   onMouseDown={(e) => e.preventDefault()}
                 >
@@ -5386,19 +5386,19 @@ function DraftAssistantPage() {
                     const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                     return (
                       <div key={i} style={{ 
-                        display: 'flex', alignItems: 'center', gap: 6, padding: 6,
+                        display: 'flex', alignItems: 'center', gap: 6, padding: 8,
                         borderBottom: `1px solid ${theme.border}`,
-                        cursor: 'pointer', fontSize: 11,
+                        cursor: 'pointer', fontSize: 13,
                         background: tier.color + '15',
                         borderLeft: `3px solid ${tier.color}`
                       }}
                       onClick={() => setShowPlayerModal(p)}
                       >
                         <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
-                        <span style={{ color: theme.textMuted, fontSize: 9 }}>{handLabel}</span>
+                        <span style={{ color: theme.textMuted, fontSize: 11 }}>{handLabel}</span>
                         <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
-                        <span style={{ color: theme.textSecondary, fontSize: 10 }}>
-                          {isPitch ? `${p.siera || p.era} SIERA` : `${p.woba} wOBA`}
+                        <span style={{ color: theme.textSecondary, fontSize: 11 }}>
+                          {isPitch ? `${p.siera || p.era} · ${p.ip || '—'} IP` : `${p.woba} · ${p.ab || '—'} AB`}
                         </span>
                       </div>
                     );
@@ -5406,8 +5406,8 @@ function DraftAssistantPage() {
                   {/* Add placeholder option */}
                   <div 
                     style={{ 
-                      display: 'flex', alignItems: 'center', gap: 6, padding: 6,
-                      cursor: 'pointer', background: theme.inputBg, fontSize: 11
+                      display: 'flex', alignItems: 'center', gap: 6, padding: 8,
+                      cursor: 'pointer', background: theme.inputBg, fontSize: 13
                     }}
                     onClick={() => { setShowPlaceholderModal('search'); setPlaceholderName(searchQuery); }}
                   >
@@ -5421,7 +5421,7 @@ function DraftAssistantPage() {
             </div>
 
             {/* Position Tabs */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 10 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
               {positionTabs.map(pos => {
                 const isActive = activePositionTab === pos;
                 return (
@@ -5429,7 +5429,7 @@ function DraftAssistantPage() {
                     key={pos}
                     onClick={() => { setActivePositionTab(pos); setSearchQuery(''); }}
                     style={{
-                      padding: '4px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                      padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600,
                       background: isActive ? theme.accent : theme.inputBg,
                       color: isActive ? '#fff' : theme.textMuted,
                       border: `1px solid ${isActive ? theme.accent : theme.border}`,
@@ -5441,10 +5441,10 @@ function DraftAssistantPage() {
             </div>
 
             {/* Best Available List - Compact */}
-            <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 6 }}>
+            <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 8 }}>
               Best {activePositionTab} ({currentAvailable.length})
             </div>
-            <div style={{ maxHeight: 250, overflowY: 'auto' }}>
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
               {currentAvailable.map((p, i) => {
                 const tier = getCardTierLabel(p.ovr);
                 const isPitching = p._isPitching;
@@ -5452,18 +5452,18 @@ function DraftAssistantPage() {
                 const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                 return (
                   <div key={p.id || i} style={{ 
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', 
-                    background: tier.color + '12', borderRadius: 6, marginBottom: 4, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', 
+                    background: tier.color + '12', borderRadius: 6, marginBottom: 5, cursor: 'pointer',
                     border: `1px solid ${theme.border}`,
                     borderLeft: `3px solid ${tier.color}`
                   }}
                   onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
                   >
-                    <span style={{ color: tier.color, fontWeight: 700, fontSize: 11 }}>{p.ovr}</span>
-                    <span style={{ color: theme.textMuted, fontSize: 9 }}>{handLabel}</span>
-                    <span style={{ color: theme.textPrimary, flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                    <span style={{ color: theme.textSecondary, fontSize: 10 }}>
-                      {isPitching ? p.siera || p.era : p.woba}
+                    <span style={{ color: tier.color, fontWeight: 700, fontSize: 14 }}>{p.ovr}</span>
+                    <span style={{ color: theme.textMuted, fontSize: 11 }}>{handLabel}</span>
+                    <span style={{ color: theme.textPrimary, flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    <span style={{ color: theme.textSecondary, fontSize: 11 }}>
+                      {isPitching ? `${p.siera || p.era} · ${p.ip || '—'} IP` : `${p.woba} · ${p.ab || '—'} AB`}
                     </span>
                   </div>
                 );
@@ -5473,10 +5473,10 @@ function DraftAssistantPage() {
 
           {/* Roster Panel */}
           <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}` }}>
-            <h3 style={{ color: theme.textPrimary, margin: '0 0 10px 0', fontSize: 13 }}>Roster ({filledCount}/{draftSize})</h3>
+            <h3 style={{ color: theme.textPrimary, margin: '0 0 10px 0', fontSize: 14 }}>Roster ({filledCount}/{draftSize})</h3>
             
             {/* Compact roster - 3 columns */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, fontSize: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, fontSize: 11 }}>
               {[...battingPositions, ...pitchingPositions].map(pos => (
                 <div key={pos} style={{ 
                   padding: 4, background: roster[pos] ? theme.success + '22' : theme.inputBg, 
@@ -5552,7 +5552,7 @@ function DraftAssistantPage() {
                   <button
                     key={slot}
                     onClick={() => {
-                      addToRoster(showPlayerModal, slot);
+                      addToRoster(slot, showPlayerModal);
                       setShowPlayerModal(null);
                     }}
                     style={{
