@@ -4848,15 +4848,14 @@ function DraftAssistantPage() {
     if (isPitching) {
       // Parse IP (handles "123.2" format)
       const ip = parseFloat(player.ip) || 0;
-      if (ip >= 100) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (100+ IP)' };
-      if (ip >= 50) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (50+ IP)' };
-      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<50 IP)' };
+      if (ip >= 200) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (200+ IP)' };
+      if (ip >= 100) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (100-199 IP)' };
+      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<100 IP)' };
     } else {
       const ab = parseInt(player.ab) || 0;
-      const pa = parseInt(player.pa) || ab;
-      if (pa >= 600) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (600+ PA)' };
-      if (pa >= 300) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (300+ PA)' };
-      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<300 PA)' };
+      if (ab >= 801) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (801+ AB)' };
+      if (ab >= 450) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (450-800 AB)' };
+      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<450 AB)' };
     }
   };
 
@@ -5285,41 +5284,326 @@ function DraftAssistantPage() {
     activePositionTab === 'SP' ? 10 : 5
   );
 
-  // Compact mode wrapper (no sidebar/navigation)
-  const CompactWrapper = ({ children }) => (
-    <div style={{ background: theme.mainBg, minHeight: '100vh', color: theme.textPrimary }}>
-      {notification && (
-        <div style={{ position: 'fixed', top: 16, right: 16, padding: '12px 20px', borderRadius: 8, zIndex: 1001, background: notification.type === 'error' ? theme.error : theme.success, color: '#fff' }}>
-          {notification.message}
-        </div>
-      )}
-      {children}
-    </div>
-  );
+  // For compact mode, render without Layout wrapper
+  if (isCompactMode) {
+    return (
+      <div style={{ background: theme.mainBg, minHeight: '100vh', color: theme.textPrimary }}>
+        {notification && (
+          <div style={{ position: 'fixed', top: 16, right: 16, padding: '12px 20px', borderRadius: 8, zIndex: 1001, background: notification.type === 'error' ? theme.error : theme.success, color: '#fff' }}>
+            {notification.message}
+          </div>
+        )}
+        <div style={{ padding: 12, maxWidth: '100%', margin: '0 auto' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                🎯 {tournamentData?.name}
+              </h1>
+              <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 11 }}>
+                {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={() => setShowQuickGuide(true)} style={{ padding: '6px 10px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12 }}>❓</button>
+              <button onClick={resetDraft} style={{ padding: '6px 10px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12 }}>↺</button>
+              <button onClick={exitDraft} style={{ padding: '6px 10px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12 }}>✕</button>
+            </div>
+          </div>
 
-  const Wrapper = isCompactMode ? CompactWrapper : Layout;
-  const wrapperProps = isCompactMode ? {} : { notification };
+          {/* Scarcity Alerts */}
+          {scarcityAlerts.length > 0 && (
+            <div style={{ 
+              background: theme.warning + '22', border: `1px solid ${theme.warning}`, 
+              borderRadius: 8, padding: 8, marginBottom: 10 
+            }}>
+              {scarcityAlerts.map((alert, i) => (
+                <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 11 }}>
+                  ⚠️ {alert.count === 0 ? `No elite ${alert.pos}!` : `Only ${alert.count} elite ${alert.pos} left!`}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Card Pool Toggles */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ color: theme.textMuted, fontSize: 10, alignSelf: 'center' }}>Pool:</span>
+            {[
+              { key: 'perfect', label: 'Perf', color: '#a855f7' },
+              { key: 'diamond', label: 'Dia', color: '#32EBFC' },
+              { key: 'gold', label: 'Gold', color: '#FFE61F' },
+              { key: 'silver', label: 'Silv', color: '#E0E0E0' },
+              { key: 'bronze', label: 'Brnz', color: '#664300' },
+              { key: 'iron', label: 'Iron', color: '#4a4a4a' },
+            ].map(tier => (
+              <button 
+                key={tier.key}
+                onClick={() => setCardPool(prev => ({ ...prev, [tier.key]: !prev[tier.key] }))}
+                style={{
+                  padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                  background: cardPool[tier.key] ? tier.color : 'transparent',
+                  color: cardPool[tier.key] ? (tier.key === 'gold' || tier.key === 'silver' ? '#000' : '#fff') : tier.color,
+                  border: `1px solid ${tier.color}`,
+                  cursor: 'pointer', opacity: cardPool[tier.key] ? 1 : 0.5
+                }}
+              >
+                {tier.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Available Players Panel */}
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}`, marginBottom: 12 }}>
+            {/* Search */}
+            <div style={{ marginBottom: 12 }}>
+              <input 
+                type="text"
+                placeholder="🔍 Search player..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                style={{
+                  width: '100%', padding: 8, borderRadius: 8,
+                  background: theme.inputBg, color: theme.textPrimary,
+                  border: `1px solid ${theme.border}`, fontSize: 12
+                }}
+              />
+              {searchResults.length > 0 && (
+                <div 
+                  style={{ 
+                    marginTop: 6, background: theme.panelBg, borderRadius: 8, 
+                    border: `1px solid ${theme.border}`, maxHeight: 200, overflowY: 'auto' 
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  {searchResults.map((p, i) => {
+                    const tier = getCardTierLabel(p.ovr);
+                    const isPitch = p.type === 'pitching';
+                    return (
+                      <div key={i} style={{ 
+                        display: 'flex', alignItems: 'center', gap: 6, padding: 6,
+                        borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
+                        cursor: 'pointer', fontSize: 11
+                      }}
+                      onClick={() => setShowPlayerModal(p)}
+                      >
+                        <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
+                        <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
+                        <span style={{ color: theme.textMuted, fontSize: 10 }}>{p.pos}</span>
+                        <span style={{ color: theme.textSecondary, fontSize: 10 }}>
+                          {isPitch ? `${p.siera || p.era} SIERA` : `${p.woba} wOBA`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Position Tabs */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 10 }}>
+              {positionTabs.map(pos => {
+                const isActive = activePositionTab === pos;
+                return (
+                  <button
+                    key={pos}
+                    onClick={() => { setActivePositionTab(pos); setSearchQuery(''); }}
+                    style={{
+                      padding: '4px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                      background: isActive ? theme.accent : theme.inputBg,
+                      color: isActive ? '#fff' : theme.textMuted,
+                      border: `1px solid ${isActive ? theme.accent : theme.border}`,
+                      cursor: 'pointer'
+                    }}
+                  >{pos}</button>
+                );
+              })}
+            </div>
+
+            {/* Best Available List - Compact */}
+            <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 6 }}>
+              Best {activePositionTab} ({currentAvailable.length})
+            </div>
+            <div style={{ maxHeight: 250, overflowY: 'auto' }}>
+              {currentAvailable.map((p, i) => {
+                const tier = getCardTierLabel(p.ovr);
+                const isPitching = p._isPitching;
+                return (
+                  <div key={p.id || i} style={{ 
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', 
+                    background: theme.panelBg, borderRadius: 6, marginBottom: 4, cursor: 'pointer',
+                    border: `1px solid ${theme.border}`
+                  }}
+                  onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
+                  >
+                    <span style={{ color: tier.color, fontWeight: 700, fontSize: 11 }}>{p.ovr}</span>
+                    <span style={{ color: theme.textPrimary, flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    <span style={{ color: theme.textSecondary, fontSize: 10 }}>
+                      {isPitching ? p.siera || p.era : p.woba}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Roster Panel */}
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.textPrimary, margin: '0 0 10px 0', fontSize: 13 }}>Roster ({filledCount}/{draftSize})</h3>
+            
+            {/* Compact roster - 3 columns */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, fontSize: 10 }}>
+              {[...battingPositions, ...pitchingPositions].map(pos => (
+                <div key={pos} style={{ 
+                  padding: 4, background: roster[pos] ? theme.success + '22' : theme.inputBg, 
+                  borderRadius: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`,
+                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis'
+                }}>
+                  <span style={{ color: theme.textMuted, fontWeight: 600 }}>{pos}: </span>
+                  {roster[pos] ? (
+                    <span style={{ color: theme.textPrimary }}>{roster[pos].name.split(' ').pop()}</span>
+                  ) : (
+                    <span style={{ color: theme.textMuted }}>—</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Bench count */}
+            <div style={{ marginTop: 6, fontSize: 10, color: theme.textMuted }}>
+              Bench: {Object.keys(roster).filter(k => k.startsWith('BENCH')).length}/{benchCount}
+            </div>
+          </div>
+        </div>
+
+        {/* Player Modal */}
+        {showPlayerModal && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setShowPlayerModal(null)}
+          >
+            <div 
+              style={{ background: theme.cardBg, borderRadius: 12, padding: 20, maxWidth: 350, width: '95%', border: `1px solid ${theme.border}` }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
+                <div>
+                  <h3 style={{ color: theme.textPrimary, margin: 0, fontSize: 16 }}>{showPlayerModal.name}</h3>
+                  <p style={{ color: theme.textMuted, margin: '4px 0 0 0', fontSize: 12 }}>
+                    {showPlayerModal.pos} · <span style={{ color: getCardTierLabel(showPlayerModal.ovr).color }}>{showPlayerModal.ovr} OVR</span>
+                  </p>
+                </div>
+                <button onClick={() => setShowPlayerModal(null)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
+              </div>
+
+              {/* Stats */}
+              <div style={{ background: theme.panelBg, borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11 }}>
+                {showPlayerModal.type === 'pitching' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div><span style={{ color: theme.textMuted }}>SIERA:</span> <span style={{ color: theme.accent }}>{showPlayerModal.siera || '—'}</span></div>
+                    <div><span style={{ color: theme.textMuted }}>ERA:</span> {showPlayerModal.era || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>FIP-:</span> <span style={{ color: theme.accent }}>{showPlayerModal.fipMinus || '—'}</span></div>
+                    <div><span style={{ color: theme.textMuted }}>WHIP:</span> {showPlayerModal.whip || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>IP:</span> {showPlayerModal.ip || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>K/9:</span> {showPlayerModal.k9 || '—'}</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div><span style={{ color: theme.textMuted }}>wOBA:</span> <span style={{ color: theme.accent }}>{showPlayerModal.woba || '—'}</span></div>
+                    <div><span style={{ color: theme.textMuted }}>OPS+:</span> <span style={{ color: theme.accent }}>{showPlayerModal.opsPlus || '—'}</span></div>
+                    <div><span style={{ color: theme.textMuted }}>AVG:</span> {showPlayerModal.avg || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>OBP:</span> {showPlayerModal.obp || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>SLG:</span> {showPlayerModal.slg || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>AB:</span> {showPlayerModal.ab || '—'}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Add to Roster */}
+              <div style={{ marginBottom: 8, fontSize: 11, color: theme.textMuted }}>Add to roster:</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {getEmptySlots(showPlayerModal.type === 'pitching' ? 'pitching' : 'batting').slice(0, 8).map(slot => (
+                  <button
+                    key={slot}
+                    onClick={() => {
+                      addToRoster(showPlayerModal, slot);
+                      setShowPlayerModal(null);
+                    }}
+                    style={{
+                      padding: '4px 8px', borderRadius: 4, fontSize: 10,
+                      background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer'
+                    }}
+                  >{slot}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Start Guide Modal */}
+        {showQuickGuide && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 
+          }}
+          onClick={() => setShowQuickGuide(false)}
+          >
+            <div 
+              style={{ 
+                background: theme.cardBg, borderRadius: 12, padding: 20, maxWidth: 400, width: '95%', 
+                border: `1px solid ${theme.border}`, maxHeight: '90vh', overflowY: 'auto' 
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 18 }}>📋 Quick Guide</h2>
+                <button onClick={() => setShowQuickGuide(false)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
+              </div>
+              <div style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 1.6 }}>
+                <p><strong style={{ color: theme.textPrimary }}>Search:</strong> Find any player by name</p>
+                <p><strong style={{ color: theme.textPrimary }}>Position Tabs:</strong> Browse best available by position</p>
+                <p><strong style={{ color: theme.textPrimary }}>Pool Toggles:</strong> Filter by card tier</p>
+                <p><strong style={{ color: theme.textPrimary }}>Click Player:</strong> View stats and add to roster</p>
+                <p style={{ marginTop: 12, fontSize: 11, color: theme.textMuted }}>
+                  Batters ranked by wOBA · Pitchers ranked by SIERA (lower = better)
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowQuickGuide(false)}
+                style={{ width: '100%', marginTop: 16, padding: 10, borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13 }}
+              >Got it!</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Normal mode uses Layout wrapper
 
   return (
-    <Wrapper {...wrapperProps}>
-      <div style={{ padding: isCompactMode ? 12 : 20, maxWidth: isCompactMode ? '100%' : 1400, margin: '0 auto' }}>
+    <Layout notification={notification}>
+      <div style={{ padding: 20, maxWidth: 1400, margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isCompactMode ? 10 : 16, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: isCompactMode ? 16 : 24, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              🎯 {isCompactMode ? '' : 'Draft Assistant - '}{tournamentData?.name}
+            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 24, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              🎯 Draft Assistant - {tournamentData?.name}
             </h1>
-            <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: isCompactMode ? 11 : 13 }}>
+            <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 13 }}>
               {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
             </p>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            {!isCompactMode && (
-              <button onClick={popOutWindow} style={{ padding: '8px 16px', borderRadius: 6, background: theme.panelBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, cursor: 'pointer' }} title="Open in smaller window for side-by-side use">↗️ Pop Out</button>
-            )}
-            <button onClick={() => setShowQuickGuide(true)} style={{ padding: isCompactMode ? '6px 10px' : '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: isCompactMode ? 12 : 14 }}>❓</button>
-            <button onClick={resetDraft} style={{ padding: isCompactMode ? '6px 10px' : '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: isCompactMode ? 12 : 14 }}>{isCompactMode ? '↺' : 'Reset'}</button>
-            <button onClick={exitDraft} style={{ padding: isCompactMode ? '6px 10px' : '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: isCompactMode ? 12 : 14 }}>{isCompactMode ? '✕' : 'Exit Draft'}</button>
+            <button onClick={popOutWindow} style={{ padding: '8px 16px', borderRadius: 6, background: theme.panelBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, cursor: 'pointer' }} title="Open in smaller window for side-by-side use">↗️ Pop Out</button>
+            <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>❓</button>
+            <button onClick={resetDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>Reset</button>
+            <button onClick={exitDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>Exit Draft</button>
           </div>
         </div>
 
@@ -5327,10 +5611,10 @@ function DraftAssistantPage() {
         {scarcityAlerts.length > 0 && (
           <div style={{ 
             background: theme.warning + '22', border: `1px solid ${theme.warning}`, 
-            borderRadius: 8, padding: isCompactMode ? 8 : 12, marginBottom: isCompactMode ? 10 : 16 
+            borderRadius: 8, padding: 12, marginBottom: 16 
           }}>
             {scarcityAlerts.map((alert, i) => (
-              <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: isCompactMode ? 11 : 13 }}>
+              <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 13 }}>
                 ⚠️ {alert.count === 0 ? `No elite ${alert.pos}!` : `Only ${alert.count} elite ${alert.pos} left!`}
               </div>
             ))}
@@ -5338,8 +5622,8 @@ function DraftAssistantPage() {
         )}
 
         {/* Card Pool Toggles */}
-        <div style={{ display: 'flex', gap: isCompactMode ? 4 : 8, marginBottom: isCompactMode ? 8 : 12, flexWrap: 'wrap' }}>
-          <span style={{ color: theme.textMuted, fontSize: isCompactMode ? 10 : 12, alignSelf: 'center' }}>Pool:</span>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
           {[
             { key: 'perfect', label: 'Perf', color: '#a855f7' },
             { key: 'diamond', label: 'Dia', color: '#32EBFC' },
@@ -5352,7 +5636,7 @@ function DraftAssistantPage() {
               key={tier.key}
               onClick={() => setCardPool(prev => ({ ...prev, [tier.key]: !prev[tier.key] }))}
               style={{
-                padding: isCompactMode ? '2px 6px' : '4px 10px', borderRadius: 4, fontSize: isCompactMode ? 10 : 11, fontWeight: 600,
+                padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                 background: cardPool[tier.key] ? tier.color : 'transparent',
                 color: cardPool[tier.key] ? (tier.key === 'gold' || tier.key === 'silver' ? '#000' : '#fff') : tier.color,
                 border: `1px solid ${tier.color}`,
@@ -5364,8 +5648,7 @@ function DraftAssistantPage() {
           ))}
         </div>
 
-        {/* Heuristics Legend - hidden in compact mode */}
-        {!isCompactMode && (
+        {/* Heuristics Legend */}
         <div style={{ 
           display: 'flex', gap: 16, marginBottom: 16, padding: '8px 12px', 
           background: theme.panelBg, borderRadius: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center'
@@ -5382,150 +5665,17 @@ function DraftAssistantPage() {
             Low confidence hidden • SP's shown for all pitching slots
           </span>
         </div>
-        )}
 
-
-        <div style={{ display: 'grid', gridTemplateColumns: isCompactMode ? '1fr' : '320px 1fr', gap: isCompactMode ? 12 : 20 }}>
-          {/* In compact mode: Available Players first, then Roster */}
-          {/* In normal mode: Roster first, then Available Players */}
-          
-          {isCompactMode ? (
-            <>
-              {/* Available Players Panel - FIRST in compact */}
-              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}` }}>
-                {/* Search */}
-                <div style={{ marginBottom: 12 }}>
-                  <input 
-                    type="text"
-                    placeholder="🔍 Search player..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    autoComplete="off"
-                    style={{
-                      width: '100%', padding: 8, borderRadius: 8,
-                      background: theme.inputBg, color: theme.textPrimary,
-                      border: `1px solid ${theme.border}`, fontSize: 12
-                    }}
-                  />
-                  {searchResults.length > 0 && (
-                    <div 
-                      style={{ 
-                        marginTop: 6, background: theme.panelBg, borderRadius: 8, 
-                        border: `1px solid ${theme.border}`, maxHeight: 200, overflowY: 'auto' 
-                      }}
-                      onMouseDown={(e) => e.preventDefault()}
-                    >
-                      {searchResults.map((p, i) => {
-                        const tier = getCardTierLabel(p.ovr);
-                        const isPitch = p.type === 'pitching';
-                        return (
-                          <div key={i} style={{ 
-                            display: 'flex', alignItems: 'center', gap: 6, padding: 6,
-                            borderBottom: i < searchResults.length - 1 ? `1px solid ${theme.border}` : 'none',
-                            cursor: 'pointer', fontSize: 11
-                          }}
-                          onClick={() => setShowPlayerModal(p)}
-                          >
-                            <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
-                            <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
-                            <span style={{ color: theme.textMuted, fontSize: 10 }}>{p.pos}</span>
-                            <span style={{ color: theme.textSecondary, fontSize: 10 }}>
-                              {isPitch ? `${p.siera || p.era} SIERA` : `${p.woba} wOBA`}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Position Tabs */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 10 }}>
-                  {positionTabs.map(pos => {
-                    const isActive = activePositionTab === pos;
-                    return (
-                      <button
-                        key={pos}
-                        onClick={() => { setActivePositionTab(pos); setSearchQuery(''); }}
-                        style={{
-                          padding: '4px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                          background: isActive ? theme.accent : theme.inputBg,
-                          color: isActive ? '#fff' : theme.textMuted,
-                          border: `1px solid ${isActive ? theme.accent : theme.border}`,
-                          cursor: 'pointer'
-                        }}
-                      >{pos}</button>
-                    );
-                  })}
-                </div>
-
-                {/* Best Available List - Compact */}
-                <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 6 }}>
-                  Best {activePositionTab} ({currentAvailable.length})
-                </div>
-                <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-                  {currentAvailable.map((p, i) => {
-                    const tier = getCardTierLabel(p.ovr);
-                    const isPitching = p._isPitching;
-                    return (
-                      <div key={p.id || i} style={{ 
-                        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', 
-                        background: theme.panelBg, borderRadius: 6, marginBottom: 4, cursor: 'pointer',
-                        border: `1px solid ${theme.border}`
-                      }}
-                      onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
-                      >
-                        <span style={{ color: tier.color, fontWeight: 700, fontSize: 11 }}>{p.ovr}</span>
-                        <span style={{ color: theme.textPrimary, flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                        <span style={{ color: theme.textSecondary, fontSize: 10 }}>
-                          {isPitching ? p.siera || p.era : p.woba}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Roster Panel - SECOND in compact */}
-              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 12, border: `1px solid ${theme.border}` }}>
-                <h3 style={{ color: theme.textPrimary, margin: '0 0 10px 0', fontSize: 13 }}>Roster ({filledCount}/{draftSize})</h3>
-                
-                {/* Compact roster - 3 columns */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, fontSize: 10 }}>
-                  {[...battingPositions, ...pitchingPositions].map(pos => (
-                    <div key={pos} style={{ 
-                      padding: 4, background: roster[pos] ? theme.success + '22' : theme.inputBg, 
-                      borderRadius: 4, border: `1px solid ${roster[pos] ? theme.success : theme.border}`,
-                      overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis'
-                    }}>
-                      <span style={{ color: theme.textMuted, fontWeight: 600 }}>{pos}: </span>
-                      {roster[pos] ? (
-                        <span style={{ color: theme.textPrimary }}>{roster[pos].name.split(' ').pop()}</span>
-                      ) : (
-                        <span style={{ color: theme.textMuted }}>—</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Bench count */}
-                <div style={{ marginTop: 6, fontSize: 10, color: theme.textMuted }}>
-                  Bench: {Object.keys(roster).filter(k => k.startsWith('BENCH')).length}/{benchCount}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* NORMAL MODE - Roster First */}
-              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
-                <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
-                
-                {/* Batting */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>BATTING</div>
-                  {battingPositions.map(pos => (
-                    <div key={pos} style={{ 
+        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
+          {/* Roster */}
+          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
+            
+            {/* Batting */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>BATTING</div>
+              {battingPositions.map(pos => (
+                <div key={pos} style={{ 
                       display: 'flex', alignItems: 'center', gap: 6, padding: 8, 
                       background: roster[pos] ? theme.success + '22' : theme.inputBg, 
                       borderRadius: 6, marginBottom: 3, border: `1px solid ${roster[pos] ? theme.success : theme.border}`
@@ -5731,8 +5881,6 @@ function DraftAssistantPage() {
                   })}
                 </div>
               </div>
-            </>
-          )}
         </div>
 
         {/* Player Modal */}
@@ -5921,8 +6069,8 @@ function DraftAssistantPage() {
                 <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>📊 Confidence & Tiers</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-                    <span style={{ color: '#22c55e' }}>◆ Trusted</span> = Large sample size (600+ PA / 100+ IP)<br/>
-                    <span style={{ color: '#86efac' }}>● High</span> = Good sample size (300+ PA / 50+ IP)<br/>
+                    <span style={{ color: '#22c55e' }}>◆ Trusted</span> = Large sample size (801+ AB / 200+ IP)<br/>
+                    <span style={{ color: '#86efac' }}>● High</span> = Good sample size (450-800 AB / 100-199 IP)<br/>
                     <span style={{ color: '#22c55e' }}>T1</span> = Elite tier, <span style={{ color: '#fbbf24' }}>T2</span> = Good tier, <span style={{ color: theme.textMuted }}>T3+</span> = Below performance gap<br/>
                     <em style={{ color: theme.textMuted, fontSize: 12 }}>Low confidence players are hidden by default.</em>
                   </p>
@@ -5971,7 +6119,7 @@ function DraftAssistantPage() {
           </div>
         )}
       </div>
-    </Wrapper>
+    </Layout>
   );
 }
 
