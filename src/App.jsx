@@ -4845,32 +4845,27 @@ function DraftAssistantPage() {
   };
 
   // === HEURISTICS: Calculate Performance Tiers ===
-  // Groups players into tiers based on meaningful gaps in key metrics
+  // Groups players into tiers based on wOBA (batters) or SIERA (pitchers)
   const calculateTiers = (players, isPitching) => {
     if (!players || players.length === 0) return [];
 
-    // Sort by primary metric (wOBA for batters, SIERA for pitchers)
+    // Sort by primary metric only: wOBA for batters, SIERA for pitchers
     const sorted = [...players].sort((a, b) => {
       if (isPitching) {
-        // Lower SIERA is better, fallback to FIP- then ERA
-        const aVal = parseFloat(a.siera) || (parseFloat(a.fipMinus) / 25) || parseFloat(a.era) || 99;
-        const bVal = parseFloat(b.siera) || (parseFloat(b.fipMinus) / 25) || parseFloat(b.era) || 99;
+        // Lower SIERA is better
+        const aVal = parseFloat(a.siera) || parseFloat(a.era) || 99;
+        const bVal = parseFloat(b.siera) || parseFloat(b.era) || 99;
         return aVal - bVal;
       } else {
-        // Higher wOBA is better, combine with OPS+ for composite
-        const aWoba = parseFloat(a.woba) || 0;
-        const bWoba = parseFloat(b.woba) || 0;
-        const aOpsPlus = parseFloat(a.opsPlus) || 100;
-        const bOpsPlus = parseFloat(b.opsPlus) || 100;
-        // Composite: wOBA * 1000 + OPS+ (wOBA dominates, OPS+ breaks ties)
-        const aVal = (aWoba * 1000) + aOpsPlus;
-        const bVal = (bWoba * 1000) + bOpsPlus;
+        // Higher wOBA is better
+        const aVal = parseFloat(a.woba) || 0;
+        const bVal = parseFloat(b.woba) || 0;
         return bVal - aVal;
       }
     });
 
     // Find tier breaks (gaps > threshold)
-    const tierThreshold = isPitching ? 0.3 : 0.020; // SIERA gap of 0.3, wOBA gap of .020
+    const tierThreshold = isPitching ? 0.25 : 0.015; // SIERA gap of 0.25, wOBA gap of .015
     let currentTier = 1;
     
     return sorted.map((player, idx) => {
@@ -4894,45 +4889,15 @@ function DraftAssistantPage() {
     });
   };
 
-  // === HEURISTICS: Composite Draft Score ===
-  // Combines sample-adjusted performance using proper metrics (no WAR)
-  const getDraftScore = (player, isPitching) => {
-    const confidence = getSampleConfidence(player, isPitching);
-    
-    let baseScore;
+  // === Get primary ranking value (wOBA or SIERA) ===
+  const getRankValue = (player, isPitching) => {
     if (isPitching) {
-      // Primary: SIERA (lower is better), Secondary: FIP-
-      // Invert so higher score = better pitcher
+      // Lower SIERA is better, so invert for sorting (higher = better)
       const siera = parseFloat(player.siera) || parseFloat(player.era) || 5;
-      const fipMinus = parseFloat(player.fipMinus) || 100;
-      
-      // SIERA typically 2.5-5.5, invert and scale
-      const sieraScore = (6 - siera) * 40; // ~20-140 range
-      // FIP- typically 60-140, invert (lower is better)
-      const fipScore = (150 - fipMinus) * 0.5; // ~5-45 range
-      
-      baseScore = sieraScore + fipScore;
+      return 10 - siera; // Invert so higher = better
     } else {
-      // Primary: wOBA, Secondary: OPS+
-      const woba = parseFloat(player.woba) || 0.300;
-      const opsPlus = parseFloat(player.opsPlus) || 100;
-      
-      // wOBA typically .280-.420, scale up
-      const wobaScore = woba * 400; // ~112-168 range
-      // OPS+ typically 80-160
-      const opsScore = (opsPlus - 80) * 0.3; // ~0-24 range
-      
-      baseScore = wobaScore + opsScore;
+      return parseFloat(player.woba) || 0;
     }
-    
-    // Apply confidence multiplier - low confidence gets significant penalty
-    const confidenceMultiplier = {
-      trusted: 1.0,
-      high: 0.92,
-      low: 0.60  // Significant penalty for low sample
-    };
-    
-    return baseScore * confidenceMultiplier[confidence.level];
   };
 
   const startDraft = async () => {
@@ -5017,17 +4982,18 @@ function DraftAssistantPage() {
     // Calculate tiers on ALL eligible players first (before limiting)
     const tiered = calculateTiers(filtered, isPitching);
     
-    // Add confidence/score
+    // Add confidence and rank value
     const withScores = tiered.map(p => ({
       ...p,
       _confidence: getSampleConfidence(p, isPitching),
-      _draftScore: getDraftScore(p, isPitching),
+      _rankValue: getRankValue(p, isPitching),
       _isPitching: isPitching
     }));
 
-    // Sort by draft score (combines metric + sample size confidence)
+    // Sort by rank value (wOBA for batters, inverted SIERA for pitchers)
+    // Already sorted by calculateTiers, but re-sort to be sure
     return withScores
-      .sort((a, b) => b._draftScore - a._draftScore)
+      .sort((a, b) => b._rankValue - a._rankValue)
       .slice(0, limit);
   };
 
@@ -5786,7 +5752,7 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🏷️ Position Tabs</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     Click position tabs (C, 1B, SS, SP, etc.) to see the best available players for that position. 
-                    Players are ranked by a composite score using <strong style={{ color: theme.textPrimary }}>wOBA + OPS+</strong> for batters and <strong style={{ color: theme.textPrimary }}>SIERA + FIP-</strong> for pitchers.
+                    Players are ranked by <strong style={{ color: theme.textPrimary }}>wOBA</strong> for batters (higher is better) and <strong style={{ color: theme.textPrimary }}>SIERA</strong> for pitchers (lower is better).
                   </p>
                 </div>
 
@@ -5901,7 +5867,7 @@ function getStyles(t) {
     // News Banner
     newsBannerContainer: { background: t.teamSecondary || t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
     newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
-    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 20s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
+    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 40s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
     newsBannerSpacer: { margin: '0 50px', color: t.textDim },
     newsBannerEditBtn: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.textMuted, fontSize: 12, zIndex: 10 },
     newsBannerEdit: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' },
