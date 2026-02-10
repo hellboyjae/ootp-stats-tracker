@@ -5281,11 +5281,8 @@ function DraftAssistantPage() {
   }
 
   // Render Main Draft View
-  const positionTabs = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', ...(hasDH ? ['DH'] : []), 'SP', 'RP', 'CL'];
-  const currentAvailable = getAvailablePlayers(
-    activePositionTab === 'SP' ? 'SP' : activePositionTab === 'RP' ? 'RP' : activePositionTab, 
-    activePositionTab === 'SP' ? 10 : 5
-  );
+  const positionTabs = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', ...(hasDH ? ['DH'] : []), 'SP'];
+  const currentAvailable = getAvailablePlayers(activePositionTab, 10);
 
   // For compact mode, render without Layout wrapper
   if (isCompactMode) {
@@ -5385,17 +5382,21 @@ function DraftAssistantPage() {
                   {searchResults.map((p, i) => {
                     const tier = getCardTierLabel(p.ovr);
                     const isPitch = p.type === 'pitching';
+                    const hand = isPitch ? (p.throws || 'R') : (p.bats || 'R');
+                    const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                     return (
                       <div key={i} style={{ 
                         display: 'flex', alignItems: 'center', gap: 6, padding: 6,
                         borderBottom: `1px solid ${theme.border}`,
-                        cursor: 'pointer', fontSize: 11
+                        cursor: 'pointer', fontSize: 11,
+                        background: tier.color + '15',
+                        borderLeft: `3px solid ${tier.color}`
                       }}
                       onClick={() => setShowPlayerModal(p)}
                       >
                         <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
+                        <span style={{ color: theme.textMuted, fontSize: 9 }}>{handLabel}</span>
                         <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
-                        <span style={{ color: theme.textMuted, fontSize: 10 }}>{p.pos}</span>
                         <span style={{ color: theme.textSecondary, fontSize: 10 }}>
                           {isPitch ? `${p.siera || p.era} SIERA` : `${p.woba} wOBA`}
                         </span>
@@ -5447,15 +5448,19 @@ function DraftAssistantPage() {
               {currentAvailable.map((p, i) => {
                 const tier = getCardTierLabel(p.ovr);
                 const isPitching = p._isPitching;
+                const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
+                const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                 return (
                   <div key={p.id || i} style={{ 
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', 
-                    background: theme.panelBg, borderRadius: 6, marginBottom: 4, cursor: 'pointer',
-                    border: `1px solid ${theme.border}`
+                    background: tier.color + '12', borderRadius: 6, marginBottom: 4, cursor: 'pointer',
+                    border: `1px solid ${theme.border}`,
+                    borderLeft: `3px solid ${tier.color}`
                   }}
                   onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
                   >
                     <span style={{ color: tier.color, fontWeight: 700, fontSize: 11 }}>{p.ovr}</span>
+                    <span style={{ color: theme.textMuted, fontSize: 9 }}>{handLabel}</span>
                     <span style={{ color: theme.textPrimary, flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                     <span style={{ color: theme.textSecondary, fontSize: 10 }}>
                       {isPitching ? p.siera || p.era : p.woba}
@@ -5827,7 +5832,7 @@ function DraftAssistantPage() {
                       ) : (
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span 
-                            onClick={() => setActivePositionTab(pos.startsWith('SP') ? 'SP' : pos.startsWith('RP') ? 'RP' : 'CL')}
+                            onClick={() => setActivePositionTab('SP')}
                             style={{ color: theme.textMuted, fontSize: 12, cursor: 'pointer' }}
                           >Empty</span>
                           <button 
@@ -5894,21 +5899,26 @@ function DraftAssistantPage() {
                       {searchResults.map((p, i) => {
                         const tier = getCardTierLabel(p.ovr);
                         const isPitch = p.type === 'pitching';
+                        const hand = isPitch ? (p.throws || 'R') : (p.bats || 'R');
+                        const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                         return (
                           <div key={i} style={{ 
                             display: 'flex', alignItems: 'center', gap: 8, padding: 10,
                             borderBottom: `1px solid ${theme.border}`,
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            background: tier.color + '15',
+                            borderLeft: `3px solid ${tier.color}`
                           }}
                           onClick={() => setShowPlayerModal(p)}
                           >
-                            <span style={{ color: tier.color, fontWeight: 600 }}>{p.ovr}</span>
+                            <span style={{ color: tier.color, fontWeight: 600, minWidth: 28 }}>{p.ovr}</span>
+                            <span style={{ color: theme.textMuted, fontSize: 10, minWidth: 12 }}>{handLabel}</span>
                             <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
                             <span style={{ color: theme.textMuted, fontSize: 12 }}>{p.pos}</span>
                             <span style={{ color: theme.textSecondary, fontSize: 11 }}>
                               {isPitch 
-                                ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
-                                : `${p.woba || '—'} wOBA · ${p.pa || p.ab || '—'} PA`
+                                ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.ip || '—'} IP`
+                                : `${p.woba || '—'} wOBA · ${p.ab || '—'} AB`
                               }
                             </span>
                           </div>
@@ -5964,12 +5974,15 @@ function DraftAssistantPage() {
                     const tierBadge = p._tier <= 2 ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } : null;
                     const conf = p._confidence;
                     const isPitching = p._isPitching;
+                    const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
+                    const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                     
                     return (
                       <div key={p.id || i} style={{ 
                         display: 'flex', alignItems: 'center', gap: 10, padding: 10, 
-                        background: theme.panelBg, borderRadius: 8, marginBottom: 6,
-                        border: `1px solid ${theme.border}`
+                        background: tier.color + '12', borderRadius: 8, marginBottom: 6,
+                        border: `1px solid ${theme.border}`,
+                        borderLeft: `3px solid ${tier.color}`
                       }}>
                         {/* Rank + Tier */}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 30 }}>
@@ -5977,8 +5990,11 @@ function DraftAssistantPage() {
                           {tierBadge && <span style={{ color: tierBadge.color, fontSize: 10, fontWeight: 600 }}>{tierBadge.label}</span>}
                         </div>
                         
-                        {/* OVR Badge */}
-                        <span style={{ color: tier.color, fontWeight: 700, fontSize: 16 }}>{p.ovr}</span>
+                        {/* OVR Badge + Hand */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 32 }}>
+                          <span style={{ color: tier.color, fontWeight: 700, fontSize: 16 }}>{p.ovr}</span>
+                          <span style={{ color: theme.textMuted, fontSize: 10 }}>{handLabel}</span>
+                        </div>
                         
                         {/* Player Info */}
                         <div style={{ flex: 1 }}>
@@ -5988,8 +6004,8 @@ function DraftAssistantPage() {
                           </div>
                           <div style={{ color: theme.textMuted, fontSize: 11 }}>
                             {isPitching 
-                              ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.fipMinus || '—'} FIP- · ${p.ip || '—'} IP`
-                              : `${p.woba || '—'} wOBA · ${p.opsPlus || '—'} OPS+ · ${p.pa || p.ab || '—'} PA`
+                              ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.ip || '—'} IP`
+                              : `${p.woba || '—'} wOBA · ${p.opsPlus || '—'} OPS+ · ${p.ab || '—'} AB`
                             }
                           </div>
                         </div>
