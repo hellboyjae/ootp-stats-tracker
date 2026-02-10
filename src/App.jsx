@@ -5029,17 +5029,8 @@ function DraftAssistantPage() {
       if (!pos.startsWith('SP') && roster[pos]) continue;
 
       const available = getAllAvailableForPosition(pos);
-      // Elite = top tier performers with good sample size
-      const eliteCount = available.filter(p => {
-        const isPitch = pos === 'SP';
-        if (isPitch) {
-          const siera = parseFloat(p.siera) || parseFloat(p.era) || 5;
-          return siera <= 3.5;
-        } else {
-          const woba = parseFloat(p.woba) || 0;
-          return woba >= 0.350;
-        }
-      }).length;
+      // Elite = T1 tier players (already calculated with tier gaps)
+      const eliteCount = available.filter(p => p._tier === 1).length;
       
       if (eliteCount <= 3 && eliteCount > 0) {
         alerts.push({ pos, count: eliteCount, type: 'warning' });
@@ -5082,7 +5073,7 @@ function DraftAssistantPage() {
     showNotif(`${player.name} moved to ${toSlot}`);
   };
 
-  // Search players
+  // Search players - includes ALL players (even low confidence)
   useEffect(() => {
     if (!searchQuery.trim() || !tournamentData) {
       setSearchResults([]);
@@ -5096,23 +5087,19 @@ function DraftAssistantPage() {
       if (!p.name.toLowerCase().includes(query)) return false;
       if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
-      // Filter out low confidence
-      if (getSampleConfidence(p, false).level === 'low') return false;
       return true;
     });
     const pitching = (tournamentData.pitching || []).filter(p => {
       if (!p.name.toLowerCase().includes(query)) return false;
       if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
-      // Filter out low confidence
-      if (getSampleConfidence(p, true).level === 'low') return false;
       return true;
     });
     
     setSearchResults([
       ...batting.map(p => ({ ...p, type: 'batting', _confidence: getSampleConfidence(p, false) })),
       ...pitching.map(p => ({ ...p, type: 'pitching', _confidence: getSampleConfidence(p, true) }))
-    ].slice(0, 10));
+    ].slice(0, 15));
   }, [searchQuery, tournamentData, roster, cardPool]);
 
   // Get empty slots for a player type
