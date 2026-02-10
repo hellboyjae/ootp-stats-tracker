@@ -5444,12 +5444,13 @@ function DraftAssistantPage() {
             <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 8 }}>
               Best {activePositionTab} ({currentAvailable.length})
             </div>
-            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+            <div>
               {currentAvailable.map((p, i) => {
                 const tier = getCardTierLabel(p.ovr);
                 const isPitching = p._isPitching;
                 const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
                 const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
+                const tierBadge = p._tier <= 2 ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } : null;
                 return (
                   <div key={p.id || i} style={{ 
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', 
@@ -5462,6 +5463,7 @@ function DraftAssistantPage() {
                     <span style={{ color: tier.color, fontWeight: 700, fontSize: 14 }}>{p.ovr}</span>
                     <span style={{ color: theme.textMuted, fontSize: 11 }}>{handLabel}</span>
                     <span style={{ color: theme.textPrimary, flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    {tierBadge && <span style={{ color: tierBadge.color, fontSize: 11, fontWeight: 600 }}>{tierBadge.label}</span>}
                     <span style={{ color: theme.textSecondary, fontSize: 11 }}>
                       {isPitching ? `${p.siera || p.era} · ${p.ip || '—'} IP` : `${p.woba} · ${p.ab || '—'} AB`}
                     </span>
