@@ -5409,10 +5409,13 @@ function DraftAssistantPage() {
                     }}
                   />
                   {searchResults.length > 0 && (
-                    <div style={{ 
-                      marginTop: 6, background: theme.panelBg, borderRadius: 8, 
-                      border: `1px solid ${theme.border}`, maxHeight: 200, overflowY: 'auto' 
-                    }}>
+                    <div 
+                      style={{ 
+                        marginTop: 6, background: theme.panelBg, borderRadius: 8, 
+                        border: `1px solid ${theme.border}`, maxHeight: 200, overflowY: 'auto' 
+                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
                       {searchResults.map((p, i) => {
                         const tier = getCardTierLabel(p.ovr);
                         const isPitch = p.type === 'pitching';
@@ -5624,10 +5627,13 @@ function DraftAssistantPage() {
                     }}
                   />
                   {searchResults.length > 0 && (
-                    <div style={{ 
-                      marginTop: 8, background: theme.panelBg, borderRadius: 8, 
-                      border: `1px solid ${theme.border}`, maxHeight: 300, overflowY: 'auto' 
-                    }}>
+                    <div 
+                      style={{ 
+                        marginTop: 8, background: theme.panelBg, borderRadius: 8, 
+                        border: `1px solid ${theme.border}`, maxHeight: 300, overflowY: 'auto' 
+                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
                       {searchResults.map((p, i) => {
                         const tier = getCardTierLabel(p.ovr);
                         const isPitch = p.type === 'pitching';
