@@ -5261,6 +5261,43 @@ function DraftAssistantPage() {
     return { picks: valuePicks.slice(0, 15), isMultiTier: true, message: '' };
   };
 
+  // === TRUE SPLITS CALCULATION ===
+  // Calculate IP-weighted pitching splits and AB-weighted batting splits
+  const getTrueSplits = () => {
+    if (!tournamentData) return null;
+    
+    // Pitching splits (IP-weighted)
+    let leftIP = 0, rightIP = 0;
+    (tournamentData.pitching || []).forEach(p => {
+      const ip = parseFloat(p.ip) || 0;
+      const throws = (p.throws || 'R').toUpperCase();
+      if (throws === 'L') leftIP += ip;
+      else rightIP += ip;
+    });
+    const totalIP = leftIP + rightIP;
+    const pitchingLeft = totalIP > 0 ? Math.round((leftIP / totalIP) * 100) : 0;
+    const pitchingRight = totalIP > 0 ? Math.round((rightIP / totalIP) * 100) : 0;
+    
+    // Batting splits (AB-weighted)
+    let leftAB = 0, switchAB = 0, rightAB = 0;
+    (tournamentData.batting || []).forEach(p => {
+      const ab = parseFloat(p.ab) || 0;
+      const bats = (p.bats || 'R').toUpperCase();
+      if (bats === 'L') leftAB += ab;
+      else if (bats === 'S') switchAB += ab;
+      else rightAB += ab;
+    });
+    const totalAB = leftAB + switchAB + rightAB;
+    const battingLeft = totalAB > 0 ? Math.round((leftAB / totalAB) * 100) : 0;
+    const battingSwitch = totalAB > 0 ? Math.round((switchAB / totalAB) * 100) : 0;
+    const battingRight = totalAB > 0 ? Math.round((rightAB / totalAB) * 100) : 0;
+    
+    return {
+      pitching: { left: pitchingLeft, right: pitchingRight, totalIP },
+      batting: { left: battingLeft, switch: battingSwitch, right: battingRight, totalAB }
+    };
+  };
+
   const filledCount = Object.keys(roster).length;
   const scarcityAlerts = draftStarted ? getScarcityAlert() : [];
 
@@ -5437,6 +5474,30 @@ function DraftAssistantPage() {
               <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 13 }}>
                 {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
               </p>
+              {/* True Splits - Compact */}
+              {(() => {
+                const splits = getTrueSplits();
+                if (!splits) return null;
+                const tooltipText = "True splits are calculated based on IP (pitching) and AB (batting) rather than raw player counts.";
+                return (
+                  <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, flexWrap: 'wrap' }}>
+                    <span style={{ color: theme.textSecondary, cursor: 'help' }} title={tooltipText}>
+                      <span style={{ color: theme.textMuted }}>P ⓘ:</span>{' '}
+                      <span style={{ color: '#f87171' }}>{splits.pitching.left}%L</span>
+                      {'/'}
+                      <span style={{ color: '#60a5fa' }}>{splits.pitching.right}%R</span>
+                    </span>
+                    <span style={{ color: theme.textSecondary, cursor: 'help' }} title={tooltipText}>
+                      <span style={{ color: theme.textMuted }}>B ⓘ:</span>{' '}
+                      <span style={{ color: '#f87171' }}>{splits.batting.left}%L</span>
+                      {'/'}
+                      <span style={{ color: '#a78bfa' }}>{splits.batting.switch}%S</span>
+                      {'/'}
+                      <span style={{ color: '#60a5fa' }}>{splits.batting.right}%R</span>
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 12px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>❓</button>
@@ -5826,6 +5887,36 @@ function DraftAssistantPage() {
             <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 13 }}>
               {draftSize} picks • {hasDH ? 'DH' : 'No DH'} • {filledCount}/{draftSize} filled
             </p>
+            {/* True Splits */}
+            {(() => {
+              const splits = getTrueSplits();
+              if (!splits) return null;
+              const tooltipText = "True splits are calculated based on IP (pitching) and AB (batting) rather than raw player counts, giving a more accurate picture of the pool.";
+              return (
+                <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 12 }}>
+                  <span 
+                    style={{ color: theme.textSecondary, cursor: 'help', borderBottom: `1px dashed ${theme.textMuted}` }}
+                    title={tooltipText}
+                  >
+                    <span style={{ color: theme.textMuted }}>True Pitching ⓘ:</span>{' '}
+                    <span style={{ color: '#f87171' }}>{splits.pitching.left}% L</span>
+                    {' / '}
+                    <span style={{ color: '#60a5fa' }}>{splits.pitching.right}% R</span>
+                  </span>
+                  <span 
+                    style={{ color: theme.textSecondary, cursor: 'help', borderBottom: `1px dashed ${theme.textMuted}` }}
+                    title={tooltipText}
+                  >
+                    <span style={{ color: theme.textMuted }}>True Batting ⓘ:</span>{' '}
+                    <span style={{ color: '#f87171' }}>{splits.batting.left}% L</span>
+                    {' / '}
+                    <span style={{ color: '#a78bfa' }}>{splits.batting.switch}% S</span>
+                    {' / '}
+                    <span style={{ color: '#60a5fa' }}>{splits.batting.right}% R</span>
+                  </span>
+                </div>
+              );
+            })()}
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button onClick={popOutWindow} style={{ padding: '8px 16px', borderRadius: 6, background: theme.panelBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, cursor: 'pointer' }} title="Open in smaller window for side-by-side use">↗️ Pop Out</button>
