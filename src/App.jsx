@@ -336,6 +336,14 @@ function getOvrColor(ovr) {
   return '#FFFFFF';
 }
 
+function getDefColor(def) {
+  const val = parseInt(def) || 0;
+  if (val >= 100) return '#a855f7'; // Purple - elite defense
+  if (val >= 80) return '#3b82f6';  // Blue - great defense
+  if (val >= 50) return '#22c55e';  // Green - good defense
+  return '#fbbf24';                  // Yellow - poor defense
+}
+
 function NewsBanner({ theme, styles }) {
   const { hasAccess, requestAuth } = useAuth();
   const [bannerText, setBannerText] = useState('');
@@ -698,7 +706,7 @@ function StatsPage() {
       };
     } else {
       return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', bats: row.B || '',
-        ovr: parseNum(row.OVR), vari: parseNum(row.VAR), g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
+        ovr: parseNum(row.OVR), vari: parseNum(row.VAR), def: parseNum(row.DEF), g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
         h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR), bbPct: parsePct(row['BB%']),
         so: parseNum(row.SO), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
         woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']), babip: row.BABIP || '.000',
@@ -708,7 +716,7 @@ function StatsPage() {
   };
 
   const PITCHING_HEADERS = ['POS', 'Name', 'T', 'OVR', 'VAR', 'G', 'GS', 'IP', 'BF', 'ERA', 'AVG', 'OBP', 'BABIP', 'WHIP', 'BRA/9', 'HR/9', 'H/9', 'BB/9', 'K/9', 'LOB%', 'ERA+', 'FIP', 'FIP-', 'WAR', 'SIERA'];
-  const BATTING_HEADERS = ['POS', 'Name', 'B', 'OVR', 'VAR', 'G', 'GS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'BB%', 'SO', 'GIDP', 'AVG', 'OBP', 'SLG', 'wOBA', 'OPS', 'OPS+', 'BABIP', 'wRC+', 'wRAA', 'WAR', 'SB%', 'BsR'];
+  const BATTING_HEADERS = ['POS', 'Name', 'B', 'OVR', 'VAR', 'DEF', 'G', 'GS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'BB%', 'SO', 'GIDP', 'AVG', 'OBP', 'SLG', 'wOBA', 'OPS', 'OPS+', 'BABIP', 'wRC+', 'wRAA', 'WAR', 'SB%', 'BsR'];
   const MAX_FILE_SIZE = 1024 * 1024;
 
   const hashContent = async (content) => {
@@ -1307,6 +1315,7 @@ function InfoPage() {
               const instance = {
                 id: crypto.randomUUID(),
                 name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+                def: parseNum(row.DEF),
                 g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
                 h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
                 so: parseNum(row.SO), gidp: parseNum(row.GIDP),
@@ -1347,6 +1356,7 @@ function InfoPage() {
                   wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
                   bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
                   ovr: instance.ovr, vari: instance.vari,
+                  def: instance.def || existing.def, // Update DEF if new value exists, else keep existing
                   bats: instance.bats || existing.bats,
                   h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
                   doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
@@ -2024,7 +2034,7 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
           <div style={modalStyles.playerInfo}>
             <h2 style={modalStyles.playerName}>{player.name}</h2>
             <span style={modalStyles.playerMeta}>
-              {player.pos} • OVR {player.ovr} • {playerType === 'pitching' ? `${player.throws || 'R'}HP` : `Bats ${player.bats || 'R'}`}
+              {player.pos} • OVR {player.ovr}{playerType === 'batting' && player.def ? ` • DEF ${player.def}` : ''} • {playerType === 'pitching' ? `${player.throws || 'R'}HP` : `Bats ${player.bats || 'R'}`}
             </span>
           </div>
           <button style={modalStyles.closeBtn} onClick={onClose}>✕</button>
@@ -2232,7 +2242,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   const calcPer600PA = (val, pa) => { const paNum = parseFloat(pa) || 0; return paNum === 0 ? '0.00' : (parseFloat(val || 0) / paNum * 600).toFixed(2); };
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<div style={styles.tableWrapper}><table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="def">DEF</SortHeader>
     {showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="pa">PA</SortHeader>
     {showTraditional && <SortHeader field="ab">AB</SortHeader>}{showTraditional && <SortHeader field="h">H</SortHeader>}{showTraditional && <SortHeader field="doubles">2B</SortHeader>}
     {showTraditional && <SortHeader field="triples">3B</SortHeader>}{showTraditional && <SortHeader field="hr">HR</SortHeader>}<SortHeader field="bbPct">BB%</SortHeader>
@@ -2246,7 +2256,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
       <td style={styles.td}>{p.pos}</td>
       <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
-      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
+      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def) : theme.textMuted}}>{p.def || '—'}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
       {showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}
       {showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td>
@@ -2846,6 +2856,7 @@ function SubmitDataPage() {
           const instance = {
             id: crypto.randomUUID(),
             name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
             so: parseNum(row.SO), gidp: parseNum(row.GIDP),
@@ -2871,6 +2882,7 @@ function SubmitDataPage() {
               wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
               bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
               ovr: instance.ovr, vari: instance.vari,
+              def: instance.def || existing.def,
               bats: instance.bats || existing.bats,
               h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
               doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
@@ -3170,6 +3182,7 @@ function SubmitDataPage() {
           const instance = {
             id: crypto.randomUUID(),
             name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
             so: parseNum(row.SO), gidp: parseNum(row.GIDP),
@@ -3198,6 +3211,7 @@ function SubmitDataPage() {
               wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
               bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
               ovr: instance.ovr, vari: instance.vari,
+              def: instance.def || existing.def,
               bats: instance.bats || existing.bats,
               h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
               doubles: Math.round(((existing.doubles * oldCount) + instance.doubles) / newCount),
@@ -3966,6 +3980,7 @@ function ReviewQueuePage() {
           const instance = {
             id: crypto.randomUUID(),
             name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
             so: parseNum(row.SO), gidp: parseNum(row.GIDP),
@@ -3994,8 +4009,9 @@ function ReviewQueuePage() {
               war: (parseFloat(existing.war || 0) + parseFloat(instance.war || 0)).toFixed(1),
               wraa: (parseFloat(existing.wraa || 0) + parseFloat(instance.wraa || 0)).toFixed(1),
               bsr: (parseFloat(existing.bsr || 0) + parseFloat(instance.bsr || 0)).toFixed(1),
-              // Keep latest OVR, VAR
+              // Keep latest OVR, VAR, DEF (update if new value exists)
               ovr: instance.ovr, vari: instance.vari,
+              def: instance.def || existing.def,
               bats: instance.bats || existing.bats,
               // Average stats - running average
               h: Math.round(((existing.h * oldCount) + instance.h) / newCount),
@@ -4967,6 +4983,9 @@ function DraftAssistantPage() {
     if (position.startsWith('SP') || position.startsWith('RP') || position === 'CL') posMatch = 'SP';
     else if (position === 'BENCH' || position.startsWith('BENCH')) posMatch = null; // All positions for bench
 
+    // Check if this is a DH position (defense doesn't matter for DH)
+    const isDHPosition = position === 'DH';
+
     // Get roster player keys
     const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
 
@@ -4992,6 +5011,12 @@ function DraftAssistantPage() {
       // Filter out low confidence players (always hidden in Perfect Draft)
       const confidence = getSampleConfidence(p, isPitching);
       if (confidence.level === 'low') return false;
+
+      // Filter out poor defense players (DEF < 50) for non-DH batting positions
+      // Only apply if player has a DEF rating recorded
+      if (!isPitching && !isDHPosition && p.def && parseInt(p.def) < 50) {
+        return false;
+      }
       
       return true;
     });
@@ -5738,6 +5763,7 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.textPrimary, margin: 0, fontSize: 16 }}>{showPlayerModal.name}</h3>
                   <p style={{ color: theme.textMuted, margin: '4px 0 0 0', fontSize: 12 }}>
                     {showPlayerModal.pos} · <span style={{ color: getCardTierLabel(showPlayerModal.ovr).color }}>{showPlayerModal.ovr} OVR</span>
+                    {showPlayerModal.type !== 'pitching' && showPlayerModal.def && <span> · <span style={{ color: getDefColor(showPlayerModal.def) }}>{showPlayerModal.def} DEF</span></span>}
                   </p>
                 </div>
                 <button onClick={() => setShowPlayerModal(null)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
@@ -6394,6 +6420,7 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.textPrimary, margin: 0 }}>{showPlayerModal.name}</h3>
                   <p style={{ color: theme.textMuted, margin: '4px 0 0 0' }}>
                     {showPlayerModal.pos} · <span style={{ color: getCardTierLabel(showPlayerModal.ovr).color }}>{showPlayerModal.ovr} OVR</span>
+                    {showPlayerModal.type !== 'pitching' && showPlayerModal.def && <span> · <span style={{ color: getDefColor(showPlayerModal.def) }}>{showPlayerModal.def} DEF</span></span>}
                   </p>
                 </div>
                 <button onClick={() => setShowPlayerModal(null)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
