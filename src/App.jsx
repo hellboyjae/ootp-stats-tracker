@@ -5127,6 +5127,140 @@ function DraftAssistantPage() {
     }
   };
 
+  // === VALUE PICKS CALCULATION ===
+  // Find players who perform close to top-tier players but are in lower card tiers
+  const getValuePicks = () => {
+    if (!tournamentData) return { picks: [], isMultiTier: false, message: '' };
+    
+    // Determine which card tiers are enabled
+    const tierOrder = ['perfect', 'diamond', 'gold', 'silver', 'bronze', 'iron'];
+    const enabledTiers = tierOrder.filter(t => cardPool[t]);
+    
+    if (enabledTiers.length <= 1) {
+      return { 
+        picks: [], 
+        isMultiTier: false, 
+        message: 'Value Picks requires multiple card tiers. Enable more tiers in the Pool filter above.'
+      };
+    }
+    
+    // Get the highest enabled tier as the "reference" tier
+    const highestTier = enabledTiers[0];
+    const highestTierIndex = tierOrder.indexOf(highestTier);
+    
+    // Value tiers are 2+ tiers below the highest
+    const valueTiers = enabledTiers.filter(t => tierOrder.indexOf(t) >= highestTierIndex + 2);
+    
+    if (valueTiers.length === 0) {
+      // If only 2 tiers apart, use the lowest as value tier
+      const lowestTier = enabledTiers[enabledTiers.length - 1];
+      if (lowestTier !== highestTier) {
+        valueTiers.push(lowestTier);
+      } else {
+        return { 
+          picks: [], 
+          isMultiTier: false, 
+          message: 'Need at least 2 different card tiers for Value Picks.'
+        };
+      }
+    }
+    
+    // Get all available players (not in roster, passing card pool filter, with good confidence)
+    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
+    
+    const allBatters = (tournamentData.batting || []).filter(p => {
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (!cardPool[getCardTier(p.ovr)]) return false;
+      if (getSampleConfidence(p, false).level === 'low') return false;
+      return true;
+    });
+    
+    const allPitchers = (tournamentData.pitching || []).filter(p => {
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (!cardPool[getCardTier(p.ovr)]) return false;
+      if (getSampleConfidence(p, true).level === 'low') return false;
+      return true;
+    });
+    
+    // For each position, find the best player (from highest tier) and compare value tier players
+    const positions = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'SP'];
+    const valuePicks = [];
+    
+    for (const pos of positions) {
+      const isPitching = pos === 'SP';
+      const players = isPitching ? allPitchers : allBatters;
+      
+      // Get players at this position
+      const positionPlayers = players.filter(p => {
+        if (isPitching) return true; // All pitchers for SP
+        const positions = p.positions || [p.pos];
+        return positions.some(pp => pp === pos || pp === pos);
+      });
+      
+      if (positionPlayers.length === 0) continue;
+      
+      // Find the best metric at this position (from any tier in pool)
+      let bestMetric;
+      if (isPitching) {
+        bestMetric = Math.min(...positionPlayers.map(p => parseFloat(p.siera) || parseFloat(p.era) || 10));
+      } else {
+        bestMetric = Math.max(...positionPlayers.map(p => parseFloat(p.woba) || 0));
+      }
+      
+      // Find value picks from lower tiers
+      for (const p of positionPlayers) {
+        const playerTier = getCardTier(p.ovr);
+        if (!valueTiers.includes(playerTier)) continue;
+        
+        const metric = isPitching 
+          ? (parseFloat(p.siera) || parseFloat(p.era) || 10)
+          : (parseFloat(p.woba) || 0);
+        
+        // Calculate gap from best
+        const gap = isPitching ? (metric - bestMetric) : (bestMetric - metric);
+        
+        // Determine value level
+        let valueLevel = null;
+        if (isPitching) {
+          if (gap <= 0.3) valueLevel = 'insane';
+          else if (gap <= 0.4) valueLevel = 'great';
+          else if (gap <= 0.5) valueLevel = 'good';
+        } else {
+          if (gap <= 0.015) valueLevel = 'insane';
+          else if (gap <= 0.025) valueLevel = 'great';
+          else if (gap <= 0.040) valueLevel = 'good';
+        }
+        
+        if (valueLevel) {
+          const tierLabel = getCardTierLabel(p.ovr);
+          valuePicks.push({
+            ...p,
+            _position: pos,
+            _isPitching: isPitching,
+            _gap: gap,
+            _bestMetric: bestMetric,
+            _valueLevel: valueLevel,
+            _tierLabel: tierLabel,
+            _cardTier: playerTier,
+            _metric: metric,
+            _confidence: getSampleConfidence(p, isPitching)
+          });
+        }
+      }
+    }
+    
+    // Sort by value level (insane > great > good), then by gap
+    const levelOrder = { insane: 0, great: 1, good: 2 };
+    valuePicks.sort((a, b) => {
+      if (levelOrder[a._valueLevel] !== levelOrder[b._valueLevel]) {
+        return levelOrder[a._valueLevel] - levelOrder[b._valueLevel];
+      }
+      return a._gap - b._gap;
+    });
+    
+    return { picks: valuePicks.slice(0, 15), isMultiTier: true, message: '' };
+  };
+
   const filledCount = Object.keys(roster).length;
   const scarcityAlerts = draftStarted ? getScarcityAlert() : [];
 
@@ -5760,7 +5894,7 @@ function DraftAssistantPage() {
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 300px', gap: 20 }}>
           {/* Roster */}
           <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
             <h3 style={{ color: theme.textPrimary, margin: '0 0 12px 0', fontSize: 16 }}>Your Roster ({filledCount}/{draftSize})</h3>
@@ -6022,6 +6156,109 @@ function DraftAssistantPage() {
                   })}
                 </div>
               </div>
+
+          {/* Value Picks Panel */}
+          {(() => {
+            const { picks: valuePicks, isMultiTier, message } = getValuePicks();
+            return (
+              <div style={{ background: theme.cardBg, borderRadius: 12, padding: 16, border: `1px solid ${theme.border}` }}>
+                <h3 style={{ color: theme.textPrimary, margin: '0 0 4px 0', fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  💎 Value Picks
+                </h3>
+                <p style={{ color: theme.textMuted, fontSize: 11, margin: '0 0 12px 0' }}>
+                  Lower tier cards with elite production
+                </p>
+                
+                {!isMultiTier ? (
+                  <div style={{ 
+                    padding: 16, background: theme.inputBg, borderRadius: 8, 
+                    color: theme.textMuted, fontSize: 12, textAlign: 'center' 
+                  }}>
+                    {message}
+                  </div>
+                ) : valuePicks.length === 0 ? (
+                  <div style={{ 
+                    padding: 16, background: theme.inputBg, borderRadius: 8, 
+                    color: theme.textMuted, fontSize: 12, textAlign: 'center' 
+                  }}>
+                    No value picks found. Lower tier players aren't close enough to top performers.
+                  </div>
+                ) : (
+                  <div>
+                    {/* Group by value level */}
+                    {['insane', 'great', 'good'].map(level => {
+                      const levelPicks = valuePicks.filter(p => p._valueLevel === level);
+                      if (levelPicks.length === 0) return null;
+                      
+                      const levelConfig = {
+                        insane: { label: '🔥 Insane Value', color: '#f59e0b', desc: 'Within 0.015 wOBA / 0.3 SIERA' },
+                        great: { label: '⭐ Great Value', color: '#22c55e', desc: 'Within 0.025 wOBA / 0.4 SIERA' },
+                        good: { label: '👍 Good Value', color: '#3b82f6', desc: 'Within 0.040 wOBA / 0.5 SIERA' }
+                      }[level];
+                      
+                      return (
+                        <div key={level} style={{ marginBottom: 12 }}>
+                          <div style={{ 
+                            color: levelConfig.color, fontSize: 11, fontWeight: 600, 
+                            marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 
+                          }}>
+                            {levelConfig.label}
+                            <span style={{ color: theme.textMuted, fontWeight: 400, fontSize: 10 }}>
+                              ({levelConfig.desc})
+                            </span>
+                          </div>
+                          {levelPicks.map((p, i) => {
+                            const hand = p._isPitching ? (p.throws || 'R') : (p.bats || 'R');
+                            const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
+                            const gapDisplay = p._isPitching 
+                              ? `+${p._gap.toFixed(2)} SIERA`
+                              : `-${p._gap.toFixed(3)} wOBA`;
+                            const pctOfBest = p._isPitching
+                              ? Math.round((p._bestMetric / p._metric) * 100)
+                              : Math.round((p._metric / p._bestMetric) * 100);
+                            
+                            return (
+                              <div 
+                                key={`${p.name}-${p.ovr}-${i}`}
+                                onClick={() => setShowPlayerModal({ ...p, type: p._isPitching ? 'pitching' : 'batting' })}
+                                style={{ 
+                                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                                  background: p._tierLabel.color + '15', borderRadius: 6, marginBottom: 4,
+                                  border: `1px solid ${theme.border}`, borderLeft: `3px solid ${p._tierLabel.color}`,
+                                  cursor: 'pointer', fontSize: 12
+                                }}
+                              >
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 28 }}>
+                                  <span style={{ color: p._tierLabel.color, fontWeight: 700, fontSize: 13 }}>{p.ovr}</span>
+                                  <span style={{ color: theme.textMuted, fontSize: 9 }}>{handLabel}</span>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: theme.textPrimary, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {p.name}
+                                  </div>
+                                  <div style={{ color: theme.textMuted, fontSize: 10 }}>
+                                    {p._position} · {p._tierLabel.label} · {pctOfBest}% of best
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right', fontSize: 10 }}>
+                                  <div style={{ color: theme.textSecondary }}>
+                                    {p._isPitching ? p.siera || p.era : p.woba}
+                                  </div>
+                                  <div style={{ color: levelConfig.color }}>
+                                    {gapDisplay}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Player Modal */}
