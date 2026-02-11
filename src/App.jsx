@@ -5249,16 +5249,40 @@ function DraftAssistantPage() {
       }
     }
     
+    // Deduplicate players - combine positions for same player
+    const playerMap = new Map();
+    for (const p of valuePicks) {
+      const key = `${p.name}|${p.ovr}`;
+      if (playerMap.has(key)) {
+        const existing = playerMap.get(key);
+        // Add position if not already included
+        if (!existing._positions.includes(p._position)) {
+          existing._positions.push(p._position);
+        }
+        // Keep the better value level
+        const levelOrder = { insane: 0, great: 1, good: 2 };
+        if (levelOrder[p._valueLevel] < levelOrder[existing._valueLevel]) {
+          existing._valueLevel = p._valueLevel;
+          existing._gap = p._gap;
+          existing._bestMetric = p._bestMetric;
+        }
+      } else {
+        playerMap.set(key, { ...p, _positions: [p._position] });
+      }
+    }
+    
+    const deduplicatedPicks = Array.from(playerMap.values());
+    
     // Sort by value level (insane > great > good), then by gap
     const levelOrder = { insane: 0, great: 1, good: 2 };
-    valuePicks.sort((a, b) => {
+    deduplicatedPicks.sort((a, b) => {
       if (levelOrder[a._valueLevel] !== levelOrder[b._valueLevel]) {
         return levelOrder[a._valueLevel] - levelOrder[b._valueLevel];
       }
       return a._gap - b._gap;
     });
     
-    return { picks: valuePicks.slice(0, 15), isMultiTier: true, message: '' };
+    return { picks: deduplicatedPicks.slice(0, 15), isMultiTier: true, message: '' };
   };
 
   // === TRUE SPLITS CALCULATION ===
@@ -6307,6 +6331,7 @@ function DraftAssistantPage() {
                             const pctOfBest = p._isPitching
                               ? Math.round((p._bestMetric / p._metric) * 100)
                               : Math.round((p._metric / p._bestMetric) * 100);
+                            const positionsDisplay = p._positions ? p._positions.join('/') : p._position;
                             
                             return (
                               <div 
@@ -6328,7 +6353,7 @@ function DraftAssistantPage() {
                                     {p.name}
                                   </div>
                                   <div style={{ color: theme.textMuted, fontSize: 10 }}>
-                                    {p._position} · {p._tierLabel.label} · {pctOfBest}% of best
+                                    {positionsDisplay} · {p._tierLabel.label} · {pctOfBest}% of best
                                   </div>
                                 </div>
                                 <div style={{ textAlign: 'right', fontSize: 10 }}>
