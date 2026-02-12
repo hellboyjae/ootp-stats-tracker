@@ -482,6 +482,7 @@ function StatsPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const { hasAccess, requestAuth } = useAuth();
+  const fileInputRef = React.useRef(null);
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [activeTab, setActiveTab] = useState('pitching');
@@ -751,15 +752,24 @@ function StatsPage() {
 
   const handleFileUpload = (event) => {
     const files = Array.from(event.target.files); 
+    // Always reset the input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     if (!files.length || !selectedTournament) return;
     for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) { showNotif('File too large', 'error'); event.target.value = ''; return; }
-      if (!file.name.toLowerCase().endsWith('.csv')) { showNotif('Not a CSV', 'error'); event.target.value = ''; return; }
+      if (file.size > MAX_FILE_SIZE) { showNotif('File too large', 'error'); return; }
+      if (!file.name.toLowerCase().endsWith('.csv')) { showNotif('Not a CSV', 'error'); return; }
     }
     // Store files and show date picker
     setPendingUploadFiles(files);
     setShowDatePicker(true);
-    event.target.value = '';
+  };
+  
+  const triggerFileUpload = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const processUploadWithDate = async (selectedDate) => {
@@ -1033,7 +1043,17 @@ function StatsPage() {
               <div style={styles.headerActions}>
                 <button style={styles.missingDataBtn} onClick={() => setShowMissingData(true)} title="View missing data calendar">📅 Missing Data</button>
                 {hasAccess('upload') && (
-                <label style={styles.uploadBtn}><span>↑ Upload CSV</span><input type="file" accept=".csv" multiple onChange={handleFileUpload} style={{display:'none'}} /></label>
+                  <>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept=".csv" 
+                      multiple 
+                      onChange={handleFileUpload} 
+                      style={{ display: 'none' }} 
+                    />
+                    <button style={styles.uploadBtn} onClick={triggerFileUpload}>↑ Upload CSV</button>
+                  </>
                 )}
               </div>
             </div>
@@ -3889,6 +3909,8 @@ function ReviewQueuePage() {
   const [notification, setNotification] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [previewId, setPreviewId] = useState(null);
+  const [selectedUploads, setSelectedUploads] = useState(new Set()); // Batch selection
+  const [isBatchApproving, setIsBatchApproving] = useState(false);
   
   // New event creation state
   const [creatingNewFor, setCreatingNewFor] = useState(null);
@@ -4175,6 +4197,109 @@ function ReviewQueuePage() {
     }
   };
 
+  // Group uploads by tournament suggestion + date for batch selection
+  const getUploadGroups = () => {
+    const groups = new Map();
+    pendingUploads.forEach(upload => {
+      const key = `${upload.suggested_tournament_name || 'Unknown'}|${upload.suggested_date || 'Unknown'}`;
+      if (!groups.has(key)) {
+        groups.set(key, { 
+          key, 
+          tournamentName: upload.suggested_tournament_name || 'Unknown', 
+          date: upload.suggested_date || 'Unknown',
+          uploads: [] 
+        });
+      }
+      groups.get(key).uploads.push(upload);
+    });
+    return Array.from(groups.values());
+  };
+
+  const toggleUploadSelection = (uploadId) => {
+    setSelectedUploads(prev => {
+      const next = new Set(prev);
+      if (next.has(uploadId)) {
+        next.delete(uploadId);
+      } else if (next.size < 10) {
+        next.add(uploadId);
+      } else {
+        showNotif('Maximum 10 uploads can be selected at once', 'error');
+      }
+      return next;
+    });
+  };
+
+  const toggleGroupSelection = (group) => {
+    const groupIds = group.uploads.map(u => u.id);
+    const allSelected = groupIds.every(id => selectedUploads.has(id));
+    
+    setSelectedUploads(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        // Deselect all in group
+        groupIds.forEach(id => next.delete(id));
+      } else {
+        // Select all in group (up to limit)
+        groupIds.forEach(id => {
+          if (next.size < 10) next.add(id);
+        });
+        if (next.size >= 10 && !groupIds.every(id => next.has(id))) {
+          showNotif('Maximum 10 uploads reached', 'error');
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleBatchApprove = async () => {
+    if (selectedUploads.size === 0) {
+      showNotif('No uploads selected', 'error');
+      return;
+    }
+
+    // Get selected uploads
+    const uploadsToApprove = pendingUploads.filter(u => selectedUploads.has(u.id));
+    
+    // Check that all have matching tournaments
+    const missingTournament = uploadsToApprove.find(u => {
+      const selectEl = document.getElementById(`tournament-${u.id}`);
+      return !selectEl?.value;
+    });
+    if (missingTournament) {
+      showNotif('Please select tournaments for all selected uploads', 'error');
+      return;
+    }
+
+    if (!confirm(`Approve ${uploadsToApprove.length} uploads?`)) return;
+
+    setIsBatchApproving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const upload of uploadsToApprove) {
+      try {
+        const selectEl = document.getElementById(`tournament-${upload.id}`);
+        const tournamentId = selectEl?.value;
+        if (!tournamentId) continue;
+        
+        await handleApprove(upload, tournamentId, upload.suggested_date);
+        successCount++;
+      } catch (e) {
+        console.error('Batch approve error:', e);
+        errorCount++;
+      }
+    }
+
+    setIsBatchApproving(false);
+    setSelectedUploads(new Set());
+    
+    if (errorCount > 0) {
+      showNotif(`Approved ${successCount}, failed ${errorCount}`, 'error');
+    } else {
+      showNotif(`✓ Batch approved ${successCount} uploads!`);
+    }
+  };
+
   const handleReject = async (uploadId) => {
     if (!confirm('Reject this submission?')) return;
     try {
@@ -4313,8 +4438,98 @@ function ReviewQueuePage() {
                 <div style={styles.reviewList}>
                   {pendingUploads.length === 0 ? (
                     <div style={styles.emptyState}>✓ No pending submissions</div>
-                  ) : pendingUploads.map(upload => (
-                    <div key={upload.id} style={styles.reviewCard}>
+                  ) : (
+                    <>
+                      {/* Batch Controls */}
+                      {pendingUploads.length > 1 && (
+                        <div style={{ 
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: 12, background: theme.panelBg, borderRadius: 8, marginBottom: 16,
+                          border: `1px solid ${theme.border}`
+                        }}>
+                          <div style={{ color: theme.textSecondary, fontSize: 13 }}>
+                            {selectedUploads.size > 0 
+                              ? `${selectedUploads.size} selected (max 10)`
+                              : 'Select uploads to batch approve'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button 
+                              onClick={() => setSelectedUploads(new Set())}
+                              disabled={selectedUploads.size === 0}
+                              style={{
+                                padding: '6px 12px', borderRadius: 6, fontSize: 12,
+                                background: 'transparent', color: theme.textMuted,
+                                border: `1px solid ${theme.border}`, cursor: 'pointer',
+                                opacity: selectedUploads.size === 0 ? 0.5 : 1
+                              }}
+                            >
+                              Clear
+                            </button>
+                            <button 
+                              onClick={handleBatchApprove}
+                              disabled={selectedUploads.size === 0 || isBatchApproving}
+                              style={{
+                                padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                background: selectedUploads.size > 0 ? theme.success : theme.inputBg,
+                                color: selectedUploads.size > 0 ? '#fff' : theme.textMuted,
+                                border: 'none', cursor: 'pointer',
+                                opacity: selectedUploads.size === 0 || isBatchApproving ? 0.5 : 1
+                              }}
+                            >
+                              {isBatchApproving ? 'Approving...' : `✓ Batch Approve (${selectedUploads.size})`}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Group headers for paired uploads */}
+                      {getUploadGroups().map(group => (
+                        <div key={group.key} style={{ marginBottom: 16 }}>
+                          {/* Group Header */}
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                            background: theme.panelBg, borderRadius: '8px 8px 0 0',
+                            borderBottom: `1px solid ${theme.border}`
+                          }}>
+                            <input 
+                              type="checkbox"
+                              checked={group.uploads.every(u => selectedUploads.has(u.id))}
+                              onChange={() => toggleGroupSelection(group)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span style={{ color: theme.textPrimary, fontWeight: 600, fontSize: 13 }}>
+                              {group.tournamentName}
+                            </span>
+                            <span style={{ color: theme.textMuted, fontSize: 12 }}>
+                              {formatDate(group.date)} · {group.uploads.length} file{group.uploads.length > 1 ? 's' : ''}
+                            </span>
+                            {group.uploads.length === 2 && (
+                              <span style={{ 
+                                background: theme.accent + '22', color: theme.accent, 
+                                padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600 
+                              }}>
+                                PAIR
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Group Items */}
+                          {group.uploads.map(upload => (
+                    <div key={upload.id} style={{
+                      ...styles.reviewCard,
+                      marginBottom: 0,
+                      borderRadius: group.uploads.indexOf(upload) === group.uploads.length - 1 ? '0 0 8px 8px' : 0,
+                      borderTop: group.uploads.indexOf(upload) > 0 ? 'none' : undefined,
+                      background: selectedUploads.has(upload.id) ? theme.accent + '11' : styles.reviewCard.background
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <input 
+                          type="checkbox"
+                          checked={selectedUploads.has(upload.id)}
+                          onChange={() => toggleUploadSelection(upload.id)}
+                          style={{ cursor: 'pointer', marginTop: 4 }}
+                        />
+                        <div style={{ flex: 1 }}>
                       <div style={styles.reviewCardHeader}>
                         <span style={styles.reviewCardFile}>📄 {upload.file_name}</span>
                         <span style={styles.reviewCardTime}>{timeAgo(upload.created_at)}</span>
@@ -4324,14 +4539,6 @@ function ReviewQueuePage() {
                         <div style={styles.reviewCardRow}>
                           <span style={styles.reviewCardLabel}>Type:</span>
                           <span style={styles.reviewCardValue}>{upload.file_type?.toUpperCase()} ({(upload.clean_data || []).length} players)</span>
-                        </div>
-                        <div style={styles.reviewCardRow}>
-                          <span style={styles.reviewCardLabel}>User Selected:</span>
-                          <span style={styles.reviewCardValue}>{upload.suggested_tournament_name || 'New Event'}</span>
-                        </div>
-                        <div style={styles.reviewCardRow}>
-                          <span style={styles.reviewCardLabel}>Date:</span>
-                          <span style={styles.reviewCardValue}>{formatDate(upload.suggested_date)}</span>
                         </div>
                         {upload.user_notes && (
                           <div style={styles.reviewCardRow}>
@@ -4461,8 +4668,14 @@ function ReviewQueuePage() {
                           {(upload.clean_data || []).length > 10 && <div style={{padding: 8, color: theme.textMuted}}>... and {upload.clean_data.length - 10} more rows</div>}
                         </div>
                       )}
+                        </div>{/* close flex: 1 div */}
+                      </div>{/* close flex wrapper div */}
                     </div>
                   ))}
+                </div>
+              ))}
+                    </>
+                  )}
                 </div>
               )}
 
