@@ -493,6 +493,7 @@ function StatsPage() {
   const [showMissingData, setShowMissingData] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingUploadFiles, setPendingUploadFiles] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [selectedPlayerType, setSelectedPlayerType] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -637,6 +638,7 @@ function StatsPage() {
     // Reset any pending upload state from previous tournament
     setShowDatePicker(false);
     setPendingUploadFiles(null);
+    setIsUploading(false);
   };
   const parseIP = (ip) => { if (!ip) return 0; const str = String(ip); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
@@ -760,9 +762,10 @@ function StatsPage() {
   };
 
   const processUploadWithDate = async (selectedDate) => {
-    if (!pendingUploadFiles || !selectedTournament) return;
+    if (!pendingUploadFiles || !selectedTournament || isUploading) return;
     
-    requestAuth(async () => {
+    const doUpload = async () => {
+      setIsUploading(true);
       try {
         let currentTournament = { ...selectedTournament };
         let uploadedHashes = [...(currentTournament.uploadedHashes || [])];
@@ -800,10 +803,17 @@ function StatsPage() {
         let msg = totalBatting || totalPitching ? `✓ ${totalBatting ? totalBatting + ' batters' : ''}${totalPitching ? (totalBatting ? ', ' : '') + totalPitching + ' pitchers' : ''}` : 'No new data';
         if (skippedDupes) msg += ` (${skippedDupes} dupes skipped)`;
         showNotif(msg, (!totalBatting && !totalPitching) ? 'error' : undefined);
-      } catch (e) { showNotif('Upload error', 'error'); }
-      setPendingUploadFiles(null);
-      setShowDatePicker(false);
-    });
+      } catch (e) { 
+        console.error('Upload error:', e);
+        showNotif('Upload error', 'error'); 
+      } finally {
+        setPendingUploadFiles(null);
+        setShowDatePicker(false);
+        setIsUploading(false);
+      }
+    };
+    
+    requestAuth(doUpload);
   };
 
   // Helper to get Pacific Time date
@@ -1044,7 +1054,8 @@ function StatsPage() {
                             ...(day.dayOfWeek === 0 ? styles.datePickerSunday : {}),
                             ...(isUploaded ? styles.datePickerDayUploaded : {})
                           }}
-                          onClick={() => processUploadWithDate(day.dateStr)}
+                          onClick={() => !isUploading && processUploadWithDate(day.dateStr)}
+                          disabled={isUploading}
                         >
                           <span style={styles.datePickerDayNum}>{day.dayOfMonth}</span>
                           <span style={styles.datePickerDayLabel}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day.dayOfWeek]}</span>
@@ -1052,8 +1063,19 @@ function StatsPage() {
                       );
                     })}
                   </div>
+                  {isUploading && (
+                    <div style={{ textAlign: 'center', padding: 12, color: theme.accent }}>
+                      Uploading...
+                    </div>
+                  )}
                   <div style={styles.modalBtns}>
-                    <button onClick={() => { setShowDatePicker(false); setPendingUploadFiles(null); }} style={styles.cancelBtn}>Cancel</button>
+                    <button 
+                      onClick={() => { setShowDatePicker(false); setPendingUploadFiles(null); setIsUploading(false); }} 
+                      style={styles.cancelBtn}
+                      disabled={isUploading}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               </div>
