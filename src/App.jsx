@@ -326,6 +326,12 @@ function initPositionTracking(instancePos) {
   };
 }
 
+function parseVariant(v) { 
+  if (!v) return 'N';
+  const val = String(v).toUpperCase().trim();
+  return (val === 'Y' || val === 'YES' || val === '1' || val === 'TRUE') ? 'Y' : 'N';
+}
+
 function getOvrColor(ovr) {
   const val = parseInt(ovr) || 0;
   if (val >= 100) return '#E82D07';
@@ -644,11 +650,6 @@ function StatsPage() {
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
   const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
   const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
-  const parseVariant = (v) => { 
-    if (!v) return 'N';
-    const val = String(v).toUpperCase().trim();
-    return (val === 'Y' || val === 'YES' || val === '1' || val === 'TRUE') ? 'Y' : 'N';
-  };
 
   const combinePlayerStats = (existing, newP, type) => {
     // Include variant in player key so variants are treated as separate cards
