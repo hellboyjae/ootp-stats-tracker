@@ -5072,7 +5072,7 @@ function DraftAssistantPage() {
   
   // Position definitions
   const battingPositions = hasDH ? ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'] : ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'];
-  const pitchingPositions = ['SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'RP1', 'RP2', 'RP3', 'RP4', 'CL'];
+  const pitchingPositions = ['SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'CL'];
   const benchCount = draftSize - battingPositions.length - pitchingPositions.length;
   const benchSlots = Array.from({ length: benchCount }, (_, i) => `BENCH${i + 1}`);
   const allSlots = [...battingPositions, ...pitchingPositions, ...benchSlots];
@@ -5359,13 +5359,31 @@ function DraftAssistantPage() {
       if (!pos.startsWith('SP') && roster[pos]) continue;
 
       const available = getAllAvailableForPosition(pos);
-      // Elite = T1 tier players (already calculated with tier gaps)
-      const eliteCount = available.filter(p => p._tier === 1).length;
       
-      if (eliteCount <= 3 && eliteCount > 0) {
-        alerts.push({ pos, count: eliteCount, type: 'warning' });
-      } else if (eliteCount === 0 && available.length > 0) {
-        alerts.push({ pos, count: 0, type: 'danger' });
+      // Count T1+ players (elite with shield)
+      const t1PlusCount = available.filter(p => p._isT1Plus).length;
+      
+      // Count T2 or higher (T1+, T1, or T2)
+      const t2OrHigherCount = available.filter(p => p._isT1Plus || p._tier <= 2).length;
+      
+      // Quality Shortage: Low on elite players with high defense (T1+)
+      if (t1PlusCount <= 2 && t1PlusCount > 0) {
+        alerts.push({ 
+          pos, 
+          count: t1PlusCount, 
+          type: 'quality',
+          message: `Quality Shortage: ${pos} - Low on elite players with high defense`
+        });
+      }
+      
+      // Few Good Picks Left: Running out of above-average players (T2 or higher)
+      if (t2OrHigherCount <= 2 && t2OrHigherCount > 0) {
+        alerts.push({ 
+          pos, 
+          count: t2OrHigherCount, 
+          type: 'scarcity',
+          message: `Few Good Picks Left: ${pos} - Running out of above-average players`
+        });
       }
     }
     
@@ -5865,8 +5883,12 @@ function DraftAssistantPage() {
               borderRadius: 8, padding: 10, marginBottom: 12 
             }}>
               {scarcityAlerts.map((alert, i) => (
-                <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 13 }}>
-                  ⚠️ {alert.count === 0 ? `No elite ${alert.pos}!` : `Only ${alert.count} elite ${alert.pos} left!`}
+                <div key={i} style={{ 
+                  color: alert.type === 'quality' ? '#a855f7' : theme.warning, 
+                  fontSize: 12,
+                  marginBottom: i < scarcityAlerts.length - 1 ? 4 : 0
+                }}>
+                  {alert.type === 'quality' ? '🛡️' : '⚠️'} {alert.message}
                 </div>
               ))}
             </div>
@@ -6326,8 +6348,12 @@ function DraftAssistantPage() {
             borderRadius: 8, padding: 12, marginBottom: 16 
           }}>
             {scarcityAlerts.map((alert, i) => (
-              <div key={i} style={{ color: alert.type === 'danger' ? theme.error : theme.warning, fontSize: 13 }}>
-                ⚠️ {alert.count === 0 ? `No elite ${alert.pos}!` : `Only ${alert.count} elite ${alert.pos} left!`}
+              <div key={i} style={{ 
+                color: alert.type === 'quality' ? '#a855f7' : theme.warning, 
+                fontSize: 13,
+                marginBottom: i < scarcityAlerts.length - 1 ? 4 : 0
+              }}>
+                {alert.type === 'quality' ? '🛡️' : '⚠️'} {alert.message}
               </div>
             ))}
           </div>
