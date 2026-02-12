@@ -1341,12 +1341,13 @@ function InfoPage() {
           for (const row of playerData) {
             const name = (row.Name || '').trim();
             const ovr = parseNum(row.OVR);
-            const key = `${name}|${ovr}`;
+            const vari = parseVariant(row.VAR);
+            const key = `${name}|${ovr}|${vari}`;
             
             if (upload.file_type === 'batting') {
               const instance = {
                 id: crypto.randomUUID(),
-                name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
+                name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari,
                 def: parseNum(row.DEF),
                 g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
                 h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -1419,7 +1420,7 @@ function InfoPage() {
               // Pitching
               const instance = {
                 id: crypto.randomUUID(),
-                name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
+                name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari,
                 g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
                 era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
                 babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -2802,11 +2803,12 @@ function SubmitDataPage() {
         newData.forEach(row => {
           const name = (row.Name || '').trim();
           const ovr = parseNum(row.OVR);
-          const key = `${name}|${ovr}`;
+          const vari = parseVariant(row.VAR);
+          const key = `${name}|${ovr}|${vari}`;
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari,
             g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
             era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
             babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -2883,11 +2885,12 @@ function SubmitDataPage() {
         newData.forEach(row => {
           const name = (row.Name || '').trim();
           const ovr = parseNum(row.OVR);
-          const key = `${name}|${ovr}`;
+          const vari = parseVariant(row.VAR);
+          const key = `${name}|${ovr}|${vari}`;
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari,
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -3131,11 +3134,12 @@ function SubmitDataPage() {
         newData.forEach(row => {
           const name = (row.Name || '').trim();
           const ovr = parseNum(row.OVR);
-          const key = `${name}|${ovr}`;
+          const vari = parseVariant(row.VAR);
+          const key = `${name}|${ovr}|${vari}`;
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari,
             g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
             era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
             babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -3209,11 +3213,12 @@ function SubmitDataPage() {
         newData.forEach(row => {
           const name = (row.Name || '').trim();
           const ovr = parseNum(row.OVR);
-          const key = `${name}|${ovr}`;
+          const vari = parseVariant(row.VAR);
+          const key = `${name}|${ovr}|${vari}`;
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari,
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -4006,12 +4011,13 @@ function ReviewQueuePage() {
       newData.forEach(row => {
         const name = (row.Name || '').trim();
         const ovr = parseNum(row.OVR);
-        const key = `${name}|${ovr}`;
+        const vari = parseVariant(row.VAR);
+        const key = `${name}|${ovr}|${vari}`;
         
         if (upload.file_type === 'batting') {
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari,
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -4072,7 +4078,7 @@ function ReviewQueuePage() {
           // Pitching
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari,
             g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
             era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
             babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
