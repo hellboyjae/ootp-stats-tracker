@@ -642,9 +642,15 @@ function StatsPage() {
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
   const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
   const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
+  const parseVariant = (v) => { 
+    if (!v) return 'N';
+    const val = String(v).toUpperCase().trim();
+    return (val === 'Y' || val === 'YES' || val === '1' || val === 'TRUE') ? 'Y' : 'N';
+  };
 
   const combinePlayerStats = (existing, newP, type) => {
-    const getPlayerKey = (p) => `${p.name}|${p.ovr}`;
+    // Include variant in player key so variants are treated as separate cards
+    const getPlayerKey = (p) => `${p.name}|${p.ovr}|${p.vari || 'N'}`;
     const playerMap = new Map();
     (existing || []).forEach(p => { playerMap.set(getPlayerKey(p), { ...p }); });
     newP.forEach(p => {
@@ -700,7 +706,7 @@ function StatsPage() {
   const normalizePlayerData = (row, type) => {
     if (type === 'pitching') {
       return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', throws: row.T || '',
-        ovr: parseNum(row.OVR), vari: parseNum(row.VAR), g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
+        ovr: parseNum(row.OVR), vari: parseVariant(row.VAR), g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
         era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000', babip: row.BABIP || '.000',
         whip: row.WHIP || '0.00', braPer9: row['BRA/9'] || '0.00', hrPer9: row['HR/9'] || '0.00', hPer9: row['H/9'] || '0.00',
         bbPer9: row['BB/9'] || '0.00', kPer9: row['K/9'] || '0.00', lobPct: parsePct(row['LOB%']),
@@ -709,7 +715,7 @@ function StatsPage() {
       };
     } else {
       return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', bats: row.B || '',
-        ovr: parseNum(row.OVR), vari: parseNum(row.VAR), def: parseNum(row.DEF), g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
+        ovr: parseNum(row.OVR), vari: parseVariant(row.VAR), def: parseNum(row.DEF), g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
         h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR), bbPct: parsePct(row['BB%']),
         so: parseNum(row.SO), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
         woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']), babip: row.BABIP || '.000',
@@ -1317,7 +1323,7 @@ function InfoPage() {
             if (upload.file_type === 'batting') {
               const instance = {
                 id: crypto.randomUUID(),
-                name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+                name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
                 def: parseNum(row.DEF),
                 g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
                 h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -1390,7 +1396,7 @@ function InfoPage() {
               // Pitching
               const instance = {
                 id: crypto.randomUUID(),
-                name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+                name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
                 g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
                 era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
                 babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -2768,7 +2774,7 @@ function SubmitDataPage() {
         const newData = validation.cleanRows;
         
         const playerMap = new Map();
-        pitchingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+        pitchingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}|${p.vari || 'N'}`, p));
         
         newData.forEach(row => {
           const name = (row.Name || '').trim();
@@ -2777,7 +2783,7 @@ function SubmitDataPage() {
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
             g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
             era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
             babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -2849,7 +2855,7 @@ function SubmitDataPage() {
         const newData = validation.cleanRows;
         
         const playerMap = new Map();
-        battingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+        battingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}|${p.vari || 'N'}`, p));
         
         newData.forEach(row => {
           const name = (row.Name || '').trim();
@@ -2858,7 +2864,7 @@ function SubmitDataPage() {
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -3097,7 +3103,7 @@ function SubmitDataPage() {
         const existingData = updatedTournament.pitching || [];
         const newData = pitching.validation.cleanRows;
         const playerMap = new Map();
-        existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+        existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}|${p.vari || 'N'}`, p));
         
         newData.forEach(row => {
           const name = (row.Name || '').trim();
@@ -3106,7 +3112,7 @@ function SubmitDataPage() {
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
             g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
             era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
             babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -3175,7 +3181,7 @@ function SubmitDataPage() {
         const existingData = updatedTournament.batting || [];
         const newData = batting.validation.cleanRows;
         const playerMap = new Map();
-        existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+        existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}|${p.vari || 'N'}`, p));
         
         newData.forEach(row => {
           const name = (row.Name || '').trim();
@@ -3184,7 +3190,7 @@ function SubmitDataPage() {
           
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -3971,7 +3977,7 @@ function ReviewQueuePage() {
       
       // Build player map from existing data
       const playerMap = new Map();
-      existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}`, p));
+      existingData.forEach(p => playerMap.set(`${p.name}|${p.ovr}|${p.vari || 'N'}`, p));
       
       // Process each row as an individual instance
       newData.forEach(row => {
@@ -3982,7 +3988,7 @@ function ReviewQueuePage() {
         if (upload.file_type === 'batting') {
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseNum(row.VAR),
+            name, pos: row.POS?.trim() || '', bats: row.B || '', ovr, vari: parseVariant(row.VAR),
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
@@ -4043,7 +4049,7 @@ function ReviewQueuePage() {
           // Pitching
           const instance = {
             id: crypto.randomUUID(),
-            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseNum(row.VAR),
+            name, pos: row.POS?.trim() || '', throws: row.T || '', ovr, vari: parseVariant(row.VAR),
             g: parseNum(row.G), gs: parseNum(row.GS), ip: row.IP || '0', bf: parseNum(row.BF),
             era: row.ERA || '0.00', avg: row.AVG || '.000', obp: row.OBP || '.000',
             babip: row.BABIP || '.000', whip: row.WHIP || '0.00',
@@ -4162,7 +4168,7 @@ function ReviewQueuePage() {
       // Remove the players that were added
       const existingData = historyItem.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
       const addedPlayerKeys = new Set((historyItem.player_data || []).map(p => `${p.Name}|${p.OVR}`));
-      const filteredData = existingData.filter(p => !addedPlayerKeys.has(`${p.name}|${p.ovr}`));
+      const filteredData = existingData.filter(p => !addedPlayerKeys.has(`${p.name}|${p.ovr}|${p.vari || 'N'}`));
 
       // Remove date from uploaded_dates
       const uploadedDates = (tournament.uploaded_dates || []).filter(d => d !== historyItem.upload_date);
@@ -5028,7 +5034,7 @@ function DraftAssistantPage() {
     const isDHPosition = position === 'DH';
 
     // Get roster player keys
-    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
+    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}|${p.vari || 'N'}`));
 
     const filtered = data.filter(p => {
       // Filter by card pool
@@ -5046,7 +5052,7 @@ function DraftAssistantPage() {
       }
       
       // Filter out already on roster
-      const key = `${p.name}|${p.ovr}`;
+      const key = `${p.name}|${p.ovr}|${p.vari || 'N'}`;
       if (rosterPlayerKeys.has(key)) return false;
 
       // Filter out low confidence players (always hidden in Perfect Draft)
@@ -5177,17 +5183,17 @@ function DraftAssistantPage() {
     }
     
     const query = searchQuery.toLowerCase();
-    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
+    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}|${p.vari || 'N'}`));
     
     const batting = (tournamentData.batting || []).filter(p => {
       if (!p.name.toLowerCase().includes(query)) return false;
-      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}|${p.vari || 'N'}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
       return true;
     });
     const pitching = (tournamentData.pitching || []).filter(p => {
       if (!p.name.toLowerCase().includes(query)) return false;
-      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}|${p.vari || 'N'}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
       return true;
     });
@@ -5246,17 +5252,17 @@ function DraftAssistantPage() {
     }
     
     // Get all available players (not in roster, passing card pool filter, with good confidence)
-    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}`));
+    const rosterPlayerKeys = new Set(Object.values(roster).map(p => `${p.name}|${p.ovr}|${p.vari || 'N'}`));
     
     const allBatters = (tournamentData.batting || []).filter(p => {
-      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}|${p.vari || 'N'}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
       if (getSampleConfidence(p, false).level === 'low') return false;
       return true;
     });
     
     const allPitchers = (tournamentData.pitching || []).filter(p => {
-      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}`)) return false;
+      if (rosterPlayerKeys.has(`${p.name}|${p.ovr}|${p.vari || 'N'}`)) return false;
       if (!cardPool[getCardTier(p.ovr)]) return false;
       if (getSampleConfidence(p, true).level === 'low') return false;
       return true;
@@ -5332,7 +5338,7 @@ function DraftAssistantPage() {
     // Deduplicate players - combine positions for same player
     const playerMap = new Map();
     for (const p of valuePicks) {
-      const key = `${p.name}|${p.ovr}`;
+      const key = `${p.name}|${p.ovr}|${p.vari || 'N'}`;
       if (playerMap.has(key)) {
         const existing = playerMap.get(key);
         // Add position if not already included
