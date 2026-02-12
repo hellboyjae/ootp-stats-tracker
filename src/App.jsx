@@ -634,6 +634,9 @@ function StatsPage() {
     setSelectedTournament(t); 
     localStorage.setItem('selectedTournamentId', t.id);
     setCurrentPage(1); // Reset pagination
+    // Reset any pending upload state from previous tournament
+    setShowDatePicker(false);
+    setPendingUploadFiles(null);
   };
   const parseIP = (ip) => { if (!ip) return 0; const str = String(ip); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
   const formatIP = (d) => { const w = Math.floor(d), f = Math.round((d - w) * 3); return f === 0 ? w.toString() : f === 3 ? (w + 1).toString() : `${w}.${f}`; };
