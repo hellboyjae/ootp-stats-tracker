@@ -4807,6 +4807,7 @@ function DraftAssistantPage() {
   const [showQuickGuide, setShowQuickGuide] = useState(false); // Quick start guide popup
   const [showPlaceholderModal, setShowPlaceholderModal] = useState(null); // Slot to add placeholder to
   const [placeholderName, setPlaceholderName] = useState(''); // Name input for placeholder
+  const [lowDataMode, setLowDataMode] = useState(false); // Low Data Support mode
   
   // Pop out to new window
   const popOutWindow = () => {
@@ -4865,15 +4866,28 @@ function DraftAssistantPage() {
 
   // === HEURISTICS: Sample Size Confidence ===
   // Based on PD Data Interpretation Guide thresholds
+  // Low Data Support mode uses lower thresholds (99 AB / 20 IP)
   const getSampleConfidence = (player, isPitching) => {
     if (isPitching) {
       // Parse IP (handles "123.2" format)
       const ip = parseFloat(player.ip) || 0;
+      if (lowDataMode) {
+        // LDS mode: lower thresholds
+        if (ip >= 100) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (100+ IP)' };
+        if (ip >= 20) return { level: 'high', label: '●', color: '#86efac', desc: 'LDS High (20-99 IP)' };
+        return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<20 IP)' };
+      }
       if (ip >= 200) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (200+ IP)' };
       if (ip >= 100) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (100-199 IP)' };
       return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<100 IP)' };
     } else {
       const ab = parseInt(player.ab) || 0;
+      if (lowDataMode) {
+        // LDS mode: lower thresholds
+        if (ab >= 450) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (450+ AB)' };
+        if (ab >= 99) return { level: 'high', label: '●', color: '#86efac', desc: 'LDS High (99-449 AB)' };
+        return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<99 AB)' };
+      }
       if (ab >= 801) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (801+ AB)' };
       if (ab >= 450) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (450-800 AB)' };
       return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<450 AB)' };
@@ -4953,6 +4967,18 @@ function DraftAssistantPage() {
       return;
     }
 
+    // Check if this is a low data tournament
+    const battingCount = data.batting?.length || 0;
+    const pitchingCount = data.pitching?.length || 0;
+    const isLowData = battingCount < 50 || pitchingCount < 30;
+    
+    if (isLowData) {
+      setLowDataMode(true);
+      showNotif('⚠️ Low data detected - LDS mode enabled', 'warning');
+    } else {
+      setLowDataMode(false);
+    }
+
     setTournamentData(data);
     setRoster({});
     setDraftStarted(true);
@@ -4970,6 +4996,18 @@ function DraftAssistantPage() {
     setDraftStarted(false);
     setTournamentData(null);
     setRoster({});
+    setLowDataMode(false);
+  };
+
+  // Check if player qualifies for elite defense shield (100+ DEF at key positions)
+  const hasEliteDefenseShield = (player, isPitching) => {
+    if (isPitching) return false;
+    const keyDefPositions = ['C', '2B', 'SS', 'CF'];
+    const hasEliteDef = player.def && parseInt(player.def) >= 100;
+    const isKeyPosition = player.positions 
+      ? player.positions.some(pos => keyDefPositions.includes(pos)) 
+      : keyDefPositions.includes(player.pos);
+    return hasEliteDef && isKeyPosition;
   };
 
   // Get available players for a position
@@ -5027,18 +5065,32 @@ function DraftAssistantPage() {
     // Calculate tiers on ALL eligible players first (before limiting)
     const tiered = calculateTiers(filtered, isPitching);
     
-    // Add confidence and rank value
-    const withScores = tiered.map(p => ({
-      ...p,
-      _confidence: getSampleConfidence(p, isPitching),
-      _rankValue: getRankValue(p, isPitching),
-      _isPitching: isPitching
-    }));
+    // Add confidence, rank value, and T1+ status
+    const withScores = tiered.map(p => {
+      const hasShield = hasEliteDefenseShield(p, isPitching);
+      // T1+ = (T1 or T2) with elite defense shield at key position
+      const isT1Plus = (p._tier === 1 || p._tier === 2) && hasShield;
+      return {
+        ...p,
+        _confidence: getSampleConfidence(p, isPitching),
+        _rankValue: getRankValue(p, isPitching),
+        _isPitching: isPitching,
+        _hasShield: hasShield,
+        _isT1Plus: isT1Plus
+      };
+    });
 
-    // Sort by rank value (wOBA for batters, inverted SIERA for pitchers)
-    // Already sorted by calculateTiers, but re-sort to be sure
+    // Sort by: T1+ first, then T1, then T2, then by rank value within each group
     return withScores
-      .sort((a, b) => b._rankValue - a._rankValue)
+      .sort((a, b) => {
+        // T1+ always first
+        if (a._isT1Plus && !b._isT1Plus) return -1;
+        if (!a._isT1Plus && b._isT1Plus) return 1;
+        // Then by tier (T1 before T2 before T3+)
+        if (a._tier !== b._tier) return a._tier - b._tier;
+        // Within same tier, sort by rank value
+        return b._rankValue - a._rankValue;
+      })
       .slice(0, limit);
   };
 
@@ -5573,7 +5625,7 @@ function DraftAssistantPage() {
           )}
 
           {/* Card Pool Toggles */}
-          <div style={{ display: 'flex', gap: 5, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 5, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
             {[
               { key: 'perfect', label: 'Perf', color: '#a855f7' },
@@ -5597,6 +5649,20 @@ function DraftAssistantPage() {
                 {tier.label}
               </button>
             ))}
+            {/* LDS Toggle - Compact */}
+            <button 
+              onClick={() => setLowDataMode(!lowDataMode)}
+              title="Low Data Support: Lowers thresholds to 99 AB / 20 IP"
+              style={{
+                padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                background: lowDataMode ? '#f59e0b' : 'transparent',
+                color: lowDataMode ? '#000' : '#f59e0b',
+                border: `1px solid #f59e0b`,
+                cursor: 'pointer', marginLeft: 'auto'
+              }}
+            >
+              LDS
+            </button>
           </div>
 
           {/* Available Players Panel */}
@@ -5697,17 +5763,25 @@ function DraftAssistantPage() {
                 const isPitching = p._isPitching;
                 const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
                 const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
-                const tierBadge = p._tier <= 2 ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } : null;
-                // Show elite defense shield for key positions (C, 2B, SS, CF) with 100+ DEF
-                const keyDefPositions = ['C', '2B', 'SS', 'CF'];
-                const showEliteDefShield = !isPitching && p.def && parseInt(p.def) >= 100 && 
-                  (p.positions ? p.positions.some(pos => keyDefPositions.includes(pos)) : keyDefPositions.includes(p.pos));
+                // T1+ (purple) for elite defense + T1/T2, otherwise regular tier badges
+                const tierBadge = p._isT1Plus 
+                  ? { label: 'T1+', color: '#a855f7' }  // Purple for T1+
+                  : p._tier <= 2 
+                    ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } 
+                    : null;
+                // Use pre-calculated shield status
+                const showEliteDefShield = p._hasShield;
                 return (
                   <div key={p.id || i} style={{ 
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', 
                     background: tier.color + '12', borderRadius: 6, marginBottom: 5, cursor: 'pointer',
                     border: `1px solid ${theme.border}`,
-                    borderLeft: `3px solid ${tier.color}`
+                    borderLeft: p._isT1Plus 
+                      ? `3px solid transparent` 
+                      : `3px solid ${tier.color}`,
+                    borderImage: p._isT1Plus 
+                      ? `linear-gradient(to right, #a855f7, ${tier.color}) 1`
+                      : 'none'
                   }}
                   onClick={() => setShowPlayerModal({ ...p, type: isPitching ? 'pitching' : 'batting' })}
                   >
@@ -5918,18 +5992,19 @@ function DraftAssistantPage() {
                 <p><strong style={{ color: theme.textPrimary }}>Click Player:</strong> View stats and add to roster</p>
                 <p><strong style={{ color: theme.textPrimary }}>+ Custom:</strong> Add placeholder for unlisted players</p>
                 <p style={{ marginTop: 8 }}>
+                  <strong style={{ color: theme.textPrimary }}>Tiers:</strong>{' '}
+                  <span style={{ color: '#a855f7' }}>T1+</span> (elite + shield) →{' '}
+                  <span style={{ color: '#22c55e' }}>T1</span> →{' '}
+                  <span style={{ color: '#fbbf24' }}>T2</span>
+                </p>
+                <p>
                   <strong style={{ color: theme.textPrimary }}>🛡️ Shield:</strong> Elite defense (100+) at C, 2B, SS, CF
                 </p>
                 <p>
-                  <strong style={{ color: theme.textPrimary }}>DEF Colors:</strong>{' '}
-                  <span style={{ color: '#a855f7' }}>100+</span> /{' '}
-                  <span style={{ color: '#3b82f6' }}>80-99</span> /{' '}
-                  <span style={{ color: '#22c55e' }}>50-79</span> /{' '}
-                  <span style={{ color: '#fbbf24' }}>&lt;50 (hidden)</span>
+                  <strong style={{ color: '#f59e0b' }}>LDS:</strong> Low Data Support - lowers thresholds (99 AB / 20 IP)
                 </p>
                 <p style={{ marginTop: 8, fontSize: 11, color: theme.textMuted }}>
-                  Batters ranked by wOBA · Pitchers ranked by SIERA (lower = better)<br/>
-                  True Splits shown in header (weighted by IP/AB)
+                  Batters ranked by wOBA · Pitchers ranked by SIERA (lower = better)
                 </p>
               </div>
               <button 
@@ -6011,7 +6086,7 @@ function DraftAssistantPage() {
         )}
 
         {/* Card Pool Toggles */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ color: theme.textMuted, fontSize: 12, alignSelf: 'center' }}>Pool:</span>
           {[
             { key: 'perfect', label: 'Perf', color: '#a855f7' },
@@ -6035,6 +6110,24 @@ function DraftAssistantPage() {
               {tier.label}
             </button>
           ))}
+          
+          {/* LDS Toggle */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button 
+              onClick={() => setLowDataMode(!lowDataMode)}
+              title="Low Data Support: Lowers confidence thresholds to 99 AB / 20 IP, allowing more players to appear in results. Recommended for tournaments with limited data."
+              style={{
+                padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                background: lowDataMode ? '#f59e0b' : 'transparent',
+                color: lowDataMode ? '#000' : '#f59e0b',
+                border: `1px solid #f59e0b`,
+                cursor: 'pointer'
+              }}
+            >
+              LDS {lowDataMode ? 'ON' : 'OFF'}
+            </button>
+            <span style={{ color: theme.textMuted, fontSize: 10, cursor: 'help' }} title="Low Data Support: Lowers confidence thresholds to 99 AB / 20 IP">ⓘ</span>
+          </div>
         </div>
 
         {/* Heuristics Legend */}
@@ -6268,22 +6361,30 @@ function DraftAssistantPage() {
                 <div>
                   {currentAvailable.map((p, i) => {
                     const tier = getCardTierLabel(p.ovr);
-                    const tierBadge = p._tier <= 2 ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } : null;
+                    // T1+ (purple) for elite defense + T1/T2, otherwise regular tier badges
+                    const tierBadge = p._isT1Plus 
+                      ? { label: 'T1+', color: '#a855f7' }  // Purple for T1+
+                      : p._tier <= 2 
+                        ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } 
+                        : null;
                     const conf = p._confidence;
                     const isPitching = p._isPitching;
                     const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
                     const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
-                    // Show elite defense shield for key positions (C, 2B, SS, CF) with 100+ DEF
-                    const keyDefPositions = ['C', '2B', 'SS', 'CF'];
-                    const showEliteDefShield = !isPitching && p.def && parseInt(p.def) >= 100 && 
-                      (p.positions ? p.positions.some(pos => keyDefPositions.includes(pos)) : keyDefPositions.includes(p.pos));
+                    // Use pre-calculated shield status
+                    const showEliteDefShield = p._hasShield;
                     
                     return (
                       <div key={p.id || i} style={{ 
                         display: 'flex', alignItems: 'center', gap: 10, padding: 10, 
                         background: tier.color + '12', borderRadius: 8, marginBottom: 6,
                         border: `1px solid ${theme.border}`,
-                        borderLeft: `3px solid ${tier.color}`
+                        borderLeft: p._isT1Plus 
+                          ? `3px solid transparent` 
+                          : `3px solid ${tier.color}`,
+                        borderImage: p._isT1Plus 
+                          ? `linear-gradient(to right, #a855f7, ${tier.color}) 1`
+                          : 'none'
                       }}>
                         {/* Rank + Tier */}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 30 }}>
@@ -6693,8 +6794,19 @@ function DraftAssistantPage() {
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     <span style={{ color: '#22c55e' }}>◆ Trusted</span> = Large sample size (801+ AB / 200+ IP)<br/>
                     <span style={{ color: '#86efac' }}>● High</span> = Good sample size (450-800 AB / 100-199 IP)<br/>
+                    <span style={{ color: '#a855f7' }}>T1+</span> = Elite tier + elite defense at key position (sorted first!)<br/>
                     <span style={{ color: '#22c55e' }}>T1</span> = Elite tier, <span style={{ color: '#fbbf24' }}>T2</span> = Good tier, <span style={{ color: theme.textMuted }}>T3+</span> = Below performance gap<br/>
-                    <em style={{ color: theme.textMuted, fontSize: 12 }}>Low confidence players are hidden by default.</em>
+                    <em style={{ color: theme.textMuted, fontSize: 12 }}>Low confidence players are hidden by default. Sort order: T1+ → T1 → T2</em>
+                  </p>
+                </div>
+
+                {/* Low Data Support */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>📉 Low Data Support (LDS)</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    <strong style={{ color: '#f59e0b' }}>LDS Mode:</strong> Lowers confidence thresholds for tournaments with limited data.<br/>
+                    Normal: 450+ AB / 100+ IP to show | LDS: 99+ AB / 20+ IP to show<br/>
+                    <em style={{ color: theme.textMuted, fontSize: 12 }}>Auto-enabled for small tournaments. Toggle with the LDS button.</em>
                   </p>
                 </div>
 
