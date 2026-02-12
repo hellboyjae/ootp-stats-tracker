@@ -5552,7 +5552,7 @@ function DraftAssistantPage() {
               })()}
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 12px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>❓</button>
+              <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 12px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>HELP</button>
               <button onClick={resetDraft} style={{ padding: '8px 12px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>↺</button>
               <button onClick={exitDraft} style={{ padding: '8px 12px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
             </div>
@@ -5698,6 +5698,10 @@ function DraftAssistantPage() {
                 const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
                 const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
                 const tierBadge = p._tier <= 2 ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } : null;
+                // Show elite defense shield for key positions (C, 2B, SS, CF) with 100+ DEF
+                const keyDefPositions = ['C', '2B', 'SS', 'CF'];
+                const showEliteDefShield = !isPitching && p.def && parseInt(p.def) >= 100 && 
+                  (p.positions ? p.positions.some(pos => keyDefPositions.includes(pos)) : keyDefPositions.includes(p.pos));
                 return (
                   <div key={p.id || i} style={{ 
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', 
@@ -5710,6 +5714,7 @@ function DraftAssistantPage() {
                     <span style={{ color: tier.color, fontWeight: 700, fontSize: 14 }}>{p.ovr}</span>
                     <span style={{ color: theme.textMuted, fontSize: 11 }}>{handLabel}</span>
                     <span style={{ color: theme.textPrimary, flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    {showEliteDefShield && <span style={{ color: '#3b82f6', fontSize: 11 }} title="Elite Defense (100+) at key position">🛡️</span>}
                     {tierBadge && <span style={{ color: tierBadge.color, fontSize: 11, fontWeight: 600 }}>{tierBadge.label}</span>}
                     <span style={{ color: theme.textSecondary, fontSize: 11 }}>
                       {isPitching ? `${p.siera || p.era} · ${p.ip || '—'} IP` : `${p.woba} · ${p.ab || '—'} AB`}
@@ -5911,8 +5916,20 @@ function DraftAssistantPage() {
                 <p><strong style={{ color: theme.textPrimary }}>Position Tabs:</strong> Browse best available by position</p>
                 <p><strong style={{ color: theme.textPrimary }}>Pool Toggles:</strong> Filter by card tier</p>
                 <p><strong style={{ color: theme.textPrimary }}>Click Player:</strong> View stats and add to roster</p>
-                <p style={{ marginTop: 12, fontSize: 11, color: theme.textMuted }}>
-                  Batters ranked by wOBA · Pitchers ranked by SIERA (lower = better)
+                <p><strong style={{ color: theme.textPrimary }}>+ Custom:</strong> Add placeholder for unlisted players</p>
+                <p style={{ marginTop: 8 }}>
+                  <strong style={{ color: theme.textPrimary }}>🛡️ Shield:</strong> Elite defense (100+) at C, 2B, SS, CF
+                </p>
+                <p>
+                  <strong style={{ color: theme.textPrimary }}>DEF Colors:</strong>{' '}
+                  <span style={{ color: '#a855f7' }}>100+</span> /{' '}
+                  <span style={{ color: '#3b82f6' }}>80-99</span> /{' '}
+                  <span style={{ color: '#22c55e' }}>50-79</span> /{' '}
+                  <span style={{ color: '#fbbf24' }}>&lt;50 (hidden)</span>
+                </p>
+                <p style={{ marginTop: 8, fontSize: 11, color: theme.textMuted }}>
+                  Batters ranked by wOBA · Pitchers ranked by SIERA (lower = better)<br/>
+                  True Splits shown in header (weighted by IP/AB)
                 </p>
               </div>
               <button 
@@ -5973,7 +5990,7 @@ function DraftAssistantPage() {
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button onClick={popOutWindow} style={{ padding: '8px 16px', borderRadius: 6, background: theme.panelBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, cursor: 'pointer' }} title="Open in smaller window for side-by-side use">↗️ Pop Out</button>
-            <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>❓</button>
+            <button onClick={() => setShowQuickGuide(true)} style={{ padding: '8px 16px', borderRadius: 6, background: theme.accent, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>HELP</button>
             <button onClick={resetDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.warning, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>Reset</button>
             <button onClick={exitDraft} style={{ padding: '8px 16px', borderRadius: 6, background: theme.error, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>Exit Draft</button>
           </div>
@@ -6256,6 +6273,10 @@ function DraftAssistantPage() {
                     const isPitching = p._isPitching;
                     const hand = isPitching ? (p.throws || 'R') : (p.bats || 'R');
                     const handLabel = hand === 'S' ? 'S' : hand === 'L' ? 'L' : 'R';
+                    // Show elite defense shield for key positions (C, 2B, SS, CF) with 100+ DEF
+                    const keyDefPositions = ['C', '2B', 'SS', 'CF'];
+                    const showEliteDefShield = !isPitching && p.def && parseInt(p.def) >= 100 && 
+                      (p.positions ? p.positions.some(pos => keyDefPositions.includes(pos)) : keyDefPositions.includes(p.pos));
                     
                     return (
                       <div key={p.id || i} style={{ 
@@ -6280,6 +6301,7 @@ function DraftAssistantPage() {
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ color: theme.textPrimary, fontWeight: 500 }}>{p.name}</span>
+                            {showEliteDefShield && <span style={{ color: '#3b82f6', fontSize: 12 }} title="Elite Defense (100+) at key position">🛡️</span>}
                             <span style={{ color: conf.color, fontSize: 12 }} title={conf.desc}>{conf.label}</span>
                           </div>
                           <div style={{ color: theme.textMuted, fontSize: 11 }}>
@@ -6627,13 +6649,13 @@ function DraftAssistantPage() {
           >
             <div 
               style={{ 
-                background: theme.cardBg, borderRadius: 16, padding: 28, maxWidth: 600, width: '95%', 
+                background: theme.cardBg, borderRadius: 16, padding: 28, maxWidth: 650, width: '95%', 
                 border: `1px solid ${theme.border}`, maxHeight: '90vh', overflowY: 'auto' 
               }}
               onClick={e => e.stopPropagation()}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 22 }}>📋 Quick Start Guide</h2>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 22 }}>📋 Draft Assistant Guide</h2>
                 <button onClick={() => setShowQuickGuide(false)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 24, cursor: 'pointer' }}>×</button>
               </div>
 
@@ -6643,7 +6665,8 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🖥️ Layout</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     <strong style={{ color: theme.textPrimary }}>Left Panel:</strong> Your roster with all slots<br/>
-                    <strong style={{ color: theme.textPrimary }}>Right Panel:</strong> Available players by position
+                    <strong style={{ color: theme.textPrimary }}>Center Panel:</strong> Available players by position<br/>
+                    <strong style={{ color: theme.textPrimary }}>Right Panel:</strong> Value Picks - lower tier cards with elite production
                   </p>
                 </div>
 
@@ -6675,12 +6698,44 @@ function DraftAssistantPage() {
                   </p>
                 </div>
 
+                {/* Defense Rating */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🛡️ Defense Rating (DEF)</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    <span style={{ color: '#a855f7' }}>100+</span> = Elite (Purple) | <span style={{ color: '#3b82f6' }}>80-99</span> = Great (Blue) | <span style={{ color: '#22c55e' }}>50-79</span> = Good (Green) | <span style={{ color: '#fbbf24' }}>&lt;50</span> = Poor (Yellow)<br/>
+                    <strong style={{ color: theme.textPrimary }}>🛡️ Shield icon:</strong> Shows on C, 2B, SS, CF with elite defense (100+)<br/>
+                    <em style={{ color: theme.textMuted, fontSize: 12 }}>Poor defense players (&lt;50 DEF) hidden except for DH position.</em>
+                  </p>
+                </div>
+
+                {/* True Splits */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>📈 True Splits</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    Displayed in the header: <strong style={{ color: theme.textPrimary }}>True Pitching</strong> and <strong style={{ color: theme.textPrimary }}>True Batting</strong> splits.<br/>
+                    These are weighted by IP (pitchers) and AB (batters) rather than raw player counts, giving a more accurate picture of the pool's handedness distribution.
+                  </p>
+                </div>
+
+                {/* Value Picks */}
+                <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
+                  <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>💎 Value Picks</h3>
+                  <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                    Shows players from lower card tiers performing close to top-tier players:<br/>
+                    <span style={{ color: '#ef4444' }}>🔥 Insane:</span> Within 0.015 wOBA / 0.3 SIERA of best<br/>
+                    <span style={{ color: '#f97316' }}>⭐ Great:</span> Within 0.025 wOBA / 0.4 SIERA of best<br/>
+                    <span style={{ color: '#eab308' }}>👍 Good:</span> Within 0.040 wOBA / 0.5 SIERA of best<br/>
+                    <em style={{ color: theme.textMuted, fontSize: 12 }}>Requires multiple card tiers enabled to compare.</em>
+                  </p>
+                </div>
+
                 {/* Player Actions */}
                 <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>👆 Player Actions</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     <strong style={{ color: theme.textPrimary }}>View:</strong> Click to see full stats and add to a roster slot<br/>
                     <strong style={{ color: theme.textPrimary }}>Search:</strong> Use the search bar to find any player by name<br/>
+                    <strong style={{ color: theme.textPrimary }}>+ Custom:</strong> Add placeholder for players not in database<br/>
                     <strong style={{ color: theme.textPrimary }}>Click empty slot:</strong> Jumps to that position's available players
                   </p>
                 </div>
@@ -6701,7 +6756,9 @@ function DraftAssistantPage() {
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     • SP's are shown for RP/CL slots since starters are typically best for all roles<br/>
                     • Watch for scarcity alerts when elite players at a position are running low<br/>
-                    • Use BENCH slots for versatile players who can fill multiple positions
+                    • Use BENCH slots for versatile players who can fill multiple positions<br/>
+                    • Pop Out button opens a compact window for side-by-side use with the game<br/>
+                    • Prioritize 🛡️ elite defense at key positions (C, 2B, SS, CF)
                   </p>
                 </div>
               </div>
