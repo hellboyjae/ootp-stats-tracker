@@ -751,25 +751,50 @@ function StatsPage() {
   };
 
   const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files); 
-    // Always reset the input so the same file can be selected again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    const input = event.target;
+    const files = Array.from(input.files || []); 
+    
+    // Always reset the input value immediately so the same file can be selected again
+    // This is critical - must happen before any early returns
+    input.value = '';
+    
+    // Validate
+    if (!files.length) {
+      console.log('No files selected');
+      return;
     }
-    if (!files.length || !selectedTournament) return;
+    if (!selectedTournament) {
+      showNotif('Please select a tournament first', 'error');
+      return;
+    }
+    
     for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) { showNotif('File too large', 'error'); return; }
-      if (!file.name.toLowerCase().endsWith('.csv')) { showNotif('Not a CSV', 'error'); return; }
+      if (file.size > MAX_FILE_SIZE) { 
+        showNotif('File too large', 'error'); 
+        return; 
+      }
+      if (!file.name.toLowerCase().endsWith('.csv')) { 
+        showNotif('Not a CSV', 'error'); 
+        return; 
+      }
     }
+    
     // Store files and show date picker
+    console.log('Setting pending files:', files.length);
     setPendingUploadFiles(files);
     setShowDatePicker(true);
   };
   
   const triggerFileUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+    const input = fileInputRef.current;
+    if (!input) {
+      console.error('File input ref not found');
+      showNotif('Upload error - please refresh the page', 'error');
+      return;
     }
+    // Reset value before clicking to ensure change event fires even for same file
+    input.value = '';
+    input.click();
   };
 
   const processUploadWithDate = async (selectedDate) => {
@@ -973,6 +998,15 @@ function StatsPage() {
 
   return (
     <Layout notification={notification}>
+      {/* File input at root level - never unmounts, keeps ref stable across tournament switches */}
+      <input 
+        ref={fileInputRef}
+        type="file" 
+        accept=".csv" 
+        multiple 
+        onChange={handleFileUpload} 
+        style={{ display: 'none' }} 
+      />
       <main style={styles.main}>
         <aside style={styles.sidebar}>
           <div style={styles.sidebarTabs}>
@@ -1043,23 +1077,13 @@ function StatsPage() {
               <div style={styles.headerActions}>
                 <button style={styles.missingDataBtn} onClick={() => setShowMissingData(true)} title="View missing data calendar">📅 Missing Data</button>
                 {hasAccess('upload') && (
-                  <>
-                    <input 
-                      ref={fileInputRef}
-                      type="file" 
-                      accept=".csv" 
-                      multiple 
-                      onChange={handleFileUpload} 
-                      style={{ display: 'none' }} 
-                    />
-                    <button style={styles.uploadBtn} onClick={triggerFileUpload}>↑ Upload CSV</button>
-                  </>
+                  <button style={styles.uploadBtn} onClick={triggerFileUpload}>↑ Upload CSV</button>
                 )}
               </div>
             </div>
             
             {/* Date Picker Modal */}
-            {showDatePicker && (
+            {showDatePicker && selectedTournament && pendingUploadFiles && (
               <div style={styles.modalOverlay}>
                 <div style={styles.datePickerModal}>
                   <h3 style={styles.modalTitle}>Select Data Date</h3>
