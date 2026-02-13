@@ -490,7 +490,22 @@ function StatsPage() {
   const [showNewTournament, setShowNewTournament] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentType, setNewTournamentType] = useState('daily');
-  const [filters, setFilters] = useState({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
+  const [filters, setFilters] = useState({ 
+    search: '', 
+    position: 'all', 
+    sortBy: 'war', 
+    sortDir: 'desc', 
+    gFilter: { enabled: false, operator: '>=', value: 0 }, 
+    paFilter: { enabled: false, operator: '>=', value: 0 }, 
+    abFilter: { enabled: false, operator: '>=', value: 0 }, 
+    ipFilter: { enabled: false, operator: '>=', value: 0 },
+    // Card tier filters (all enabled by default)
+    cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
+    // Variant filter: 'all', 'yes', 'no'
+    variantFilter: 'all',
+    // Defense filter (batting only)
+    defFilter: { enabled: false, operator: '>=', value: 0 }
+  });
   const [showPer9, setShowPer9] = useState(false);
   const [showTraditional, setShowTraditional] = useState(true);
   const [notification, setNotification] = useState(null);
@@ -519,7 +534,7 @@ function StatsPage() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.search, filters.position, filters.gFilter.enabled, filters.paFilter.enabled, filters.abFilter.enabled, filters.ipFilter.enabled]);
+  }, [filters.search, filters.position, filters.gFilter.enabled, filters.paFilter.enabled, filters.abFilter.enabled, filters.ipFilter.enabled, filters.defFilter.enabled, filters.variantFilter, filters.cardTiers]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -940,8 +955,11 @@ function StatsPage() {
   const getFilteredData = (data, type) => {
     if (!data) return [];
     let f = [...data];
+    
+    // Search filter
     if (filters.search) f = f.filter(p => p.name.toLowerCase().includes(filters.search.toLowerCase()));
-    // Check positions array if it exists, otherwise fall back to pos
+    
+    // Position filter
     if (filters.position !== 'all') {
       const filterPos = filters.position.toUpperCase();
       f = f.filter(p => {
@@ -951,9 +969,33 @@ function StatsPage() {
         return (p.pos || '').toUpperCase() === filterPos;
       });
     }
+    
+    // Card tier filter
+    f = f.filter(p => {
+      const tier = getCardTier(p.ovr);
+      return filters.cardTiers[tier];
+    });
+    
+    // Variant filter
+    if (filters.variantFilter !== 'all') {
+      f = f.filter(p => {
+        const isVariant = p.vari === 'Y';
+        return filters.variantFilter === 'yes' ? isVariant : !isVariant;
+      });
+    }
+    
+    // Stat filters
     f = f.filter(p => passesFilter(p.g, filters.gFilter));
-    if (type === 'batting') f = f.filter(p => passesFilter(p.pa, filters.paFilter) && passesFilter(p.ab, filters.abFilter));
-    else f = f.filter(p => passesFilter(parseIP(p.ip), filters.ipFilter));
+    if (type === 'batting') {
+      f = f.filter(p => passesFilter(p.pa, filters.paFilter) && passesFilter(p.ab, filters.abFilter));
+      // Defense filter (batting only)
+      if (filters.defFilter.enabled) {
+        f = f.filter(p => passesFilter(parseInt(p.def) || 0, filters.defFilter));
+      }
+    } else {
+      f = f.filter(p => passesFilter(parseIP(p.ip), filters.ipFilter));
+    }
+    
     const calcPer600PA = (val, pa) => { const paNum = parseFloat(pa) || 0; return paNum === 0 ? 0 : parseFloat(val || 0) / paNum * 600; };
     const calcWarPer200IP = (war, ip) => { const ipNum = parseIP(ip); return ipNum === 0 ? 0 : parseFloat(war || 0) / ipNum * 200; };
     f.sort((a, b) => {
@@ -971,8 +1013,46 @@ function StatsPage() {
 
   const toggleSort = (field) => { if (filters.sortBy === field) setFilters(f => ({ ...f, sortDir: f.sortDir === 'asc' ? 'desc' : 'asc' })); else setFilters(f => ({ ...f, sortBy: field, sortDir: 'desc' })); };
   const updateStatFilter = (name, updates) => setFilters(f => ({ ...f, [name]: { ...f[name], ...updates } }));
-  const resetFilters = () => setFilters({ search: '', position: 'all', sortBy: 'war', sortDir: 'desc', gFilter: { enabled: false, operator: '>=', value: 0 }, paFilter: { enabled: false, operator: '>=', value: 0 }, abFilter: { enabled: false, operator: '>=', value: 0 }, ipFilter: { enabled: false, operator: '>=', value: 0 } });
-  const getActiveFilterCount = () => { let c = 0; if (filters.position !== 'all') c++; ['gFilter', 'paFilter', 'abFilter', 'ipFilter'].forEach(f => { if (filters[f].enabled) c++; }); return c; };
+  const resetFilters = () => setFilters({ 
+    search: '', 
+    position: 'all', 
+    sortBy: 'war', 
+    sortDir: 'desc', 
+    gFilter: { enabled: false, operator: '>=', value: 0 }, 
+    paFilter: { enabled: false, operator: '>=', value: 0 }, 
+    abFilter: { enabled: false, operator: '>=', value: 0 }, 
+    ipFilter: { enabled: false, operator: '>=', value: 0 },
+    cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
+    variantFilter: 'all',
+    defFilter: { enabled: false, operator: '>=', value: 0 }
+  });
+  const getActiveFilterCount = () => { 
+    let c = 0; 
+    if (filters.position !== 'all') c++; 
+    ['gFilter', 'paFilter', 'abFilter', 'ipFilter', 'defFilter'].forEach(f => { if (filters[f].enabled) c++; }); 
+    // Count disabled card tiers
+    const disabledTiers = Object.values(filters.cardTiers).filter(v => !v).length;
+    if (disabledTiers > 0) c++;
+    if (filters.variantFilter !== 'all') c++;
+    return c; 
+  };
+  
+  const getCardTier = (ovr) => {
+    const val = parseInt(ovr) || 0;
+    if (val >= 100) return 'perfect';
+    if (val >= 90) return 'diamond';
+    if (val >= 80) return 'gold';
+    if (val >= 70) return 'silver';
+    if (val >= 60) return 'bronze';
+    return 'iron';
+  };
+  
+  const toggleCardTier = (tier) => {
+    setFilters(f => ({
+      ...f,
+      cardTiers: { ...f.cardTiers, [tier]: !f.cardTiers[tier] }
+    }));
+  };
 
   const pitchingPositions = ['all', 'SP', 'RP', 'CL'];
   const battingPositions = ['all', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
@@ -1271,10 +1351,82 @@ function StatsPage() {
               </div>
               <div style={styles.resultsCount}>{filteredData.length} / {totalData}</div>
             </div>
-            {showAdvancedFilters && (<div style={styles.advancedFilters}><div style={styles.filterGroup}>
-              <StatFilter label="G" filter={filters.gFilter} onChange={(u) => updateStatFilter('gFilter', u)} theme={theme} />
-              {activeTab === 'batting' ? (<><StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} theme={theme} /><StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} theme={theme} /></>) : (<StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} theme={theme} />)}
-            </div></div>)}
+            {showAdvancedFilters && (
+              <div style={styles.advancedFilters}>
+                {/* Stat Filters Row */}
+                <div style={styles.filterGroup}>
+                  <StatFilter label="G" filter={filters.gFilter} onChange={(u) => updateStatFilter('gFilter', u)} theme={theme} />
+                  {activeTab === 'batting' ? (
+                    <>
+                      <StatFilter label="PA" filter={filters.paFilter} onChange={(u) => updateStatFilter('paFilter', u)} theme={theme} />
+                      <StatFilter label="AB" filter={filters.abFilter} onChange={(u) => updateStatFilter('abFilter', u)} theme={theme} />
+                      <StatFilter label="DEF" filter={filters.defFilter} onChange={(u) => updateStatFilter('defFilter', u)} theme={theme} />
+                    </>
+                  ) : (
+                    <StatFilter label="IP" filter={filters.ipFilter} onChange={(u) => updateStatFilter('ipFilter', u)} theme={theme} />
+                  )}
+                </div>
+                
+                {/* Card Tier Toggles */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <span style={{ color: theme.textMuted, fontSize: 12 }}>Card Tiers:</span>
+                  {[
+                    { key: 'perfect', label: 'Perfect', color: '#a855f7', min: 100 },
+                    { key: 'diamond', label: 'Diamond', color: '#32EBFC', min: 90 },
+                    { key: 'gold', label: 'Gold', color: '#FFE61F', min: 80 },
+                    { key: 'silver', label: 'Silver', color: '#E0E0E0', min: 70 },
+                    { key: 'bronze', label: 'Bronze', color: '#cd7f32', min: 60 },
+                    { key: 'iron', label: 'Iron', color: '#888', min: 0 }
+                  ].map(tier => (
+                    <button
+                      key={tier.key}
+                      onClick={() => toggleCardTier(tier.key)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        border: `1px solid ${filters.cardTiers[tier.key] ? tier.color : theme.border}`,
+                        background: filters.cardTiers[tier.key] ? tier.color + '22' : 'transparent',
+                        color: filters.cardTiers[tier.key] ? tier.color : theme.textMuted,
+                        cursor: 'pointer',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        opacity: filters.cardTiers[tier.key] ? 1 : 0.5
+                      }}
+                      title={`${tier.label} (${tier.min}+ OVR) - Click to ${filters.cardTiers[tier.key] ? 'hide' : 'show'}`}
+                    >
+                      {tier.label}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Variant Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <span style={{ color: theme.textMuted, fontSize: 12 }}>Variants:</span>
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'no', label: 'No Variants' },
+                    { value: 'yes', label: 'Only Variants' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFilters(f => ({ ...f, variantFilter: opt.value }))}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        border: `1px solid ${filters.variantFilter === opt.value ? theme.accent : theme.border}`,
+                        background: filters.variantFilter === opt.value ? theme.accent + '22' : 'transparent',
+                        color: filters.variantFilter === opt.value ? theme.accent : theme.textMuted,
+                        cursor: 'pointer',
+                        fontSize: 11,
+                        fontWeight: 600
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={styles.tableContainer}>
               {activeTab === 'pitching' 
                 ? <PitchingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} /> 
