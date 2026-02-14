@@ -3061,7 +3061,8 @@ function SubmitDataPage() {
           file_type: 'pitching',
           upload_date: item.date,
           player_count: newData.length,
-          player_data: newData
+          player_data: newData,
+          source: 'admin_bulk'
         });
 
         if (!uploadedDates.includes(item.date)) {
@@ -3147,7 +3148,8 @@ function SubmitDataPage() {
           file_type: 'batting',
           upload_date: item.date,
           player_count: newData.length,
-          player_data: newData
+          player_data: newData,
+          source: 'admin_bulk'
         });
 
         if (!uploadedDates.includes(item.date)) {
@@ -3395,7 +3397,8 @@ function SubmitDataPage() {
           file_type: 'pitching',
           upload_date: date,
           player_count: newData.length,
-          player_data: newData
+          player_data: newData,
+          source: 'admin_direct'
         });
       }
       
@@ -3479,7 +3482,8 @@ function SubmitDataPage() {
           file_type: 'batting',
           upload_date: date,
           player_count: newData.length,
-          player_data: newData
+          player_data: newData,
+          source: 'admin_direct'
         });
       }
       
@@ -4354,7 +4358,8 @@ function ReviewQueuePage() {
         file_type: upload.file_type,
         upload_date: assignedDate,
         player_count: newData.length,
-        player_data: newData
+        player_data: newData,
+        source: 'user_submission'
       });
 
       // Mark upload as approved
@@ -4496,17 +4501,23 @@ function ReviewQueuePage() {
       if (!tournament) throw new Error('Tournament not found');
 
       // Remove the players that were added
+      // player_data has raw CSV format (Name, OVR, VAR) with capital letters
       const existingData = historyItem.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
-      const addedPlayerKeys = new Set((historyItem.player_data || []).map(p => `${p.Name}|${p.OVR}`));
+      const addedPlayerKeys = new Set((historyItem.player_data || []).map(p => {
+        const name = p.Name || p.name || '';
+        const ovr = p.OVR || p.ovr || '';
+        const vari = parseVariant(p.VAR || p.vari);
+        return `${name}|${ovr}|${vari}`;
+      }));
       const filteredData = existingData.filter(p => !addedPlayerKeys.has(`${p.name}|${p.ovr}|${p.vari || 'N'}`));
 
       // Remove date from uploaded_dates
-      const uploadedDates = (tournament.uploaded_dates || []).filter(d => d !== historyItem.upload_date);
+      const uploadedDates = (tournament.uploaded_dates || tournament.uploadedDates || []).filter(d => d !== historyItem.upload_date);
 
       // Update tournament
       const updatePayload = historyItem.file_type === 'batting'
-        ? { batting: filteredData, uploaded_dates: uploadedDates }
-        : { pitching: filteredData, uploaded_dates: uploadedDates };
+        ? { batting: filteredData, uploaded_dates: uploadedDates, uploadedDates: uploadedDates }
+        : { pitching: filteredData, uploaded_dates: uploadedDates, uploadedDates: uploadedDates };
       
       await supabase.from('tournaments').update(updatePayload).eq('id', historyItem.tournament_id);
 
@@ -4919,6 +4930,7 @@ function ReviewQueuePage() {
                           <th style={styles.historyTh}>Tournament</th>
                           <th style={styles.historyTh}>Type</th>
                           <th style={styles.historyTh}>Players</th>
+                          <th style={styles.historyTh}>Source</th>
                           <th style={styles.historyTh}>Action</th>
                         </tr>
                       </thead>
@@ -4929,6 +4941,24 @@ function ReviewQueuePage() {
                             <td style={styles.historyTd}>{h.tournament_name}</td>
                             <td style={styles.historyTd}>{h.file_type}</td>
                             <td style={styles.historyTd}>{h.player_count}</td>
+                            <td style={styles.historyTd}>
+                              <span style={{
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                background: h.source === 'admin_direct' ? theme.accent + '22' : 
+                                           h.source === 'admin_bulk' ? theme.warning + '22' : 
+                                           theme.success + '22',
+                                color: h.source === 'admin_direct' ? theme.accent : 
+                                       h.source === 'admin_bulk' ? theme.warning : 
+                                       theme.success
+                              }}>
+                                {h.source === 'admin_direct' ? 'Admin' : 
+                                 h.source === 'admin_bulk' ? 'Bulk' : 
+                                 h.source === 'user_submission' ? 'User' : 
+                                 'Legacy'}
+                              </span>
+                            </td>
                             <td style={styles.historyTd}>
                               {h.undone ? (
                                 <span style={{color: theme.textMuted}}>UNDONE</span>
