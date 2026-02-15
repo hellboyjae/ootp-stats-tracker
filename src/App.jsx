@@ -28,16 +28,14 @@ const withAlpha = (hex, alpha) => {
 };
 
 // MLB Team color schemes - primary is main color, secondary is accent
-// Team colors: primary = DARK (backgrounds, sidebar, table headers)
-//              secondary = BRIGHT (accent text, buttons, highlights, gold)
 const teamColors = {
-  default: { primary: '#1e3a5f', secondary: '#fbbf24', name: 'Default' },
+  default: { primary: '#3b82f6', secondary: '#fbbf24', name: 'Default' },
   // AL East
   yankees: { primary: '#003087', secondary: '#C4CED4', name: 'Yankees' },
-  redsox: { primary: '#0C2340', secondary: '#BD3039', name: 'Red Sox' },
+  redsox: { primary: '#BD3039', secondary: '#0C2340', name: 'Red Sox' },
   rays: { primary: '#092C5C', secondary: '#8FBCE6', name: 'Rays' },
-  bluejays: { primary: '#134A8E', secondary: '#5CB8F0', name: 'Blue Jays' },
-  orioles: { primary: '#1A1110', secondary: '#DF4601', name: 'Orioles' },
+  bluejays: { primary: '#134A8E', secondary: '#1D2D5C', name: 'Blue Jays' },
+  orioles: { primary: '#DF4601', secondary: '#000000', name: 'Orioles' },
   // AL Central
   guardians: { primary: '#00385D', secondary: '#E50022', name: 'Guardians' },
   twins: { primary: '#002B5C', secondary: '#D31145', name: 'Twins' },
@@ -47,26 +45,26 @@ const teamColors = {
   // AL West
   astros: { primary: '#002D62', secondary: '#EB6E1F', name: 'Astros' },
   rangers: { primary: '#003278', secondary: '#C0111F', name: 'Rangers' },
-  mariners: { primary: '#0C2C56', secondary: '#00C9C9', name: 'Mariners' },
-  angels: { primary: '#003263', secondary: '#E4002B', name: 'Angels' },
+  mariners: { primary: '#0C2C56', secondary: '#005C5C', name: 'Mariners' },
+  angels: { primary: '#BA0021', secondary: '#003263', name: 'Angels' },
   athletics: { primary: '#003831', secondary: '#EFB21E', name: 'Athletics' },
   // NL East
-  braves: { primary: '#13274F', secondary: '#CE1141', name: 'Braves' },
-  phillies: { primary: '#002D72', secondary: '#E81828', name: 'Phillies' },
+  braves: { primary: '#CE1141', secondary: '#13274F', name: 'Braves' },
+  phillies: { primary: '#E81828', secondary: '#002D72', name: 'Phillies' },
   mets: { primary: '#002D72', secondary: '#FF5910', name: 'Mets' },
-  marlins: { primary: '#0A1E3D', secondary: '#00A3E0', name: 'Marlins' },
-  nationals: { primary: '#14225A', secondary: '#E4002B', name: 'Nationals' },
+  marlins: { primary: '#00A3E0', secondary: '#EF3340', name: 'Marlins' },
+  nationals: { primary: '#AB0003', secondary: '#14225A', name: 'Nationals' },
   // NL Central
   brewers: { primary: '#12284B', secondary: '#FFC52F', name: 'Brewers' },
-  cardinals: { primary: '#0C2340', secondary: '#C41E3A', name: 'Cardinals' },
+  cardinals: { primary: '#C41E3A', secondary: '#0C2340', name: 'Cardinals' },
   cubs: { primary: '#0E3386', secondary: '#CC3433', name: 'Cubs' },
-  reds: { primary: '#1A1114', secondary: '#E4002B', name: 'Reds' },
+  reds: { primary: '#C6011F', secondary: '#000000', name: 'Reds' },
   pirates: { primary: '#27251F', secondary: '#FDB827', name: 'Pirates' },
   // NL West
   dodgers: { primary: '#005A9C', secondary: '#EF3E42', name: 'Dodgers' },
   padres: { primary: '#2F241D', secondary: '#FFC425', name: 'Padres' },
-  giants: { primary: '#1E1710', secondary: '#FD5A1E', name: 'Giants' },
-  dbacks: { primary: '#1E0C12', secondary: '#E4002B', name: 'D-backs' },
+  giants: { primary: '#FD5A1E', secondary: '#27251F', name: 'Giants' },
+  dbacks: { primary: '#A71930', secondary: '#E3D4AD', name: 'D-backs' },
   rockies: { primary: '#333366', secondary: '#C4CED4', name: 'Rockies' },
 };
 
@@ -5423,9 +5421,87 @@ function DraftAssistantPage() {
       return;
     }
 
+    // Load upload history to calculate confidence bands
+    const { data: history } = await supabase
+      .from('upload_history')
+      .select('*')
+      .eq('tournament_id', selectedTournamentId)
+      .eq('undone', false)
+      .order('created_at', { ascending: true });
+
+    // Calculate min/max values for each player from upload history
+    const playerBands = new Map();
+    
+    if (history && history.length > 1) {
+      history.forEach(upload => {
+        const playerData = upload.player_data || [];
+        const isPitching = upload.file_type === 'pitching';
+        
+        playerData.forEach(p => {
+          const name = (p.Name || p.name || '').trim();
+          const ovr = parseFloat(p.OVR || p.ovr) || 0;
+          const key = `${name}|${ovr}`;
+          
+          if (!playerBands.has(key)) {
+            playerBands.set(key, { 
+              wobaValues: [], 
+              sieraValues: [],
+              isPitching 
+            });
+          }
+          
+          const band = playerBands.get(key);
+          if (isPitching) {
+            const siera = parseFloat(p.SIERA || p.siera);
+            if (!isNaN(siera) && siera > 0) {
+              band.sieraValues.push(siera);
+            }
+          } else {
+            const woba = parseFloat(p.wOBA || p.woba);
+            if (!isNaN(woba) && woba > 0) {
+              band.wobaValues.push(woba);
+            }
+          }
+        });
+      });
+    }
+
+    // Add min/max to tournament data
+    const enrichedData = { ...data };
+    
+    if (enrichedData.batting) {
+      enrichedData.batting = enrichedData.batting.map(p => {
+        const key = `${p.name}|${p.ovr}`;
+        const band = playerBands.get(key);
+        if (band && band.wobaValues.length >= 2) {
+          return {
+            ...p,
+            _wobaMin: Math.min(...band.wobaValues).toFixed(3),
+            _wobaMax: Math.max(...band.wobaValues).toFixed(3)
+          };
+        }
+        return p;
+      });
+    }
+    
+    if (enrichedData.pitching) {
+      enrichedData.pitching = enrichedData.pitching.map(p => {
+        const key = `${p.name}|${p.ovr}`;
+        const band = playerBands.get(key);
+        if (band && band.sieraValues.length >= 2) {
+          return {
+            ...p,
+            _sieraMin: Math.min(...band.sieraValues).toFixed(2),
+            _sieraMax: Math.max(...band.sieraValues).toFixed(2)
+          };
+        }
+        return p;
+      });
+    }
+
     // Check if this is a low data tournament
-    const battingCount = data.batting?.length || 0;
-    const pitchingCount = data.pitching?.length || 0;
+    const battingCount = enrichedData.batting?.length || 0;
+    const pitchingCount = enrichedData.pitching?.length || 0;
     const isLowData = battingCount < 50 || pitchingCount < 30;
     
     if (isLowData) {
@@ -5435,7 +5511,7 @@ function DraftAssistantPage() {
       setLowDataMode(false);
     }
 
-    setTournamentData(data);
+    setTournamentData(enrichedData);
     setRoster({});
     setDraftStarted(true);
     setActivePositionTab('C');
@@ -5521,18 +5597,56 @@ function DraftAssistantPage() {
     // Calculate tiers on ALL eligible players first (before limiting)
     const tiered = calculateTiers(filtered, isPitching);
     
+    // Find the top performer's metric value for T1+ cutoff
+    let topPerformerValue = null;
+    if (tiered.length > 0) {
+      if (isPitching) {
+        topPerformerValue = parseFloat(tiered[0].siera) || parseFloat(tiered[0].era) || null;
+      } else {
+        topPerformerValue = parseFloat(tiered[0].woba) || null;
+      }
+    }
+    
     // Add confidence, rank value, and T1+ status
     const withScores = tiered.map(p => {
       const hasShield = hasEliteDefenseShield(p, isPitching);
-      // T1+ = (T1 or T2) with elite defense shield at key position
-      const isT1Plus = (p._tier === 1 || p._tier === 2) && hasShield;
+      const confidence = getSampleConfidence(p, isPitching);
+      
+      // T1+ requirements:
+      // 1. Must be T1 or T2 tier
+      // 2. Must have elite defense shield at key position
+      // 3. Must be within performance cutoff of top performer
+      //    - Batters: wOBA must be >= top - 0.050
+      //    - Pitchers: SIERA must be <= top + 0.50
+      let isT1Plus = false;
+      if ((p._tier === 1 || p._tier === 2) && hasShield && topPerformerValue !== null) {
+        if (isPitching) {
+          const playerSiera = parseFloat(p.siera) || parseFloat(p.era) || 99;
+          isT1Plus = playerSiera <= topPerformerValue + 0.50;
+        } else {
+          const playerWoba = parseFloat(p.woba) || 0;
+          isT1Plus = playerWoba >= topPerformerValue - 0.050;
+        }
+      }
+      
+      // Get confidence band from player data if available (for trusted players)
+      let confidenceBand = null;
+      if (confidence.level === 'trusted') {
+        if (isPitching && p._sieraMin !== undefined && p._sieraMax !== undefined) {
+          confidenceBand = { min: p._sieraMin, max: p._sieraMax };
+        } else if (!isPitching && p._wobaMin !== undefined && p._wobaMax !== undefined) {
+          confidenceBand = { min: p._wobaMin, max: p._wobaMax };
+        }
+      }
+      
       return {
         ...p,
-        _confidence: getSampleConfidence(p, isPitching),
+        _confidence: confidence,
         _rankValue: getRankValue(p, isPitching),
         _isPitching: isPitching,
         _hasShield: hasShield,
-        _isT1Plus: isT1Plus
+        _isT1Plus: isT1Plus,
+        _confidenceBand: confidenceBand
       };
     });
 
@@ -6031,7 +6145,7 @@ function DraftAssistantPage() {
 
   // Render Main Draft View
   const positionTabs = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', ...(hasDH ? ['DH'] : []), 'SP'];
-  const currentAvailable = getAvailablePlayers(activePositionTab, 10);
+  const currentAvailable = getAvailablePlayers(activePositionTab, 15);
 
   // For compact mode, render without Layout wrapper
   if (isCompactMode) {
@@ -6189,7 +6303,9 @@ function DraftAssistantPage() {
                         <span style={{ color: theme.textMuted, fontSize: 11 }}>{handLabel}</span>
                         <span style={{ flex: 1, color: theme.textPrimary }}>{p.name}</span>
                         <span style={{ color: theme.textSecondary, fontSize: 11 }}>
-                          {isPitch ? `${p.siera || p.era} · ${p.ip || '—'} IP` : `${p.woba} · ${p.ab || '—'} AB`}
+                          {isPitch 
+                            ? `${p.siera || p.era}${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ip || '—'} IP` 
+                            : `${p.woba}${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ab || '—'} AB`}
                         </span>
                       </div>
                     );
@@ -6269,7 +6385,9 @@ function DraftAssistantPage() {
                     {showEliteDefShield && <span style={{ color: '#3b82f6', fontSize: 11 }} title="Elite Defense (100+) at key position">🛡️</span>}
                     {tierBadge && <span style={{ color: tierBadge.color, fontSize: 11, fontWeight: 600 }}>{tierBadge.label}</span>}
                     <span style={{ color: theme.textSecondary, fontSize: 11 }}>
-                      {isPitching ? `${p.siera || p.era} · ${p.ip || '—'} IP` : `${p.woba} · ${p.ab || '—'} AB`}
+                      {isPitching 
+                        ? `${p.siera || p.era}${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ip || '—'} IP` 
+                        : `${p.woba}${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ab || '—'} AB`}
                     </span>
                   </div>
                 );
@@ -6789,8 +6907,8 @@ function DraftAssistantPage() {
                             <span style={{ color: theme.textMuted, fontSize: 12 }}>{p.pos}</span>
                             <span style={{ color: theme.textSecondary, fontSize: 11 }}>
                               {isPitch 
-                                ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.ip || '—'} IP`
-                                : `${p.woba || '—'} wOBA · ${p.ab || '—'} AB`
+                                ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'}${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ip || '—'} IP`
+                                : `${p.woba || '—'} wOBA${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ab || '—'} AB`
                               }
                             </span>
                           </div>
@@ -6889,8 +7007,8 @@ function DraftAssistantPage() {
                           </div>
                           <div style={{ color: theme.textMuted, fontSize: 11 }}>
                             {isPitching 
-                              ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'} · ${p.ip || '—'} IP`
-                              : `${p.woba || '—'} wOBA · ${p.opsPlus || '—'} OPS+ · ${p.ab || '—'} AB`
+                              ? `${p.siera || p.era || '—'} ${p.siera ? 'SIERA' : 'ERA'}${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ip || '—'} IP`
+                              : `${p.woba || '—'} wOBA${p._confidenceBand ? ` (${p._confidenceBand.min}~${p._confidenceBand.max})` : ''} · ${p.ab || '—'} AB`
                             }
                           </div>
                         </div>
