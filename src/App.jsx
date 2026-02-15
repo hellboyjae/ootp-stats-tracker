@@ -28,14 +28,16 @@ const withAlpha = (hex, alpha) => {
 };
 
 // MLB Team color schemes - primary is main color, secondary is accent
+// Team colors: primary = DARK (backgrounds, sidebar, table headers)
+//              secondary = BRIGHT (accent text, buttons, highlights, gold)
 const teamColors = {
-  default: { primary: '#3b82f6', secondary: '#fbbf24', name: 'Default' },
+  default: { primary: '#1e3a5f', secondary: '#fbbf24', name: 'Default' },
   // AL East
   yankees: { primary: '#003087', secondary: '#C4CED4', name: 'Yankees' },
-  redsox: { primary: '#BD3039', secondary: '#0C2340', name: 'Red Sox' },
+  redsox: { primary: '#0C2340', secondary: '#BD3039', name: 'Red Sox' },
   rays: { primary: '#092C5C', secondary: '#8FBCE6', name: 'Rays' },
-  bluejays: { primary: '#134A8E', secondary: '#1D2D5C', name: 'Blue Jays' },
-  orioles: { primary: '#DF4601', secondary: '#000000', name: 'Orioles' },
+  bluejays: { primary: '#134A8E', secondary: '#5CB8F0', name: 'Blue Jays' },
+  orioles: { primary: '#1A1110', secondary: '#DF4601', name: 'Orioles' },
   // AL Central
   guardians: { primary: '#00385D', secondary: '#E50022', name: 'Guardians' },
   twins: { primary: '#002B5C', secondary: '#D31145', name: 'Twins' },
@@ -45,26 +47,26 @@ const teamColors = {
   // AL West
   astros: { primary: '#002D62', secondary: '#EB6E1F', name: 'Astros' },
   rangers: { primary: '#003278', secondary: '#C0111F', name: 'Rangers' },
-  mariners: { primary: '#0C2C56', secondary: '#005C5C', name: 'Mariners' },
-  angels: { primary: '#BA0021', secondary: '#003263', name: 'Angels' },
+  mariners: { primary: '#0C2C56', secondary: '#00C9C9', name: 'Mariners' },
+  angels: { primary: '#003263', secondary: '#E4002B', name: 'Angels' },
   athletics: { primary: '#003831', secondary: '#EFB21E', name: 'Athletics' },
   // NL East
-  braves: { primary: '#CE1141', secondary: '#13274F', name: 'Braves' },
-  phillies: { primary: '#E81828', secondary: '#002D72', name: 'Phillies' },
+  braves: { primary: '#13274F', secondary: '#CE1141', name: 'Braves' },
+  phillies: { primary: '#002D72', secondary: '#E81828', name: 'Phillies' },
   mets: { primary: '#002D72', secondary: '#FF5910', name: 'Mets' },
-  marlins: { primary: '#00A3E0', secondary: '#EF3340', name: 'Marlins' },
-  nationals: { primary: '#AB0003', secondary: '#14225A', name: 'Nationals' },
+  marlins: { primary: '#0A1E3D', secondary: '#00A3E0', name: 'Marlins' },
+  nationals: { primary: '#14225A', secondary: '#E4002B', name: 'Nationals' },
   // NL Central
   brewers: { primary: '#12284B', secondary: '#FFC52F', name: 'Brewers' },
-  cardinals: { primary: '#C41E3A', secondary: '#0C2340', name: 'Cardinals' },
+  cardinals: { primary: '#0C2340', secondary: '#C41E3A', name: 'Cardinals' },
   cubs: { primary: '#0E3386', secondary: '#CC3433', name: 'Cubs' },
-  reds: { primary: '#C6011F', secondary: '#000000', name: 'Reds' },
+  reds: { primary: '#1A1114', secondary: '#E4002B', name: 'Reds' },
   pirates: { primary: '#27251F', secondary: '#FDB827', name: 'Pirates' },
   // NL West
   dodgers: { primary: '#005A9C', secondary: '#EF3E42', name: 'Dodgers' },
   padres: { primary: '#2F241D', secondary: '#FFC425', name: 'Padres' },
-  giants: { primary: '#FD5A1E', secondary: '#27251F', name: 'Giants' },
-  dbacks: { primary: '#A71930', secondary: '#E3D4AD', name: 'D-backs' },
+  giants: { primary: '#1E1710', secondary: '#FD5A1E', name: 'Giants' },
+  dbacks: { primary: '#1E0C12', secondary: '#E4002B', name: 'D-backs' },
   rockies: { primary: '#333366', secondary: '#C4CED4', name: 'Rockies' },
 };
 
