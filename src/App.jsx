@@ -439,7 +439,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
         <div><h1 style={styles.title}>BeaneCounter</h1><p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p></div>
         <div style={styles.headerRight}>
           <nav style={styles.nav}>
-            <NavLink to="/" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
+            <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/leaderboards" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Leaderboards</NavLink>
             <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
@@ -7495,6 +7495,7 @@ function DraftAssistantPage() {
 function WelcomePage() {
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
   const [fadeOut, setFadeOut] = useState(false);
+  const [shouldShow, setShouldShow] = useState(false);
   const particlesRef = React.useRef(null);
   
   const quotes = [
@@ -7506,8 +7507,19 @@ function WelcomePage() {
     '"The harder I work, the luckier I get." — Gary Player'
   ];
 
+  // Check if user has already entered the site this session
+  useEffect(() => {
+    const hasEntered = sessionStorage.getItem('beaneCounterEntered');
+    if (hasEntered) {
+      window.location.href = '/stats';
+    } else {
+      setShouldShow(true);
+    }
+  }, []);
+
   // Quote rotation
   useEffect(() => {
+    if (!shouldShow) return;
     const interval = setInterval(() => {
       setFadeOut(true);
       setTimeout(() => {
@@ -7516,10 +7528,11 @@ function WelcomePage() {
       }, 500);
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [shouldShow]);
 
   // Particle animation
   useEffect(() => {
+    if (!shouldShow) return;
     const container = particlesRef.current;
     if (!container) return;
 
@@ -7569,11 +7582,17 @@ function WelcomePage() {
     // Continuous particles
     const interval = setInterval(createParticle, 600);
     return () => clearInterval(interval);
-  }, []);
+  }, [shouldShow]);
 
   const handleEnter = () => {
+    sessionStorage.setItem('beaneCounterEntered', 'true');
     window.location.href = '/stats';
   };
+
+  // Don't render until we know if we should show
+  if (!shouldShow) {
+    return <div style={{ background: '#0a1929', minHeight: '100vh' }} />;
+  }
 
   return (
     <div style={{
