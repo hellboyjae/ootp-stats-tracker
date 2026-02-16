@@ -1,11 +1,11 @@
 # BeaneCounter Robots.txt
-# https://beanecounter.vercel.app
+# https://www.beanecounter.com
 
 User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://beanecounter.vercel.app/sitemap.xml
+Sitemap: https://www.beanecounter.com/sitemap.xml
 
 # Crawl-delay (optional, be nice to servers)
 Crawl-delay: 1
