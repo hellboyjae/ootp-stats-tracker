@@ -7491,9 +7491,301 @@ function DraftAssistantPage() {
   );
 }
 
+// Welcome Page - Clean landing page with OOTP 27 blue/orange theme
+function WelcomePage() {
+  const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+  const [fadeOut, setFadeOut] = useState(false);
+  const particlesRef = React.useRef(null);
+  
+  const quotes = [
+    '"Winning isn\'t everything, but losing isn\'t anything." — Charles M. Schulz',
+    '"Baseball is a game of inches." — Bull Durham (1988)',
+    '"Winners never quit, and quitters never win." — Vince Lombardi',
+    '"If you\'re not going all the way, why go at all?" — Joe Namath',
+    '"Winning is a habit." — Vince Lombardi',
+    '"The harder I work, the luckier I get." — Gary Player'
+  ];
+
+  // Quote rotation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFadeOut(true);
+      setTimeout(() => {
+        setCurrentQuoteIndex(prev => (prev + 1) % quotes.length);
+        setFadeOut(false);
+      }, 500);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Particle animation
+  useEffect(() => {
+    const container = particlesRef.current;
+    if (!container) return;
+
+    const createParticle = () => {
+      const particle = document.createElement('div');
+      particle.style.cssText = `
+        position: absolute;
+        width: ${Math.random() * 3 + 2}px;
+        height: ${Math.random() * 3 + 2}px;
+        background: rgba(255, 149, 0, 0.5);
+        border-radius: 50%;
+        left: ${Math.random() * 100}%;
+        top: -10px;
+        opacity: ${Math.random() * 0.5 + 0.3};
+        pointer-events: none;
+      `;
+      container.appendChild(particle);
+
+      const duration = 8000 + Math.random() * 6000;
+      const startTime = performance.now();
+      const startX = parseFloat(particle.style.left);
+      const drift = (Math.random() - 0.5) * 100;
+
+      const animate = (currentTime) => {
+        const elapsed = currentTime - startTime;
+        const progress = elapsed / duration;
+
+        if (progress < 1) {
+          const y = progress * (window.innerHeight + 20);
+          const x = startX + Math.sin(progress * Math.PI * 2) * 20 + drift * progress;
+          particle.style.top = y + 'px';
+          particle.style.left = x + '%';
+          particle.style.opacity = (1 - progress) * 0.6;
+          requestAnimationFrame(animate);
+        } else {
+          particle.remove();
+        }
+      };
+      requestAnimationFrame(animate);
+    };
+
+    // Initial particles
+    for (let i = 0; i < 10; i++) {
+      setTimeout(createParticle, i * 300);
+    }
+
+    // Continuous particles
+    const interval = setInterval(createParticle, 600);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleEnter = () => {
+    window.location.href = '/stats';
+  };
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '40px 20px',
+      position: 'relative',
+      background: `
+        radial-gradient(ellipse 80% 50% at 50% 120%, rgba(30, 60, 114, 0.4) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 30% at 50% 0%, rgba(255, 149, 0, 0.08) 0%, transparent 50%),
+        linear-gradient(180deg, #0a1929 0%, #0d2137 50%, #0a1929 100%)
+      `,
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      overflow: 'hidden'
+    }}>
+      {/* Grid pattern */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: `
+          linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)
+        `,
+        backgroundSize: '50px 50px',
+        pointerEvents: 'none'
+      }} />
+
+      {/* Decorative rings */}
+      <div style={{
+        position: 'absolute',
+        width: 400,
+        height: 400,
+        borderRadius: '50%',
+        border: '1px solid rgba(255, 149, 0, 0.1)',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        animation: 'rotateSlow 30s linear infinite',
+        pointerEvents: 'none'
+      }} />
+      <div style={{
+        position: 'absolute',
+        width: 500,
+        height: 500,
+        borderRadius: '50%',
+        border: '1px dashed rgba(255, 149, 0, 0.1)',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        animation: 'rotateSlow 40s linear infinite reverse',
+        pointerEvents: 'none'
+      }} />
+
+      {/* Particles container */}
+      <div ref={particlesRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />
+
+      {/* Main content */}
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600 }}>
+        <h1 style={{
+          fontSize: 'clamp(3rem, 10vw, 5rem)',
+          fontWeight: 900,
+          letterSpacing: '-0.03em',
+          marginBottom: 8,
+          background: 'linear-gradient(135deg, #ff9500 0%, #ffb347 40%, #ff9500 80%, #ffcc80 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          animation: 'shimmer 3s ease-in-out infinite',
+          backgroundSize: '200% 100%'
+        }}>
+          BeaneCounter
+        </h1>
+        
+        <p style={{
+          fontSize: '1.1rem',
+          fontWeight: 600,
+          color: '#5b9bd5',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          marginBottom: 30
+        }}>
+          OOTP Perfect Team Stats Tool
+        </p>
+
+        <p style={{
+          fontSize: '1.15rem',
+          color: 'rgba(255, 255, 255, 0.7)',
+          lineHeight: 1.7,
+          marginBottom: 40
+        }}>
+          Analyze draft & tournament data to build championship teams.
+          <br />
+          <span style={{ color: '#ff9500', fontWeight: 600 }}>Win more with data-driven decisions.</span>
+        </p>
+
+        <button
+          onClick={handleEnter}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '20px 50px',
+            fontSize: '1.1rem',
+            fontWeight: 700,
+            color: '#fff',
+            background: 'linear-gradient(135deg, #ff9500 0%, #e68600 100%)',
+            border: 'none',
+            borderRadius: 60,
+            cursor: 'pointer',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 4px 15px rgba(255, 149, 0, 0.4)',
+            animation: 'buttonPulse 2.5s ease-in-out infinite'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-3px) scale(1.02)';
+            e.target.style.boxShadow = '0 8px 30px rgba(255, 149, 0, 0.5)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0) scale(1)';
+            e.target.style.boxShadow = '0 4px 15px rgba(255, 149, 0, 0.4)';
+          }}
+        >
+          <span style={{ fontSize: '1.4rem' }}>⚾</span>
+          Enter Site
+        </button>
+
+        {/* Quote */}
+        <div style={{ marginTop: 35, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{
+            fontStyle: 'italic',
+            color: '#ff9500',
+            fontSize: '1rem',
+            maxWidth: 500,
+            opacity: fadeOut ? 0 : 1,
+            transition: 'opacity 0.5s ease-in-out'
+          }}>
+            {quotes[currentQuoteIndex]}
+          </p>
+        </div>
+      </div>
+
+      {/* Version badge */}
+      <div style={{
+        position: 'fixed',
+        bottom: 24,
+        left: 24,
+        padding: '8px 14px',
+        background: 'rgba(91, 155, 213, 0.1)',
+        border: '1px solid rgba(91, 155, 213, 0.2)',
+        borderRadius: 6,
+        color: '#5b9bd5',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        letterSpacing: '0.05em'
+      }}>
+        v1.3-021526
+      </div>
+
+      {/* Badges */}
+      <div style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', gap: 12 }}>
+        <div style={{
+          padding: '10px 18px',
+          background: 'rgba(0, 0, 0, 0.4)',
+          border: '1px solid rgba(255, 149, 0, 0.2)',
+          borderRadius: 8,
+          color: 'rgba(255, 255, 255, 0.6)',
+          fontSize: '0.85rem',
+          backdropFilter: 'blur(10px)'
+        }}>
+          Built by <span style={{ color: '#ff9500', fontWeight: 700 }}>@ItsHellboy</span>
+        </div>
+        <div style={{
+          padding: '10px 18px',
+          background: 'rgba(0, 0, 0, 0.4)',
+          border: '1px solid rgba(255, 149, 0, 0.2)',
+          borderRadius: 8,
+          color: 'rgba(255, 255, 255, 0.6)',
+          fontSize: '0.85rem',
+          backdropFilter: 'blur(10px)'
+        }}>
+          Built for <span style={{ color: '#ff9500', fontWeight: 700 }}>OOTP 27</span>
+        </div>
+      </div>
+
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes shimmer {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes rotateSlow {
+          from { transform: translate(-50%, -50%) rotate(0deg); }
+          to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        @keyframes buttonPulse {
+          0%, 100% { box-shadow: 0 4px 15px rgba(255, 149, 0, 0.4), 0 0 0 0 rgba(255, 149, 0, 0.4); }
+          50% { box-shadow: 0 6px 25px rgba(255, 149, 0, 0.5), 0 0 0 8px rgba(255, 149, 0, 0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><Routes>
-    <Route path="/" element={<StatsPage />} />
+    <Route path="/" element={<WelcomePage />} />
+    <Route path="/stats" element={<StatsPage />} />
     <Route path="/info" element={<InfoPage />} />
     <Route path="/videos" element={<VideosPage />} />
     <Route path="/articles" element={<ArticlesPage />} />
