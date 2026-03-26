@@ -2731,7 +2731,7 @@ function UploadTutorial({ theme }) {
     stepTitle: { fontSize: 14, fontWeight: 700, color: t.textPrimary, margin: 0 },
     stepNum: { fontSize: 11, color: t.textMuted, fontWeight: 500 },
     text: { fontSize: 13, color: t.textSecondary, lineHeight: 1.6, margin: '0 0 12px' },
-    img: { width: '100%', borderRadius: 6, border: `1px solid ${t.border}`, marginBottom: 12, cursor: 'pointer' },
+    img: { width: '100%', maxHeight: '40vh', objectFit: 'contain', borderRadius: 6, border: `1px solid ${t.border}`, marginBottom: 12, cursor: 'pointer', background: t.inputBg },
     imgPlaceholder: { width: '100%', height: 120, borderRadius: 6, border: `2px dashed ${t.border}`, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted, fontSize: 12, background: t.inputBg },
     note: { fontSize: 12, color: t.accent, background: `${t.accent}10`, padding: '8px 10px', borderRadius: 6, marginBottom: 10, lineHeight: 1.5 },
     warn: { fontSize: 12, color: t.warning || '#f59e0b', background: `${t.warning || '#f59e0b'}12`, border: `1px solid ${t.warning || '#f59e0b'}30`, padding: '8px 10px', borderRadius: 6, marginBottom: 10, lineHeight: 1.5 },
@@ -8124,7 +8124,7 @@ function getStyles(t) {
     navBadge: { background: t.error, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
     
     // Submit Data Page
-    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, padding: '24px 24px' },
+    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, padding: '24px 24px' },
     submitFormPanel: { background: t.cardBg, borderRadius: 8, padding: 24, border: `1px solid ${t.border}` },
     submitInfoPanel: { background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', height: 'fit-content', position: 'sticky', top: 24 },
     submitTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
