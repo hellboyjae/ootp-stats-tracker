@@ -513,6 +513,8 @@ function StatsPage() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('tournaments');
   const [tournamentSearch, setTournamentSearch] = useState('');
+  const [renamingTournament, setRenamingTournament] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
   const [showMissingData, setShowMissingData] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingUploadFiles, setPendingUploadFiles] = useState(null);
@@ -666,6 +668,27 @@ function StatsPage() {
       setSidebarTab(newCategory);
       showNotif(`Moved to ${newCategory === 'tournaments' ? 'Tournaments' : 'Drafts'}`);
     }, 'master');
+  };
+
+  const startRename = (tournament) => {
+    setRenamingTournament(tournament.id);
+    setRenameValue(tournament.name);
+  };
+
+  const confirmRename = async (tournament) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === tournament.name) {
+      setRenamingTournament(null);
+      return;
+    }
+    const updatedTournament = { ...tournament, name: trimmed };
+    await saveTournament(updatedTournament);
+    setTournaments(tournaments.map(t => t.id === tournament.id ? updatedTournament : t));
+    if (selectedTournament?.id === tournament.id) {
+      setSelectedTournament(updatedTournament);
+    }
+    setRenamingTournament(null);
+    showNotif('Renamed successfully');
   };
 
   const selectTournament = (t) => { 
@@ -1130,34 +1153,64 @@ function StatsPage() {
                 const quality = getDataQuality(getCsvCount(t));
                 const isSelected = selectedTournament?.id === t.id;
                 const isLegacy = t.category === 'legacy';
-                return (<div key={t.id} style={{...styles.tournamentItem, ...(isSelected ? styles.tournamentActive : {})}} onClick={() => selectTournament(t)}>
+                return (<div key={t.id} style={{...styles.tournamentItem, ...(isSelected ? styles.tournamentActive : {})}} onClick={() => renamingTournament !== t.id && selectTournament(t)}>
                   <div style={styles.tournamentInfo}>
-                    <span style={{...styles.tournamentName, ...(isSelected ? styles.tournamentNameActive : {})}}>{t.name}</span>
+                    {renamingTournament === t.id ? (
+                      <input
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') confirmRename(t); if (e.key === 'Escape') setRenamingTournament(null); }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ width: '100%', padding: '4px 6px', background: theme.inputBg, border: `1px solid ${theme.accent}`, borderRadius: 4, color: theme.textPrimary, fontSize: 13, outline: 'none' }}
+                        autoFocus
+                      />
+                    ) : (
+                      <span style={{...styles.tournamentName, ...(isSelected ? styles.tournamentNameActive : {})}}>{t.name}</span>
+                    )}
                     <span style={styles.tournamentStats}>
                       <span style={{color: quality.color, fontWeight: 600}}>{quality.label}</span>
                       {` · ${t.batting?.length || 0}B / ${t.pitching?.length || 0}P`}
                     </span>
                   </div>
                   <div style={styles.tournamentActions}>
-                    {hasAccess('master') && !isLegacy && (
-                    <button 
-                      style={styles.legacyBtn} 
-                      onClick={(e) => { e.stopPropagation(); moveCategory(t); }}
-                      title={t.category === 'tournaments' ? 'Move to Drafts' : 'Move to Tournaments'}
-                    >
-                      {t.category === 'tournaments' ? '🔀' : '🔀'}
-                    </button>
-                  )}
-                    {hasAccess('master') && (
-                    <button 
-                      style={styles.legacyBtn} 
-                      onClick={(e) => { e.stopPropagation(); toggleLegacy(t); }}
-                      title={isLegacy ? 'Restore from Legacy' : 'Move to Legacy'}
-                    >
-                      {isLegacy ? '↩' : '📦'}
-                    </button>
-                  )}
-                    {hasAccess('master') && <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>×</button>}
+                    {renamingTournament === t.id ? (
+                      <>
+                        <button style={styles.legacyBtn} onClick={(e) => { e.stopPropagation(); confirmRename(t); }} title="Save">✓</button>
+                        <button style={styles.legacyBtn} onClick={(e) => { e.stopPropagation(); setRenamingTournament(null); }} title="Cancel">✕</button>
+                      </>
+                    ) : (
+                      <>
+                        {hasAccess('master') && !isLegacy && (
+                        <button 
+                          style={styles.legacyBtn} 
+                          onClick={(e) => { e.stopPropagation(); startRename(t); }}
+                          title="Rename"
+                        >
+                          ✏️
+                        </button>
+                      )}
+                        {hasAccess('master') && !isLegacy && (
+                        <button 
+                          style={styles.legacyBtn} 
+                          onClick={(e) => { e.stopPropagation(); moveCategory(t); }}
+                          title={t.category === 'tournaments' ? 'Move to Drafts' : 'Move to Tournaments'}
+                        >
+                          🔀
+                        </button>
+                      )}
+                        {hasAccess('master') && (
+                        <button 
+                          style={styles.legacyBtn} 
+                          onClick={(e) => { e.stopPropagation(); toggleLegacy(t); }}
+                          title={isLegacy ? 'Restore from Legacy' : 'Move to Legacy'}
+                        >
+                          {isLegacy ? '↩' : '📦'}
+                        </button>
+                      )}
+                        {hasAccess('master') && <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>×</button>}
+                      </>
+                    )}
                   </div>
                 </div>);
               })}
