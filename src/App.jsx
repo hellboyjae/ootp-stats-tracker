@@ -8124,7 +8124,7 @@ function getStyles(t) {
     navBadge: { background: t.error, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
     
     // Submit Data Page
-    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, padding: '24px 24px' },
+    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 24, padding: '24px 24px' },
     submitFormPanel: { background: t.cardBg, borderRadius: 8, padding: 24, border: `1px solid ${t.border}` },
     submitInfoPanel: { background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', height: 'fit-content', position: 'sticky', top: 24 },
     submitTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
