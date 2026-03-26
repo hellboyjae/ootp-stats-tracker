@@ -2685,8 +2685,9 @@ const TUTORIAL_STEPS = [
   {
     title: 'Pitching Column Order',
     icon: '⚾',
-    text: 'Same process for pitching — check the right columns and drag them into this exact order. Save this view as "CSV Export PITCH" under Global.',
+    text: 'Same process for pitching — check the right columns and drag them into this exact order. Make sure "Position" is checked under the General category (it\'s cut off in this image but must be included). Save this view as "CSV Export PITCH" under Global.',
     image: IMG_CUSTOMIZE_VIEW,
+    note: 'Required checkboxes: Position, Name, Throws (Short), and Overall under General. The rest are stat columns — make sure the drag order on the right matches exactly.',
   },
   {
     title: 'Set Your Filters',
@@ -8123,7 +8124,7 @@ function getStyles(t) {
     navBadge: { background: t.error, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
     
     // Submit Data Page
-    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24, padding: '24px', maxWidth: 1200, margin: '0 auto' },
+    submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, padding: '24px 24px' },
     submitFormPanel: { background: t.cardBg, borderRadius: 8, padding: 24, border: `1px solid ${t.border}` },
     submitInfoPanel: { background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', height: 'fit-content', position: 'sticky', top: 24 },
     submitTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
