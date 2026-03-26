@@ -2665,7 +2665,7 @@ const TUTORIAL_STEPS = [
   {
     title: 'Go to Sortable Stats',
     icon: '📋',
-    text: 'Click "Player Statistics" at the top, then select the "Sortable Stats" tab on the far right.',
+    text: 'Click "Player Statistics" at the top, then select the "Sortable Stats" tab on the far right. This is where you\'ll set up the custom views used in Steps 4 and 5.',
     image: IMG_STATISTICS_PAGE,
   },
   {
@@ -2680,14 +2680,14 @@ const TUTORIAL_STEPS = [
     icon: '🏏',
     text: 'In the Customize View screen, check the columns you need and drag them into this exact order on the right side. Save this view as "CSV Export BATTING" under Global.',
     images: [IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM],
-    warning: 'Strikeouts column must be "K" (not "SO"). The column order matters — it must match exactly or the upload will fail.',
+    warning: 'The column order matters — it must match exactly or the upload will fail.',
   },
   {
     title: 'Pitching Column Order',
     icon: '⚾',
-    text: 'Same process for pitching — check the right columns and drag them into this exact order. Make sure "Position" is checked under the General category (it\'s cut off in this image but must be included). Save this view as "CSV Export PITCH" under Global.',
+    text: 'Same process for pitching — check the right columns and drag them into this exact order. Save this view as "CSV Export PITCH" under Global.',
     image: IMG_CUSTOMIZE_VIEW,
-    note: 'Required checkboxes: Position, Name, Throws (Short), and Overall under General. The rest are stat columns — make sure the drag order on the right matches exactly.',
+    warning: 'Position goes above Name in the table column. NOT SHOWN IN THIS PICTURE — but make sure it\'s checked and at the top of your column order!',
   },
   {
     title: 'Set Your Filters',
