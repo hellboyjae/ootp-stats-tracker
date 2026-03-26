@@ -653,6 +653,20 @@ function StatsPage() {
     }, 'master');
   };
 
+  const moveCategory = (tournament) => {
+    requestAuth(async () => {
+      const newCategory = tournament.category === 'tournaments' ? 'drafts' : 'tournaments';
+      const updatedTournament = { ...tournament, category: newCategory };
+      await saveTournament(updatedTournament);
+      setTournaments(tournaments.map(t => t.id === tournament.id ? updatedTournament : t));
+      if (selectedTournament?.id === tournament.id) {
+        setSelectedTournament(updatedTournament);
+      }
+      setSidebarTab(newCategory);
+      showNotif(`Moved to ${newCategory === 'tournaments' ? 'Tournaments' : 'Drafts'}`);
+    }, 'master');
+  };
+
   const selectTournament = (t) => { 
     setSelectedTournament(t); 
     localStorage.setItem('selectedTournamentId', t.id);
@@ -1124,6 +1138,15 @@ function StatsPage() {
                     </span>
                   </div>
                   <div style={styles.tournamentActions}>
+                    {hasAccess('master') && !isLegacy && (
+                    <button 
+                      style={styles.legacyBtn} 
+                      onClick={(e) => { e.stopPropagation(); moveCategory(t); }}
+                      title={t.category === 'tournaments' ? 'Move to Drafts' : 'Move to Tournaments'}
+                    >
+                      {t.category === 'tournaments' ? '🔀' : '🔀'}
+                    </button>
+                  )}
                     {hasAccess('master') && (
                     <button 
                       style={styles.legacyBtn} 
