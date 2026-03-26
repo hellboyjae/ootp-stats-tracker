@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN } from './tutorialImages.js';
 
 const ThemeContext = createContext();
 
@@ -2653,6 +2654,142 @@ function calculatePlayerMatch(csvRows, tournamentPlayers, fileType) {
   return Math.round((matches / csvPlayerNames.size) * 100);
 }
 
+// ==================== UPLOAD TUTORIAL ====================
+const TUTORIAL_STEPS = [
+  {
+    title: 'Open the Statistics Page',
+    icon: '📊',
+    text: 'In OOTP, hover over the Tournament menu at the top and click "Statistics".',
+    image: IMG_TOURNAMENT_NAV,
+  },
+  {
+    title: 'Go to Sortable Stats',
+    icon: '📋',
+    text: 'Click "Player Statistics" at the top, then select the "Sortable Stats" tab on the far right.',
+    image: IMG_STATISTICS_PAGE,
+  },
+  {
+    title: 'Open Customize View',
+    icon: '🔧',
+    text: 'Click the VIEW dropdown on the left side of the filter bar, then select "Customize..." to set up your column order.',
+    image: IMG_VIEW_DROPDOWN,
+    note: 'You need to create two views and save them to "Global" — one for batting and one for pitching.',
+  },
+  {
+    title: 'Batting Column Order',
+    icon: '🏏',
+    text: 'In the Customize View screen, check the columns you need and drag them into this exact order on the right side. Save this view as "CSV Export BATTING" under Global.',
+    images: [IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM],
+    warning: 'Strikeouts column must be "K" (not "SO"). The column order matters — it must match exactly or the upload will fail.',
+  },
+  {
+    title: 'Pitching Column Order',
+    icon: '⚾',
+    text: 'Same process for pitching — check the right columns and drag them into this exact order. Save this view as "CSV Export PITCH" under Global.',
+    image: IMG_CUSTOMIZE_VIEW,
+  },
+  {
+    title: 'Set Your Filters',
+    icon: '🎯',
+    text: 'Before exporting, make sure your filter bar is set correctly. For pitching: Qualify → "Pitching Qualifiers", Position → "All Pitchers". For batting: Qualify → "Batting Qualifiers", Position → "All Batters".',
+    image: IMG_PITCHING_FILTERS,
+    warning: 'Wrong filters = rejected upload. Double-check every time!',
+  },
+  {
+    title: 'Export to CSV',
+    icon: '💾',
+    text: 'Click the REPORT dropdown on the right side of the filter bar and choose "Write report to csv". Do this once for batting and once for pitching — you\'ll end up with two CSV files.',
+    image: IMG_EXPORT_CSV,
+    note: 'You need TWO separate files: one batting CSV and one pitching CSV.',
+  },
+  {
+    title: 'Upload Here!',
+    icon: '📤',
+    text: 'Use the form on the left to upload both CSVs. Select the correct tournament or draft, choose the right date, attach both files, and hit Submit for Review.',
+    checks: ['Correct tournament/draft selected', 'Right date chosen for the data', 'Both batting AND pitching CSVs attached', 'Filters were double-checked before export'],
+  },
+];
+
+function UploadTutorial({ theme }) {
+  const [step, setStep] = useState(0);
+  const [imageError, setImageError] = useState({});
+  const t = theme;
+  const s = TUTORIAL_STEPS[step];
+  const total = TUTORIAL_STEPS.length;
+
+  const base = {
+    panel: { background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', height: 'fit-content', position: 'sticky', top: 24 },
+    header: { padding: '14px 16px', background: t.cardBg, borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    title: { margin: 0, fontSize: 15, fontWeight: 700, color: t.textPrimary },
+    badge: { fontSize: 11, fontWeight: 600, color: t.accent, background: `${t.accent}18`, padding: '3px 8px', borderRadius: 10 },
+    dots: { display: 'flex', gap: 3, padding: '10px 16px', borderBottom: `1px solid ${t.border}`, background: t.inputBg, flexWrap: 'wrap', justifyContent: 'center' },
+    dot: (active) => ({ width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? t.accent : 'transparent', color: active ? '#fff' : t.textMuted, transition: 'all 0.15s' }),
+    body: { padding: 16 },
+    stepHead: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
+    icon: { fontSize: 22, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${t.accent}12`, borderRadius: 8, flexShrink: 0 },
+    stepTitle: { fontSize: 14, fontWeight: 700, color: t.textPrimary, margin: 0 },
+    stepNum: { fontSize: 11, color: t.textMuted, fontWeight: 500 },
+    text: { fontSize: 13, color: t.textSecondary, lineHeight: 1.6, margin: '0 0 12px' },
+    img: { width: '100%', borderRadius: 6, border: `1px solid ${t.border}`, marginBottom: 12, cursor: 'pointer' },
+    imgPlaceholder: { width: '100%', height: 120, borderRadius: 6, border: `2px dashed ${t.border}`, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted, fontSize: 12, background: t.inputBg },
+    note: { fontSize: 12, color: t.accent, background: `${t.accent}10`, padding: '8px 10px', borderRadius: 6, marginBottom: 10, lineHeight: 1.5 },
+    warn: { fontSize: 12, color: t.warning || '#f59e0b', background: `${t.warning || '#f59e0b'}12`, border: `1px solid ${t.warning || '#f59e0b'}30`, padding: '8px 10px', borderRadius: 6, marginBottom: 10, lineHeight: 1.5 },
+    checks: { listStyle: 'none', padding: 0, margin: '0 0 12px' },
+    check: { fontSize: 13, color: t.textSecondary, padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 },
+    nav: { display: 'flex', gap: 8, justifyContent: 'space-between', paddingTop: 8, borderTop: `1px solid ${t.border}` },
+    navBtn: (disabled) => ({ flex: 1, padding: '8px 0', background: disabled ? 'transparent' : t.accent, color: disabled ? t.textMuted : '#fff', border: disabled ? `1px solid ${t.border}` : 'none', borderRadius: 6, cursor: disabled ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, opacity: disabled ? 0.5 : 1 }),
+  };
+
+  return (
+    <div style={base.panel}>
+      <div style={base.header}>
+        <h3 style={base.title}>📖 Upload Guide</h3>
+        <span style={base.badge}>Step {step + 1} of {total}</span>
+      </div>
+      <div style={base.dots}>
+        {TUTORIAL_STEPS.map((_, i) => (
+          <button key={i} style={base.dot(i === step)} onClick={() => { setStep(i); setImageError({}); }}>{i + 1}</button>
+        ))}
+      </div>
+      <div style={base.body}>
+        <div style={base.stepHead}>
+          <div style={base.icon}>{s.icon}</div>
+          <div>
+            <p style={base.stepTitle}>{s.title}</p>
+            <span style={base.stepNum}>Step {step + 1} of {total}</span>
+          </div>
+        </div>
+
+        <p style={base.text}>{s.text}</p>
+
+        {s.warning && <div style={base.warn}>⚠️ {s.warning}</div>}
+        {s.note && <div style={base.note}>💡 {s.note}</div>}
+
+        {s.image && (
+          imageError[step]
+            ? <div style={base.imgPlaceholder}>📷 Image: {s.title}</div>
+            : <img src={s.image} alt={s.title} style={base.img} onError={() => setImageError(prev => ({...prev, [step]: true}))} />
+        )}
+
+        {s.images && s.images.map((img, i) => (
+          <img key={i} src={img} alt={`${s.title} (${i + 1})`} style={{...base.img, marginBottom: i < s.images.length - 1 ? 4 : 12}} />
+        ))}
+
+        {s.checks && (
+          <ul style={base.checks}>
+            {s.checks.map((c, i) => <li key={i} style={base.check}>✅ {c}</li>)}
+          </ul>
+        )}
+
+        <div style={base.nav}>
+          <button style={base.navBtn(step === 0)} onClick={() => step > 0 && setStep(step - 1)} disabled={step === 0}>← Back</button>
+          <button style={base.navBtn(step === total - 1)} onClick={() => step < total - 1 && setStep(step + 1)} disabled={step === total - 1}>Next →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SubmitDataPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
@@ -3939,73 +4076,8 @@ function SubmitDataPage() {
           )}
         </div>
 
-        {/* Right: Info Panel */}
-        <div style={styles.submitInfoPanel}>
-          <div style={styles.infoPanelHeader}>
-            <h3 style={styles.infoPanelTitle}>📋 Submission Guidelines</h3>
-            {!isEditingInfo && hasAccess('master') && (
-              <button onClick={startEditingInfo} style={styles.infoPanelEditBtn}>✎ Edit</button>
-            )}
-          </div>
-          
-          {isEditingInfo ? (
-            <div style={styles.infoPanelEdit}>
-              {editInfoContent.sections.map((section, i) => (
-                <div key={i} style={styles.infoPanelEditSection}>
-                  <div style={styles.infoPanelEditHeader}>
-                    <input 
-                      type="text" 
-                      value={section.heading} 
-                      onChange={(e) => {
-                        const newSections = [...editInfoContent.sections];
-                        newSections[i] = { ...newSections[i], heading: e.target.value };
-                        setEditInfoContent({ ...editInfoContent, sections: newSections });
-                      }}
-                      style={styles.infoPanelEditInput}
-                      placeholder="Section heading..."
-                    />
-                    <button 
-                      onClick={() => setEditInfoContent({ ...editInfoContent, sections: editInfoContent.sections.filter((_, idx) => idx !== i) })}
-                      style={styles.infoPanelRemoveBtn}
-                    >✕</button>
-                  </div>
-                  <textarea
-                    value={section.body}
-                    onChange={(e) => {
-                      const newSections = [...editInfoContent.sections];
-                      newSections[i] = { ...newSections[i], body: e.target.value };
-                      setEditInfoContent({ ...editInfoContent, sections: newSections });
-                    }}
-                    style={styles.infoPanelEditTextarea}
-                    rows={4}
-                    placeholder="Content (supports **bold**, *italic*, [links](url))..."
-                  />
-                </div>
-              ))}
-              <button 
-                onClick={() => setEditInfoContent({ ...editInfoContent, sections: [...editInfoContent.sections, { heading: '', body: '' }] })}
-                style={styles.infoPanelAddBtn}
-              >+ Add Section</button>
-              <div style={styles.infoPanelEditActions}>
-                <button onClick={saveInfoContent} style={styles.saveBtn}>Save</button>
-                <button onClick={() => setIsEditingInfo(false)} style={styles.cancelBtn}>Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div style={styles.infoPanelContent}>
-              {infoContent.sections.length === 0 ? (
-                <p style={styles.infoPanelEmpty}>No guidelines added yet. {hasAccess('master') && 'Click Edit to add content.'}</p>
-              ) : (
-                infoContent.sections.map((section, i) => (
-                  <div key={i} style={styles.infoPanelSection}>
-                    {section.heading && <h4 style={styles.infoPanelHeading}>{section.heading}</h4>}
-                    <div style={styles.infoPanelBody} dangerouslySetInnerHTML={{ __html: parseMarkdown(section.body) }} />
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+        {/* Right: Upload Tutorial */}
+        <UploadTutorial theme={theme} />
       </div>
 
       {/* Admin Direct Upload Confirmation Modal */}
