@@ -3460,7 +3460,7 @@ function SubmitDataPage() {
       }
 
       // If admin, show confirmation dialog instead of submitting to pending
-      if (hasAccess('master')) {
+      if (hasAccess('master') && selectedTournament && selectedTournamentId) {
         setAdminConfirmData({
           tournament: selectedTournament,
           tournamentId: selectedTournamentId,
@@ -3549,6 +3549,12 @@ function SubmitDataPage() {
     
     setIsSubmitting(true);
     const { tournament, tournamentId, date, pitching, batting } = adminConfirmData;
+    
+    if (!tournament || !tournamentId) {
+      showNotif('No tournament selected. Please select an existing tournament for admin direct upload.', 'error');
+      setIsSubmitting(false);
+      return;
+    }
     
     const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
     const parsePct = (v) => { if (!v) return '0.0'; return String(v).replace('%', ''); };
