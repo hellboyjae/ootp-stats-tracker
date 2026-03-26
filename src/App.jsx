@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN } from './tutorialImages.js';
+import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP } from './tutorialImages.js';
 
 const ThemeContext = createContext();
 
@@ -2686,8 +2686,8 @@ const TUTORIAL_STEPS = [
     title: 'Pitching Column Order',
     icon: '⚾',
     text: 'Same process for pitching — check the right columns and drag them into this exact order. Save this view as "CSV Export PITCH" under Global.',
-    image: IMG_CUSTOMIZE_VIEW,
-    warning: 'Position goes above Name in the table column. NOT SHOWN IN THIS PICTURE — but make sure it\'s checked and at the top of your column order!',
+    images: [IMG_PITCHING_POSITION_TOP, IMG_CUSTOMIZE_VIEW],
+    warning: 'Position goes above Name in the table column. NOT SHOWN IN THE SECOND PICTURE — but make sure it\'s checked and at the top of your column order!',
   },
   {
     title: 'Set Your Filters',
@@ -2714,6 +2714,7 @@ const TUTORIAL_STEPS = [
 function UploadTutorial({ theme }) {
   const [step, setStep] = useState(0);
   const [imageError, setImageError] = useState({});
+  const [lightboxImg, setLightboxImg] = useState(null);
   const t = theme;
   const s = TUTORIAL_STEPS[step];
   const total = TUTORIAL_STEPS.length;
@@ -2732,6 +2733,7 @@ function UploadTutorial({ theme }) {
     stepNum: { fontSize: 11, color: t.textMuted, fontWeight: 500 },
     text: { fontSize: 13, color: t.textSecondary, lineHeight: 1.6, margin: '0 0 12px' },
     img: { width: '100%', maxHeight: '40vh', objectFit: 'contain', borderRadius: 6, border: `1px solid ${t.border}`, marginBottom: 12, cursor: 'pointer', background: t.inputBg },
+    imgHint: { fontSize: 10, color: t.textMuted, textAlign: 'center', marginTop: -8, marginBottom: 12 },
     imgPlaceholder: { width: '100%', height: 120, borderRadius: 6, border: `2px dashed ${t.border}`, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted, fontSize: 12, background: t.inputBg },
     note: { fontSize: 12, color: t.accent, background: `${t.accent}10`, padding: '8px 10px', borderRadius: 6, marginBottom: 10, lineHeight: 1.5 },
     warn: { fontSize: 12, color: t.warning || '#f59e0b', background: `${t.warning || '#f59e0b'}12`, border: `1px solid ${t.warning || '#f59e0b'}30`, padding: '8px 10px', borderRadius: 6, marginBottom: 10, lineHeight: 1.5 },
@@ -2739,10 +2741,24 @@ function UploadTutorial({ theme }) {
     check: { fontSize: 13, color: t.textSecondary, padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 },
     nav: { display: 'flex', gap: 8, justifyContent: 'space-between', paddingTop: 8, borderTop: `1px solid ${t.border}` },
     navBtn: (disabled) => ({ flex: 1, padding: '8px 0', background: disabled ? 'transparent' : t.accent, color: disabled ? t.textMuted : '#fff', border: disabled ? `1px solid ${t.border}` : 'none', borderRadius: 6, cursor: disabled ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, opacity: disabled ? 0.5 : 1 }),
+    // Lightbox styles
+    overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 24 },
+    lightboxImg: { maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' },
+    lightboxClose: { position: 'fixed', top: 16, right: 24, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 },
+    lightboxHint: { position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.5)', fontSize: 12, zIndex: 10000 },
   };
 
   return (
     <div style={base.panel}>
+      {/* Lightbox overlay */}
+      {lightboxImg && (
+        <div style={base.overlay} onClick={() => setLightboxImg(null)}>
+          <button style={base.lightboxClose} onClick={() => setLightboxImg(null)}>✕</button>
+          <img src={lightboxImg} alt="Enlarged view" style={base.lightboxImg} onClick={(e) => e.stopPropagation()} />
+          <span style={base.lightboxHint}>Click anywhere to close</span>
+        </div>
+      )}
+
       <div style={base.header}>
         <h3 style={base.title}>📖 Upload Guide</h3>
         <span style={base.badge}>Step {step + 1} of {total}</span>
@@ -2769,11 +2785,17 @@ function UploadTutorial({ theme }) {
         {s.image && (
           imageError[step]
             ? <div style={base.imgPlaceholder}>📷 Image: {s.title}</div>
-            : <img src={s.image} alt={s.title} style={base.img} onError={() => setImageError(prev => ({...prev, [step]: true}))} />
+            : <>
+                <img src={s.image} alt={s.title} style={base.img} onClick={() => setLightboxImg(s.image)} onError={() => setImageError(prev => ({...prev, [step]: true}))} />
+                <p style={base.imgHint}>🔍 Click image to enlarge</p>
+              </>
         )}
 
         {s.images && s.images.map((img, i) => (
-          <img key={i} src={img} alt={`${s.title} (${i + 1})`} style={{...base.img, marginBottom: i < s.images.length - 1 ? 4 : 12}} />
+          <React.Fragment key={i}>
+            <img src={img} alt={`${s.title} (${i + 1})`} style={{...base.img, marginBottom: 4}} onClick={() => setLightboxImg(img)} />
+            {i === s.images.length - 1 && <p style={base.imgHint}>🔍 Click image to enlarge</p>}
+          </React.Fragment>
         ))}
 
         {s.checks && (
