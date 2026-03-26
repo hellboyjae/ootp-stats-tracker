@@ -2819,6 +2819,7 @@ function SubmitDataPage() {
   const [infoContent, setInfoContent] = useState({ sections: [] });
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [editInfoContent, setEditInfoContent] = useState({ sections: [] });
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     loadTournaments();
@@ -3689,14 +3690,27 @@ function SubmitDataPage() {
 
   return (
     <Layout notification={notification}>
-      <div style={styles.submitPageLayout}>
+      <div style={{...styles.submitPageLayout, gridTemplateColumns: showTutorial ? '2fr 3fr' : '1fr', maxWidth: showTutorial ? 'none' : 800, margin: showTutorial ? undefined : '0 auto'}}>
         {/* Left: Upload Form */}
         <div style={styles.submitFormPanel}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <h2 style={{...styles.submitTitle, margin: 0}}>📤 Submit CSV Data</h2>
-            <button 
-              onClick={() => { setBulkMode(!bulkMode); clearBulkFiles(); }}
-              style={{
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={() => setShowTutorial(!showTutorial)}
+                style={{
+                  background: showTutorial ? theme.accent : 'transparent',
+                  color: showTutorial ? '#fff' : theme.textMuted,
+                  border: `1px solid ${showTutorial ? theme.accent : theme.border}`,
+                  borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', whiteSpace: 'nowrap'
+                }}
+              >
+                {showTutorial ? '✕ Hide Tutorial' : '📖 Upload Tutorial'}
+              </button>
+              <button 
+                onClick={() => { setBulkMode(!bulkMode); clearBulkFiles(); }}
+                style={{
                 background: bulkMode ? theme.accent : 'transparent',
                 color: bulkMode ? '#fff' : theme.textMuted,
                 border: `1px solid ${bulkMode ? theme.accent : theme.border}`,
@@ -3705,6 +3719,7 @@ function SubmitDataPage() {
             >
               {bulkMode ? '✓ Bulk Mode' : '📦 Bulk Upload'}
             </button>
+            </div>
           </div>
           <p style={styles.submitSubtitle}>
             {bulkMode 
@@ -4078,7 +4093,7 @@ function SubmitDataPage() {
         </div>
 
         {/* Right: Upload Tutorial */}
-        <UploadTutorial theme={theme} />
+        {showTutorial && <UploadTutorial theme={theme} />}
       </div>
 
       {/* Admin Direct Upload Confirmation Modal */}
