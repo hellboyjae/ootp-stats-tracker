@@ -736,7 +736,7 @@ function StatsPage() {
       return { id: crypto.randomUUID(), name: row.Name?.trim() || 'Unknown', pos: row.POS?.trim() || '', bats: row.B || '',
         ovr: parseNum(row.OVR), vari: parseVariant(row.VAR), def: parseNum(row.DEF), g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
         h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR), bbPct: parsePct(row['BB%']),
-        so: parseNum(row.SO), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
+        so: parseNum(row.K), gidp: parseNum(row.GIDP), avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
         woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']), babip: row.BABIP || '.000',
         wrcPlus: parseNum(row['wRC+']), wraa: row.wRAA || '0.0', war: row.WAR || '0.0', sbPct: parsePct(row['SB%']), bsr: row.BsR || '0.0'
       };
@@ -744,7 +744,7 @@ function StatsPage() {
   };
 
   const PITCHING_HEADERS = ['POS', 'Name', 'T', 'OVR', 'VAR', 'G', 'GS', 'IP', 'BF', 'ERA', 'AVG', 'OBP', 'BABIP', 'WHIP', 'BRA/9', 'HR/9', 'H/9', 'BB/9', 'K/9', 'LOB%', 'ERA+', 'FIP', 'FIP-', 'WAR', 'SIERA'];
-  const BATTING_HEADERS = ['POS', 'Name', 'B', 'OVR', 'VAR', 'DEF', 'G', 'GS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'BB%', 'SO', 'GIDP', 'AVG', 'OBP', 'SLG', 'wOBA', 'OPS', 'OPS+', 'BABIP', 'wRC+', 'wRAA', 'WAR', 'SB%', 'BsR'];
+  const BATTING_HEADERS = ['POS', 'Name', 'B', 'OVR', 'VAR', 'DEF', 'G', 'GS', 'PA', 'AB', 'H', '2B', '3B', 'HR', 'BB%', 'K', 'GIDP', 'AVG', 'OBP', 'SLG', 'wOBA', 'OPS', 'OPS+', 'BABIP', 'wRC+', 'wRAA', 'WAR', 'SB%', 'BsR'];
   const MAX_FILE_SIZE = 1024 * 1024;
 
   const hashContent = async (content) => {
@@ -1547,7 +1547,7 @@ function InfoPage() {
                 def: parseNum(row.DEF),
                 g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
                 h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
-                so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+                so: parseNum(row.K), gidp: parseNum(row.GIDP),
                 avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
                 woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
                 babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
@@ -2475,7 +2475,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
     {showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="pa">PA</SortHeader>
     {showTraditional && <SortHeader field="ab">AB</SortHeader>}{showTraditional && <SortHeader field="h">H</SortHeader>}{showTraditional && <SortHeader field="doubles">2B</SortHeader>}
     {showTraditional && <SortHeader field="triples">3B</SortHeader>}{showTraditional && <SortHeader field="hr">HR</SortHeader>}<SortHeader field="bbPct">BB%</SortHeader>
-    <SortHeader field="so">SO</SortHeader><SortHeader field="gidp">GIDP</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader>
+    <SortHeader field="so">K</SortHeader><SortHeader field="gidp">GIDP</SortHeader><SortHeader field="avg">AVG</SortHeader><SortHeader field="obp">OBP</SortHeader><SortHeader field="slg">SLG</SortHeader>
     <SortHeader field="woba">wOBA</SortHeader><SortHeader field="ops">OPS</SortHeader><SortHeader field="opsPlus">OPS+</SortHeader><SortHeader field="babip">BABIP</SortHeader>
     <SortHeader field="wrcPlus">wRC+</SortHeader><SortHeader field="wraa">wRAA</SortHeader>{showPer9 && <SortHeader field="wraaPer600PA" isRate>wRAA/600</SortHeader>}
     <SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeader field="warPer600PA" isRate>WAR/600</SortHeader>}
@@ -3091,7 +3091,7 @@ function SubmitDataPage() {
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
-            so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+            so: parseNum(row.K), gidp: parseNum(row.GIDP),
             avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
             woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
             babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
@@ -3421,7 +3421,7 @@ function SubmitDataPage() {
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
-            so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+            so: parseNum(row.K), gidp: parseNum(row.GIDP),
             avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
             woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
             babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
@@ -4223,7 +4223,7 @@ function ReviewQueuePage() {
             def: parseNum(row.DEF),
             g: parseNum(row.G), gs: parseNum(row.GS), pa: parseNum(row.PA), ab: parseNum(row.AB),
             h: parseNum(row.H), doubles: parseNum(row['2B']), triples: parseNum(row['3B']), hr: parseNum(row.HR),
-            so: parseNum(row.SO), gidp: parseNum(row.GIDP),
+            so: parseNum(row.K), gidp: parseNum(row.GIDP),
             avg: row.AVG || '.000', obp: row.OBP || '.000', slg: row.SLG || '.000',
             woba: row.wOBA || '.000', ops: row.OPS || '.000', opsPlus: parseNum(row['OPS+']),
             babip: row.BABIP || '.000', wrcPlus: parseNum(row['wRC+']),
