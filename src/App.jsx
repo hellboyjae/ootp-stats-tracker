@@ -515,6 +515,7 @@ function StatsPage() {
   const [tournamentSearch, setTournamentSearch] = useState('');
   const [renamingTournament, setRenamingTournament] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [openMenuId, setOpenMenuId] = useState(null);
   const [showMissingData, setShowMissingData] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingUploadFiles, setPendingUploadFiles] = useState(null);
@@ -540,6 +541,14 @@ function StatsPage() {
   }, [filters.search, filters.position, filters.gFilter.enabled, filters.paFilter.enabled, filters.abFilter.enabled, filters.ipFilter.enabled, filters.defFilter.enabled, filters.variantFilter, filters.cardTiers]);
 
   useEffect(() => { loadData(); }, []);
+
+  // Close gear menu when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = () => setOpenMenuId(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openMenuId]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -1180,36 +1189,71 @@ function StatsPage() {
                         <button style={styles.legacyBtn} onClick={(e) => { e.stopPropagation(); setRenamingTournament(null); }} title="Cancel">✕</button>
                       </>
                     ) : (
-                      <>
-                        {hasAccess('master') && !isLegacy && (
-                        <button 
-                          style={styles.legacyBtn} 
-                          onClick={(e) => { e.stopPropagation(); startRename(t); }}
-                          title="Rename"
-                        >
-                          ✏️
-                        </button>
-                      )}
-                        {hasAccess('master') && !isLegacy && (
-                        <button 
-                          style={styles.legacyBtn} 
-                          onClick={(e) => { e.stopPropagation(); moveCategory(t); }}
-                          title={t.category === 'tournaments' ? 'Move to Drafts' : 'Move to Tournaments'}
-                        >
-                          🔀
-                        </button>
-                      )}
-                        {hasAccess('master') && (
-                        <button 
-                          style={styles.legacyBtn} 
-                          onClick={(e) => { e.stopPropagation(); toggleLegacy(t); }}
-                          title={isLegacy ? 'Restore from Legacy' : 'Move to Legacy'}
-                        >
-                          {isLegacy ? '↩' : '📦'}
-                        </button>
-                      )}
-                        {hasAccess('master') && <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>×</button>}
-                      </>
+                      hasAccess('master') && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            style={styles.legacyBtn}
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === t.id ? null : t.id); }}
+                            title="Event settings"
+                          >⚙️</button>
+                          {openMenuId === t.id && (
+                            <div style={{
+                              position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                              background: theme.cardBg, border: `1px solid ${theme.border}`,
+                              borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                              zIndex: 100, minWidth: 180, overflow: 'hidden'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            >
+                              {!isLegacy && (
+                                <button
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'transparent', border: 'none', color: theme.textPrimary, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                                  onMouseEnter={(e) => e.target.style.background = theme.panelBg}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => { startRename(t); setOpenMenuId(null); }}
+                                >✏️ Rename</button>
+                              )}
+                              {!isLegacy && (
+                                <button
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'transparent', border: 'none', color: theme.textPrimary, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                                  onMouseEnter={(e) => e.target.style.background = theme.panelBg}
+                                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                  onClick={() => { moveCategory(t); setOpenMenuId(null); }}
+                                >{t.category === 'tournaments' ? '🔀 Move to Drafts' : '🔀 Move to Tournaments'}</button>
+                              )}
+                              {!isLegacy && (
+                                <button
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: t.rotatingFormat ? `${theme.warning}15` : 'transparent', border: 'none', color: t.rotatingFormat ? theme.warning : theme.textPrimary, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                                  onMouseEnter={(e) => e.target.style.background = theme.panelBg}
+                                  onMouseLeave={(e) => e.target.style.background = t.rotatingFormat ? `${theme.warning}15` : 'transparent'}
+                                  onClick={async () => {
+                                    const newValue = !t.rotatingFormat;
+                                    const updated = { ...t, rotatingFormat: newValue };
+                                    await supabase.from('tournaments').update({ rotating_format: newValue }).eq('id', t.id);
+                                    setTournaments(tournaments.map(x => x.id === t.id ? updated : x));
+                                    if (selectedTournament?.id === t.id) setSelectedTournament(updated);
+                                    showNotif(newValue ? 'Marked as rotating format' : 'Removed rotating format');
+                                    setOpenMenuId(null);
+                                  }}
+                                >{t.rotatingFormat ? '🔄 Rotating Format ✓' : '🔄 Rotating Format'}</button>
+                              )}
+                              <div style={{ height: 1, background: theme.border, margin: '4px 0' }} />
+                              <button
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'transparent', border: 'none', color: theme.textPrimary, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                                onMouseEnter={(e) => e.target.style.background = theme.panelBg}
+                                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                onClick={() => { toggleLegacy(t); setOpenMenuId(null); }}
+                              >{isLegacy ? '↩️ Restore from Legacy' : '📦 Move to Legacy'}</button>
+                              <button
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'transparent', border: 'none', color: theme.error, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                                onMouseEnter={(e) => e.target.style.background = `${theme.error}12`}
+                                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                onClick={() => { deleteTournament(t.id); setOpenMenuId(null); }}
+                              >🗑️ Delete</button>
+                            </div>
+                          )}
+                        </div>
+                      )
                     )}
                   </div>
                 </div>);
