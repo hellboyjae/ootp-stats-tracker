@@ -5004,24 +5004,46 @@ function ReviewQueuePage() {
 
                       {/* Actions */}
                       <div style={styles.reviewCardActions}>
-                        {upload.suggested_tournament_id ? (
-                          <>
-                            <select 
-                              defaultValue={upload.suggested_tournament_id}
-                              style={styles.reviewSelect}
-                              id={`tournament-${upload.id}`}
-                            >
-                              {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                            <button 
-                              style={styles.approveBtn}
-                              onClick={() => handleApprove(upload, document.getElementById(`tournament-${upload.id}`).value, upload.suggested_date)}
-                            >✓ Approve</button>
-                          </>
-                        ) : (
-                          <>
-                            {creatingNewFor === upload.id ? (
-                              <div style={styles.newEventForm}>
+                        {/* Always show what user suggested */}
+                        <div style={{ width: '100%', marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>
+                            User submitted to: <strong style={{ color: upload.suggested_tournament_name ? theme.textPrimary : theme.warning }}>
+                              {upload.suggested_tournament_name || 'No event selected'}
+                            </strong>
+                            {upload.suggested_date && <span> · {formatDate(upload.suggested_date)}</span>}
+                          </div>
+                        </div>
+                        
+                        {/* Tournament reassignment dropdown - always visible */}
+                        <select 
+                          defaultValue={upload.suggested_tournament_id || ''}
+                          style={styles.reviewSelect}
+                          id={`tournament-${upload.id}`}
+                        >
+                          <option value="">-- Select Tournament --</option>
+                          {tournaments.filter(t => t.category === 'tournaments' || !t.category).length > 0 && (
+                            <optgroup label="Tournaments">
+                              {tournaments.filter(t => t.category === 'tournaments' || !t.category).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </optgroup>
+                          )}
+                          {tournaments.filter(t => t.category === 'drafts').length > 0 && (
+                            <optgroup label="Drafts">
+                              {tournaments.filter(t => t.category === 'drafts').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </optgroup>
+                          )}
+                        </select>
+                        <button 
+                          style={styles.approveBtn}
+                          onClick={() => handleApprove(upload, document.getElementById(`tournament-${upload.id}`).value, upload.suggested_date)}
+                        >✓ Approve</button>
+                        <button style={styles.rejectBtn} onClick={() => handleReject(upload.id)}>✕</button>
+                        <button style={styles.previewBtn} onClick={() => setPreviewId(previewId === upload.id ? null : upload.id)}>
+                          {previewId === upload.id ? 'Hide' : 'Preview'}
+                        </button>
+                        
+                        {/* Create new event option */}
+                        {creatingNewFor === upload.id ? (
+                          <div style={styles.newEventForm}>
                                 <input 
                                   type="text" 
                                   value={newEventName} 
@@ -5049,30 +5071,8 @@ function ReviewQueuePage() {
                                 <button style={styles.cancelSmallBtn} onClick={() => setCreatingNewFor(null)}>Cancel</button>
                               </div>
                             ) : (
-                              <>
-                                <select style={styles.reviewSelect} id={`tournament-${upload.id}`}>
-                                  <option value="">-- Select Existing --</option>
-                                  {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </select>
-                                <button 
-                                  style={styles.approveBtn}
-                                  onClick={() => {
-                                    const selected = document.getElementById(`tournament-${upload.id}`).value;
-                                    if (selected) {
-                                      handleApprove(upload, selected, upload.suggested_date);
-                                    } else {
-                                      setCreatingNewFor(upload.id);
-                                      setNewEventName(upload.suggested_tournament_name || '');
-                                    }
-                                  }}
-                                >✓ Approve</button>
-                                <button style={styles.newEventBtn} onClick={() => { setCreatingNewFor(upload.id); setNewEventName(upload.suggested_tournament_name || ''); }}>+ New Event</button>
-                              </>
+                              <button style={styles.newEventBtn} onClick={() => { setCreatingNewFor(upload.id); setNewEventName(upload.suggested_tournament_name || ''); }}>+ New Event</button>
                             )}
-                          </>
-                        )}
-                        <button style={styles.previewBtn} onClick={() => setPreviewId(previewId === upload.id ? null : upload.id)}>👁 Preview</button>
-                        <button style={styles.rejectBtn} onClick={() => handleReject(upload.id)}>✗</button>
                       </div>
 
                       {/* Preview */}
