@@ -2187,7 +2187,6 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
     setIsLoading(true);
     setError(null);
     try {
-      // Get upload history for this tournament
       const { data: history, error: historyError } = await supabase
         .from('upload_history')
         .select('*')
@@ -2197,28 +2196,41 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
 
       if (historyError) throw historyError;
 
+      console.log('[PlayerTrend] Query:', { tournamentId, playerType });
+      console.log('[PlayerTrend] History entries:', history?.length || 0);
+
       if (!history || history.length === 0) {
+        console.log('[PlayerTrend] No history found — graph will show empty');
         setTrendData([]);
         setIsLoading(false);
         return;
       }
 
-      // Find this player in each upload by name|ovr key
       const playerKey = `${player.name}|${player.ovr}`;
+      console.log('[PlayerTrend] Looking for playerKey:', playerKey);
       const dataPoints = [];
 
       history.forEach((upload, index) => {
         const playerData = upload.player_data || [];
-        // Find ALL instances of this player in the upload (not just the first)
+        console.log(`[PlayerTrend] Upload #${index + 1}: ${playerData.length} players, player_data is ${playerData.length === 0 ? 'EMPTY' : 'present'}`);
+        
+        if (index === 0 && playerData.length > 0) {
+          const sample = playerData[0];
+          console.log('[PlayerTrend] Sample keys:', Object.keys(sample));
+          console.log('[PlayerTrend] Sample Name/name:', sample.Name, '/', sample.name);
+          console.log('[PlayerTrend] Sample OVR/ovr:', sample.OVR, '/', sample.ovr);
+        }
+
         const allMatches = playerData.filter(p => {
           const name = (p.Name || p.name || '').trim();
           const ovr = parseFloat(p.OVR || p.ovr) || 0;
           return `${name}|${ovr}` === playerKey;
         });
 
+        console.log(`[PlayerTrend] Upload #${index + 1}: ${allMatches.length} matches found`);
+
         if (allMatches.length > 0) {
           if (playerType === 'pitching') {
-            // Average all instances for this upload
             const avgSiera = allMatches.reduce((sum, p) => sum + (parseFloat(p.SIERA || p.siera) || 0), 0) / allMatches.length;
             const avgFipMinus = allMatches.reduce((sum, p) => sum + (parseFloat(p['FIP-'] || p.fipMinus) || 0), 0) / allMatches.length;
             const avgLobPct = allMatches.reduce((sum, p) => {
@@ -2233,10 +2245,9 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
               instances: allMatches.length,
             });
           } else {
-            // Average all instances for this upload
             const avgWoba = allMatches.reduce((sum, p) => {
-              const val = p.wOBA || p.woba || '0';
-              return sum + (parseFloat(String(val).replace('.', '0.')) || 0);
+              const val = String(p.wOBA || p.woba || '0');
+              return sum + (parseFloat(val) || 0);
             }, 0) / allMatches.length;
             const avgOpsPlus = allMatches.reduce((sum, p) => sum + (parseFloat(p['OPS+'] || p.opsPlus) || 0), 0) / allMatches.length;
             const avgWrcPlus = allMatches.reduce((sum, p) => sum + (parseFloat(p['wRC+'] || p.wrcPlus) || 0), 0) / allMatches.length;
@@ -2251,9 +2262,10 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
         }
       });
 
+      console.log('[PlayerTrend] Total data points:', dataPoints.length);
       setTrendData(dataPoints);
     } catch (e) {
-      console.error('Error loading trend data:', e);
+      console.error('[PlayerTrend] Error:', e);
       setError('Failed to load trend data');
     }
     setIsLoading(false);
