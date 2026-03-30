@@ -886,6 +886,16 @@ function StatsPage() {
           uploadedHashes.push(fileHash);
           if (validation.type === 'batting') totalBatting += processed.length;
           else totalPitching += processed.length;
+          
+          // Save to upload_history for player trend tracking
+          await supabase.from('upload_history').insert({
+            tournament_id: selectedTournament.id,
+            tournament_name: selectedTournament.name,
+            file_type: validation.type,
+            upload_date: selectedDate || new Date().toISOString().split('T')[0],
+            player_count: validRows.length,
+            player_data: validRows,
+          });
         }
         
         // Add the selected date to uploadedDates if not already present
@@ -2196,29 +2206,21 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
 
       if (historyError) throw historyError;
 
-      console.log('[PlayerTrend] Query:', { tournamentId, playerType });
-      console.log('[PlayerTrend] History entries:', history?.length || 0);
 
       if (!history || history.length === 0) {
-        console.log('[PlayerTrend] No history found — graph will show empty');
         setTrendData([]);
         setIsLoading(false);
         return;
       }
 
       const playerKey = `${player.name}|${player.ovr}`;
-      console.log('[PlayerTrend] Looking for playerKey:', playerKey);
       const dataPoints = [];
 
       history.forEach((upload, index) => {
         const playerData = upload.player_data || [];
-        console.log(`[PlayerTrend] Upload #${index + 1}: ${playerData.length} players, player_data is ${playerData.length === 0 ? 'EMPTY' : 'present'}`);
         
         if (index === 0 && playerData.length > 0) {
           const sample = playerData[0];
-          console.log('[PlayerTrend] Sample keys:', Object.keys(sample));
-          console.log('[PlayerTrend] Sample Name/name:', sample.Name, '/', sample.name);
-          console.log('[PlayerTrend] Sample OVR/ovr:', sample.OVR, '/', sample.ovr);
         }
 
         const allMatches = playerData.filter(p => {
@@ -2227,7 +2229,6 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
           return `${name}|${ovr}` === playerKey;
         });
 
-        console.log(`[PlayerTrend] Upload #${index + 1}: ${allMatches.length} matches found`);
 
         if (allMatches.length > 0) {
           if (playerType === 'pitching') {
@@ -2262,10 +2263,8 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
         }
       });
 
-      console.log('[PlayerTrend] Total data points:', dataPoints.length);
       setTrendData(dataPoints);
     } catch (e) {
-      console.error('[PlayerTrend] Error:', e);
       setError('Failed to load trend data');
     }
     setIsLoading(false);
@@ -3355,7 +3354,6 @@ function SubmitDataPage() {
           upload_date: item.date,
           player_count: newData.length,
           player_data: newData,
-          source: 'admin_bulk'
         });
 
         if (!uploadedDates.includes(item.date)) {
@@ -3442,7 +3440,6 @@ function SubmitDataPage() {
           upload_date: item.date,
           player_count: newData.length,
           player_data: newData,
-          source: 'admin_bulk'
         });
 
         if (!uploadedDates.includes(item.date)) {
@@ -3697,7 +3694,6 @@ function SubmitDataPage() {
           upload_date: date,
           player_count: newData.length,
           player_data: newData,
-          source: 'admin_direct'
         });
       }
       
@@ -3782,7 +3778,6 @@ function SubmitDataPage() {
           upload_date: date,
           player_count: newData.length,
           player_data: newData,
-          source: 'admin_direct'
         });
       }
       
@@ -4607,7 +4602,6 @@ function ReviewQueuePage() {
         upload_date: assignedDate,
         player_count: newData.length,
         player_data: newData,
-        source: 'user_submission'
       });
 
       // Mark upload as approved
