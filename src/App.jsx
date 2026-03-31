@@ -179,6 +179,10 @@ function ThemeProvider({ children }) {
   const [team, setTeam] = useState(() => {
     return localStorage.getItem('teamTheme') || 'default';
   });
+
+  const [isColorblind, setIsColorblind] = useState(() => {
+    return localStorage.getItem('colorblindMode') === 'true';
+  });
   
   // Inject keyframes for news banner animation and select dropdown styles
   useEffect(() => {
@@ -202,8 +206,10 @@ function ThemeProvider({ children }) {
   
   useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
   useEffect(() => { localStorage.setItem('teamTheme', team); }, [team]);
+  useEffect(() => { localStorage.setItem('colorblindMode', isColorblind ? 'true' : 'false'); }, [isColorblind]);
   
   const toggle = () => setIsDark(!isDark);
+  const toggleColorblind = () => setIsColorblind(!isColorblind);
   const setTeamTheme = (teamKey) => setTeam(teamKey);
   
   // Generate full theme based on team and dark/light mode
@@ -214,7 +220,7 @@ function ThemeProvider({ children }) {
     theme = generateTeamTheme(team, isDark);
   }
   
-  return <ThemeContext.Provider value={{ isDark, toggle, theme, team, setTeamTheme, teamColors }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ isDark, toggle, theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind }}>{children}</ThemeContext.Provider>;
 }
 
 function useTheme() { return useContext(ThemeContext); }
@@ -343,12 +349,30 @@ function getOvrColor(ovr) {
   return '#FFFFFF';
 }
 
-function getDefColor(def) {
+function getDefColor(def, colorblind) {
   const val = parseInt(def) || 0;
-  if (val >= 100) return '#a855f7'; // Purple - elite defense
-  if (val >= 80) return '#3b82f6';  // Blue - great defense
-  if (val >= 50) return '#22c55e';  // Green - good defense
-  return '#fbbf24';                  // Yellow - poor defense
+  if (colorblind) {
+    if (val >= 100) return '#a855f7'; // Purple - elite
+    if (val >= 80) return '#3b82f6';  // Blue - great
+    if (val >= 50) return '#2563eb';  // Brighter blue - good
+    return '#f59e0b';                  // Amber - poor
+  }
+  if (val >= 100) return '#a855f7';
+  if (val >= 80) return '#3b82f6';
+  if (val >= 50) return '#22c55e';
+  return '#fbbf24';
+}
+
+// Deuteranopia-safe alternatives: blue for positive, orange for negative
+const CB_POSITIVE = '#2563eb';   // Blue (replaces green)
+const CB_NEGATIVE = '#ea580c';   // Orange (replaces red)
+const CB_TRUSTED = '#2563eb';    // Blue (replaces green)
+
+function getStatColor(value, threshold, colorblind, invert = false) {
+  const pos = colorblind ? CB_POSITIVE : '#22C55E';
+  const neg = colorblind ? CB_NEGATIVE : '#EF4444';
+  if (invert) return value < threshold ? pos : value > threshold ? neg : undefined;
+  return value > threshold ? pos : value < threshold ? neg : undefined;
 }
 
 function NewsBanner({ theme, styles }) {
@@ -419,7 +443,7 @@ function NewsBanner({ theme, styles }) {
 }
 
 function Layout({ children, notification, pendingCount = 0 }) {
-  const { isDark, toggle, theme, team, setTeamTheme, teamColors } = useTheme();
+  const { isDark, toggle, theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
   const { hasAccess } = useAuth();
   const styles = getStyles(theme);
   
@@ -469,6 +493,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
                 </optgroup>
               ))}
             </select>
+            <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
             <button onClick={toggle} style={styles.themeToggle} title={isDark ? 'Light' : 'Dark'}>{isDark ? '☀' : '☾'}</button>
           </div>
         </div>
@@ -480,7 +505,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
 }
 
 function StatsPage() {
-  const { theme } = useTheme();
+  const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
   const { hasAccess, requestAuth } = useAuth();
   const fileInputRef = React.useRef(null);
@@ -1123,9 +1148,11 @@ function StatsPage() {
 
   const getCsvCount = (t) => (t.uploadedHashes?.length || 0);
   const getDataQuality = (count) => {
-    if (count >= 31) return { label: 'HIGH', color: '#22C55E' };
+    const g = isColorblind ? CB_POSITIVE : '#22C55E';
+    const r = isColorblind ? CB_NEGATIVE : '#EF4444';
+    if (count >= 31) return { label: 'HIGH', color: g };
     if (count >= 14) return { label: 'MED', color: '#F59E0B' };
-    return { label: 'LOW', color: '#EF4444' };
+    return { label: 'LOW', color: r };
   };
 
   const filteredTournaments = tournaments.filter(t => (t.category || 'tournaments') === sidebarTab).filter(t => !tournamentSearch || t.name.toLowerCase().includes(tournamentSearch.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
@@ -2558,6 +2585,7 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
 
 function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick }) {
   const styles = getStyles(theme);
+  const { isColorblind } = useTheme();
   const SortHeader = ({ field, children, isRate }) => (
     <th style={{...styles.th, ...(isRate ? styles.thRate : {}), ...(sortBy === field ? styles.thSorted : {})}} onClick={() => onSort(field)}>
       {children}{sortBy === field && <span style={styles.sortIndicator}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -2566,6 +2594,8 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   const calcIPperG = (ip, g) => { if (!g) return '0.00'; const str = String(ip); let n = str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; return (n / g).toFixed(2); };
   const parseIPVal = (ip) => { const str = String(ip); return str.includes('.') ? parseFloat(str.split('.')[0]) + (parseFloat(str.split('.')[1]) / 3) : parseFloat(ip) || 0; };
   const calcWarPer200IP = (war, ip) => { const ipNum = parseIPVal(ip); return ipNum === 0 ? '0.00' : (parseFloat(war || 0) / ipNum * 200).toFixed(2); };
+  const pos = isColorblind ? CB_POSITIVE : '#22C55E';
+  const neg = isColorblind ? CB_NEGATIVE : '#EF4444';
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
   return (<div style={styles.tableWrapper}><table style={styles.table}><thead><tr>
     <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>
@@ -2586,21 +2616,24 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
       <td style={styles.td}>{p.babip}</td>{showTraditional && <td style={styles.td}>{p.whip}</td>}<td style={styles.td}>{p.braPer9}</td><td style={styles.td}>{p.hrPer9}</td>
       {showTraditional && <td style={styles.td}>{p.hPer9}</td>}<td style={styles.td}>{p.bbPer9}</td><td style={styles.td}>{p.kPer9}</td><td style={styles.td}>{p.lobPct}</td>
       <td style={styles.td}>{p.eraPlus}</td><td style={styles.td}>{p.fip}</td><td style={styles.td}>{p.fipMinus}</td>
-      <td style={{...styles.td, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444', fontWeight: 600}}>{p.war}</td>
+      <td style={{...styles.td, color: parseFloat(p.war) >= 0 ? pos : neg, fontWeight: 600}}>{p.war}</td>
       {showPer9 && <td style={styles.tdRate}>{calcWarPer200IP(p.war, p.ip)}</td>}
-      <td style={{...styles.td, color: parseFloat(p.siera) < 3.90 ? '#22C55E' : parseFloat(p.siera) > 3.90 ? '#EF4444' : undefined}}>{p.siera}</td>
+      <td style={{...styles.td, color: parseFloat(p.siera) < 3.90 ? pos : parseFloat(p.siera) > 3.90 ? neg : undefined}}>{p.siera}</td>
     </tr>))}
   </tbody></table></div>);
 }
 
 function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick }) {
   const styles = getStyles(theme);
+  const { isColorblind } = useTheme();
   const SortHeader = ({ field, children, isRate }) => (
     <th style={{...styles.th, ...(isRate ? styles.thRate : {}), ...(sortBy === field ? styles.thSorted : {})}} onClick={() => onSort(field)}>
       {children}{sortBy === field && <span style={styles.sortIndicator}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
     </th>
   );
   const calcPer600PA = (val, pa) => { const paNum = parseFloat(pa) || 0; return paNum === 0 ? '0.00' : (parseFloat(val || 0) / paNum * 600).toFixed(2); };
+  const pos = isColorblind ? CB_POSITIVE : '#22C55E';
+  const neg = isColorblind ? CB_NEGATIVE : '#EF4444';
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<div style={styles.tableWrapper}><table style={styles.table}><thead><tr>
     <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader><SortHeader field="def">DEF</SortHeader>
@@ -2617,15 +2650,15 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
       <td style={styles.td}>{p.pos}</td>
       <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
-      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def) : theme.textMuted}}>{p.def || '—'}</td>
+      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def, isColorblind) : theme.textMuted}}>{p.def || '—'}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
       {showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}
       {showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td>
       <td style={styles.td}>{p.so}</td><td style={styles.td}>{p.gidp}</td><td style={styles.td}>{p.avg}</td><td style={styles.td}>{p.obp}</td><td style={styles.td}>{p.slg}</td>
-      <td style={{...styles.td, color: parseFloat(p.woba) > 0.320 ? '#22C55E' : parseFloat(p.woba) < 0.320 ? '#EF4444' : undefined}}>{p.woba}</td>
+      <td style={{...styles.td, color: parseFloat(p.woba) > 0.320 ? pos : parseFloat(p.woba) < 0.320 ? neg : undefined}}>{p.woba}</td>
       <td style={styles.td}>{p.ops}</td><td style={styles.td}>{p.opsPlus}</td><td style={styles.td}>{p.babip}</td>
       <td style={styles.td}>{p.wrcPlus}</td><td style={styles.td}>{p.wraa}</td>{showPer9 && <td style={styles.tdRate}>{calcPer600PA(p.wraa, p.pa)}</td>}
-      <td style={{...styles.td, color: parseFloat(p.war) >= 0 ? '#22C55E' : '#EF4444', fontWeight: 600}}>{p.war}</td>
+      <td style={{...styles.td, color: parseFloat(p.war) >= 0 ? pos : neg, fontWeight: 600}}>{p.war}</td>
       {showPer9 && <td style={styles.tdRate}>{calcPer600PA(p.war, p.pa)}</td>}
       <td style={styles.td}>{p.sbPct}</td><td style={styles.td}>{p.bsr}</td>{showPer9 && <td style={styles.tdRate}>{calcPer600PA(p.bsr, p.pa)}</td>}
     </tr>))}
@@ -5470,7 +5503,7 @@ function LeaderboardsPage() {
 }
 
 function DraftAssistantPage() {
-  const { theme } = useTheme();
+  const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
   
   // Check if in compact/popout mode via URL parameter
@@ -5564,29 +5597,29 @@ function DraftAssistantPage() {
   // Based on PD Data Interpretation Guide thresholds
   // Low Data Support mode uses lower thresholds (99 AB / 20 IP)
   const getSampleConfidence = (player, isPitching) => {
+    const trusted = isColorblind ? CB_POSITIVE : '#22c55e';
+    const high = isColorblind ? '#93c5fd' : '#86efac';
+    const low = isColorblind ? CB_NEGATIVE : '#f87171';
     if (isPitching) {
-      // Parse IP (handles "123.2" format)
       const ip = parseFloat(player.ip) || 0;
       if (lowDataMode) {
-        // LDS mode: lower thresholds
-        if (ip >= 100) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (100+ IP)' };
-        if (ip >= 20) return { level: 'high', label: '●', color: '#86efac', desc: 'LDS High (20-99 IP)' };
-        return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<20 IP)' };
+        if (ip >= 100) return { level: 'trusted', label: '◆', color: trusted, desc: 'Trusted (100+ IP)' };
+        if (ip >= 20) return { level: 'high', label: '●', color: high, desc: 'LDS High (20-99 IP)' };
+        return { level: 'low', label: '○', color: low, desc: 'Low confidence (<20 IP)' };
       }
-      if (ip >= 200) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (200+ IP)' };
-      if (ip >= 100) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (100-199 IP)' };
-      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<100 IP)' };
+      if (ip >= 200) return { level: 'trusted', label: '◆', color: trusted, desc: 'Trusted (200+ IP)' };
+      if (ip >= 100) return { level: 'high', label: '●', color: high, desc: 'High confidence (100-199 IP)' };
+      return { level: 'low', label: '○', color: low, desc: 'Low confidence (<100 IP)' };
     } else {
       const ab = parseInt(player.ab) || 0;
       if (lowDataMode) {
-        // LDS mode: lower thresholds
-        if (ab >= 450) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (450+ AB)' };
-        if (ab >= 99) return { level: 'high', label: '●', color: '#86efac', desc: 'LDS High (99-449 AB)' };
-        return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<99 AB)' };
+        if (ab >= 450) return { level: 'trusted', label: '◆', color: trusted, desc: 'Trusted (450+ AB)' };
+        if (ab >= 99) return { level: 'high', label: '●', color: high, desc: 'LDS High (99-449 AB)' };
+        return { level: 'low', label: '○', color: low, desc: 'Low confidence (<99 AB)' };
       }
-      if (ab >= 801) return { level: 'trusted', label: '◆', color: '#22c55e', desc: 'Trusted (801+ AB)' };
-      if (ab >= 450) return { level: 'high', label: '●', color: '#86efac', desc: 'High confidence (450-800 AB)' };
-      return { level: 'low', label: '○', color: '#f87171', desc: 'Low confidence (<450 AB)' };
+      if (ab >= 801) return { level: 'trusted', label: '◆', color: trusted, desc: 'Trusted (801+ AB)' };
+      if (ab >= 450) return { level: 'high', label: '●', color: high, desc: 'High confidence (450-800 AB)' };
+      return { level: 'low', label: '○', color: low, desc: 'Low confidence (<450 AB)' };
     }
   };
 
@@ -6417,13 +6450,13 @@ function DraftAssistantPage() {
                   <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, flexWrap: 'wrap' }}>
                     <span style={{ color: theme.textSecondary, cursor: 'help' }} title={tooltipText}>
                       <span style={{ color: theme.textMuted }}>P ⓘ:</span>{' '}
-                      <span style={{ color: '#f87171' }}>{splits.pitching.left}%L</span>
+                      <span style={{ color: isColorblind ? CB_NEGATIVE : '#f87171' }}>{splits.pitching.left}%L</span>
                       {'/'}
                       <span style={{ color: '#60a5fa' }}>{splits.pitching.right}%R</span>
                     </span>
                     <span style={{ color: theme.textSecondary, cursor: 'help' }} title={tooltipText}>
                       <span style={{ color: theme.textMuted }}>B ⓘ:</span>{' '}
-                      <span style={{ color: '#f87171' }}>{splits.batting.left}%L</span>
+                      <span style={{ color: isColorblind ? CB_NEGATIVE : '#f87171' }}>{splits.batting.left}%L</span>
                       {'/'}
                       <span style={{ color: '#a78bfa' }}>{splits.batting.switch}%S</span>
                       {'/'}
@@ -6603,7 +6636,7 @@ function DraftAssistantPage() {
                 const tierBadge = p._isT1Plus 
                   ? { label: 'T1+', color: '#a855f7' }  // Purple for T1+
                   : p._tier <= 2 
-                    ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } 
+                    ? { label: `T${p._tier}`, color: p._tier === 1 ? (isColorblind ? CB_POSITIVE : '#22c55e') : '#fbbf24' } 
                     : null;
                 // Use pre-calculated shield status
                 const showEliteDefShield = p._hasShield;
@@ -6683,7 +6716,7 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.textPrimary, margin: 0, fontSize: 16 }}>{showPlayerModal.name}</h3>
                   <p style={{ color: theme.textMuted, margin: '4px 0 0 0', fontSize: 12 }}>
                     {showPlayerModal.pos} · <span style={{ color: getCardTierLabel(showPlayerModal.ovr).color }}>{showPlayerModal.ovr} OVR</span>
-                    {showPlayerModal.type !== 'pitching' && showPlayerModal.def && <span> · <span style={{ color: getDefColor(showPlayerModal.def) }}>{showPlayerModal.def} DEF</span></span>}
+                    {showPlayerModal.type !== 'pitching' && showPlayerModal.def && <span> · <span style={{ color: getDefColor(showPlayerModal.def, isColorblind) }}>{showPlayerModal.def} DEF</span></span>}
                   </p>
                 </div>
                 <button onClick={() => setShowPlayerModal(null)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
@@ -6832,7 +6865,7 @@ function DraftAssistantPage() {
                 <p style={{ marginTop: 8 }}>
                   <strong style={{ color: theme.textPrimary }}>Tiers:</strong>{' '}
                   <span style={{ color: '#a855f7' }}>T1+</span> (elite + shield) →{' '}
-                  <span style={{ color: '#22c55e' }}>T1</span> →{' '}
+                  <span style={{ color: isColorblind ? CB_POSITIVE : '#22c55e' }}>T1</span> →{' '}
                   <span style={{ color: '#fbbf24' }}>T2</span>
                 </p>
                 <p>
@@ -6882,7 +6915,7 @@ function DraftAssistantPage() {
                     title={tooltipText}
                   >
                     <span style={{ color: theme.textMuted }}>True Pitching ⓘ:</span>{' '}
-                    <span style={{ color: '#f87171' }}>{splits.pitching.left}% L</span>
+                    <span style={{ color: isColorblind ? CB_NEGATIVE : '#f87171' }}>{splits.pitching.left}% L</span>
                     {' / '}
                     <span style={{ color: '#60a5fa' }}>{splits.pitching.right}% R</span>
                   </span>
@@ -6891,7 +6924,7 @@ function DraftAssistantPage() {
                     title={tooltipText}
                   >
                     <span style={{ color: theme.textMuted }}>True Batting ⓘ:</span>{' '}
-                    <span style={{ color: '#f87171' }}>{splits.batting.left}% L</span>
+                    <span style={{ color: isColorblind ? CB_NEGATIVE : '#f87171' }}>{splits.batting.left}% L</span>
                     {' / '}
                     <span style={{ color: '#a78bfa' }}>{splits.batting.switch}% S</span>
                     {' / '}
@@ -6978,11 +7011,11 @@ function DraftAssistantPage() {
           background: theme.panelBg, borderRadius: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center'
         }}>
           <span style={{ color: theme.textMuted }}>Confidence:</span>
-          <span><span style={{ color: '#22c55e' }}>◆</span> Trusted</span>
+          <span><span style={{ color: isColorblind ? CB_POSITIVE : '#22c55e' }}>◆</span> Trusted</span>
           <span><span style={{ color: '#86efac' }}>●</span> High</span>
           <span style={{ color: theme.textMuted }}>|</span>
           <span style={{ color: theme.textMuted }}>Tier:</span>
-          <span><span style={{ color: '#22c55e' }}>T1</span> Elite</span>
+          <span><span style={{ color: isColorblind ? CB_POSITIVE : '#22c55e' }}>T1</span> Elite</span>
           <span><span style={{ color: '#fbbf24' }}>T2</span> Good</span>
           <span><span style={{ color: theme.textMuted }}>T3+</span> Below gap</span>
           <span style={{ color: theme.textMuted, marginLeft: 'auto', fontSize: 10 }}>
@@ -7207,7 +7240,7 @@ function DraftAssistantPage() {
                     const tierBadge = p._isT1Plus 
                       ? { label: 'T1+', color: '#a855f7' }  // Purple for T1+
                       : p._tier <= 2 
-                        ? { label: `T${p._tier}`, color: p._tier === 1 ? '#22c55e' : '#fbbf24' } 
+                        ? { label: `T${p._tier}`, color: p._tier === 1 ? (isColorblind ? CB_POSITIVE : '#22c55e') : '#fbbf24' } 
                         : null;
                     const conf = p._confidence;
                     const isPitching = p._isPitching;
@@ -7301,7 +7334,7 @@ function DraftAssistantPage() {
                       
                       const levelConfig = {
                         insane: { label: '🔥 Insane Value', color: '#f59e0b', desc: 'Within 0.015 wOBA / 0.3 SIERA' },
-                        great: { label: '⭐ Great Value', color: '#22c55e', desc: 'Within 0.025 wOBA / 0.4 SIERA' },
+                        great: { label: '⭐ Great Value', color: isColorblind ? CB_POSITIVE : '#22c55e', desc: 'Within 0.025 wOBA / 0.4 SIERA' },
                         good: { label: '👍 Good Value', color: '#3b82f6', desc: 'Within 0.040 wOBA / 0.5 SIERA' }
                       }[level];
                       
@@ -7388,7 +7421,7 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.textPrimary, margin: 0 }}>{showPlayerModal.name}</h3>
                   <p style={{ color: theme.textMuted, margin: '4px 0 0 0' }}>
                     {showPlayerModal.pos} · <span style={{ color: getCardTierLabel(showPlayerModal.ovr).color }}>{showPlayerModal.ovr} OVR</span>
-                    {showPlayerModal.type !== 'pitching' && showPlayerModal.def && <span> · <span style={{ color: getDefColor(showPlayerModal.def) }}>{showPlayerModal.def} DEF</span></span>}
+                    {showPlayerModal.type !== 'pitching' && showPlayerModal.def && <span> · <span style={{ color: getDefColor(showPlayerModal.def, isColorblind) }}>{showPlayerModal.def} DEF</span></span>}
                   </p>
                 </div>
                 <button onClick={() => setShowPlayerModal(null)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
@@ -7442,7 +7475,7 @@ function DraftAssistantPage() {
                   <span style={{ color: theme.textMuted, fontSize: 11 }}>Performance Tier:</span>
                   <span style={{ 
                     fontWeight: 700, 
-                    color: showPlayerModal._tier === 1 ? '#22c55e' : showPlayerModal._tier === 2 ? '#fbbf24' : theme.textMuted 
+                    color: showPlayerModal._tier === 1 ? (isColorblind ? CB_POSITIVE : '#22c55e') : showPlayerModal._tier === 2 ? '#fbbf24' : theme.textMuted 
                   }}>
                     Tier {showPlayerModal._tier}
                     {showPlayerModal._tier === 1 && ' (Elite)'}
@@ -7634,10 +7667,10 @@ function DraftAssistantPage() {
                 <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>📊 Confidence & Tiers</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-                    <span style={{ color: '#22c55e' }}>◆ Trusted</span> = Large sample size (801+ AB / 200+ IP)<br/>
+                    <span style={{ color: isColorblind ? CB_POSITIVE : '#22c55e' }}>◆ Trusted</span> = Large sample size (801+ AB / 200+ IP)<br/>
                     <span style={{ color: '#86efac' }}>● High</span> = Good sample size (450-800 AB / 100-199 IP)<br/>
                     <span style={{ color: '#a855f7' }}>T1+</span> = Elite tier + elite defense at key position (sorted first!)<br/>
-                    <span style={{ color: '#22c55e' }}>T1</span> = Elite tier, <span style={{ color: '#fbbf24' }}>T2</span> = Good tier, <span style={{ color: theme.textMuted }}>T3+</span> = Below performance gap<br/>
+                    <span style={{ color: isColorblind ? CB_POSITIVE : '#22c55e' }}>T1</span> = Elite tier, <span style={{ color: '#fbbf24' }}>T2</span> = Good tier, <span style={{ color: theme.textMuted }}>T3+</span> = Below performance gap<br/>
                     <em style={{ color: theme.textMuted, fontSize: 12 }}>Low confidence players are hidden by default. Sort order: T1+ → T1 → T2</em>
                   </p>
                 </div>
@@ -7656,7 +7689,7 @@ function DraftAssistantPage() {
                 <div style={{ background: theme.panelBg, borderRadius: 10, padding: 14 }}>
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>🛡️ Defense Rating (DEF)</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-                    <span style={{ color: '#a855f7' }}>100+</span> = Elite (Purple) | <span style={{ color: '#3b82f6' }}>80-99</span> = Great (Blue) | <span style={{ color: '#22c55e' }}>50-79</span> = Good (Green) | <span style={{ color: '#fbbf24' }}>&lt;50</span> = Poor (Yellow)<br/>
+                    <span style={{ color: '#a855f7' }}>100+</span> = Elite (Purple) | <span style={{ color: '#3b82f6' }}>80-99</span> = Great (Blue) | <span style={{ color: isColorblind ? CB_POSITIVE : '#22c55e' }}>50-79</span> = Good (Green) | <span style={{ color: '#fbbf24' }}>&lt;50</span> = Poor (Yellow)<br/>
                     <strong style={{ color: theme.textPrimary }}>🛡️ Shield icon:</strong> Shows on C, 2B, SS, CF with elite defense (100+)<br/>
                     <em style={{ color: theme.textMuted, fontSize: 12 }}>Poor defense players (&lt;50 DEF) hidden except for DH position.</em>
                   </p>
@@ -7676,7 +7709,7 @@ function DraftAssistantPage() {
                   <h3 style={{ color: theme.accent, margin: '0 0 8px 0', fontSize: 14 }}>💎 Value Picks</h3>
                   <p style={{ color: theme.textSecondary, margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     Shows players from lower card tiers performing close to top-tier players:<br/>
-                    <span style={{ color: '#ef4444' }}>🔥 Insane:</span> Within 0.015 wOBA / 0.3 SIERA of best<br/>
+                    <span style={{ color: isColorblind ? CB_NEGATIVE : '#ef4444' }}>🔥 Insane:</span> Within 0.015 wOBA / 0.3 SIERA of best<br/>
                     <span style={{ color: '#f97316' }}>⭐ Great:</span> Within 0.025 wOBA / 0.4 SIERA of best<br/>
                     <span style={{ color: '#eab308' }}>👍 Good:</span> Within 0.040 wOBA / 0.5 SIERA of best<br/>
                     <em style={{ color: theme.textMuted, fontSize: 12 }}>Requires multiple card tiers enabled to compare.</em>
