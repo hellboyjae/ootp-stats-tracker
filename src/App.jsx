@@ -339,8 +339,18 @@ function parseVariant(v) {
   return (val === 'Y' || val === 'YES' || val === '1' || val === 'TRUE') ? 'Y' : 'N';
 }
 
-function getOvrColor(ovr) {
+function getOvrColor(ovr, colorblind) {
   const val = parseInt(ovr) || 0;
+  if (colorblind) {
+    // Deuteranopia-safe: uses blue/purple/orange spectrum instead of red/green
+    // Each tier has high contrast against dark backgrounds and against each other
+    if (val >= 100) return '#f472b6'; // Pink - Perfect (clearly distinct)
+    if (val >= 90) return '#38bdf8';  // Sky blue - Diamond
+    if (val >= 80) return '#fbbf24';  // Amber/Yellow - Gold (unchanged, safe)
+    if (val >= 70) return '#d1d5db';  // Light gray - Silver (unchanged)
+    if (val >= 60) return '#c2884d';  // Tan/Bronze (warmer, more distinct)
+    return '#FFFFFF';                  // White - Iron
+  }
   if (val >= 100) return '#E82D07';
   if (val >= 90) return '#32EBFC';
   if (val >= 80) return '#FFE61F';
@@ -2610,7 +2620,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
       <td style={styles.td}>{p.pos}</td>
       <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')}>{p.name}</td>
       <td style={styles.td}>{p.throws}</td>
-      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
+      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.td}>{calcIPperG(p.ip, p.g)}</td>
       {showTraditional && <td style={styles.td}>{p.bf}</td>}{showTraditional && <td style={styles.td}>{p.era}</td>}{showTraditional && <td style={styles.td}>{p.avg}</td>}{showTraditional && <td style={styles.td}>{p.obp}</td>}
       <td style={styles.td}>{p.babip}</td>{showTraditional && <td style={styles.td}>{p.whip}</td>}<td style={styles.td}>{p.braPer9}</td><td style={styles.td}>{p.hrPer9}</td>
@@ -2650,7 +2660,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
       <td style={styles.td}>{p.pos}</td>
       <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
-      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def, isColorblind) : theme.textMuted}}>{p.def || '—'}</td>
+      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def, isColorblind) : theme.textMuted}}>{p.def || '—'}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
       {showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}
       {showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td>
