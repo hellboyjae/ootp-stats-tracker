@@ -77,7 +77,7 @@ const generateTeamTheme = (teamKey, isDark) => {
   const secondary = team.secondary;
   
   if (isDark) {
-    // Dark mode - use team's TRUE primary color prominently
+    // Dark mode - neutral base with team colors as accents only
     return {
       // Main backgrounds stay dark for readability
       mainBg: '#0f1117',
@@ -85,45 +85,45 @@ const generateTeamTheme = (teamKey, isDark) => {
       tableBg: '#161b26',
       inputBg: '#131720',
 
-      // Header and sidebar use TRUE primary color
-      sidebarBg: primary,
+      // Sidebar and panels use dark neutral base, NOT solid primary
+      sidebarBg: '#131720',
       panelBg: '#1a2033',
 
-      // Table header uses primary color
-      tableHeaderBg: primary,
+      // Table header uses neutral dark bg, primary only as accent border
+      tableHeaderBg: '#1a2033',
       tableRowBg: '#161b26',
-      tableRowHover: withAlpha(primary, 0.15),
-      tableBorder: withAlpha(primary, 0.3),
-      
+      tableRowHover: withAlpha(primary, 0.10),
+      tableBorder: '#1e293b',
+
       // Text colors
       textPrimary: '#e8edf5',
       textSecondary: '#a4b1c7',
       textMuted: '#8893a7',
       textDim: '#5b6780',
-      
-      // Accent uses secondary color for contrast
-      accent: secondary,
-      accentHover: adjustColor(secondary, -20),
-      
+
+      // Accent uses primary for colored text/borders, secondary as secondary accent
+      accent: primary,
+      accentHover: adjustColor(primary, -20),
+
       // Status colors
       success: '#22c55e',
       warning: '#f59e0b',
       error: '#ef4444',
-      
-      // Gold uses secondary
-      gold: secondary,
-      
-      // Borders mix both colors
-      border: withAlpha(primary, 0.4),
-      borderLight: withAlpha(secondary, 0.3),
-      inputBorder: withAlpha(primary, 0.4),
 
-      // Store original colors for special use
+      // Gold for rate stats — consistent warm gold
+      gold: '#fbbf24',
+
+      // Borders use neutral tones, not team colors
+      border: '#1e293b',
+      borderLight: '#334155',
+      inputBorder: '#1e293b',
+
+      // Store original colors for accent use
       teamPrimary: primary,
       teamSecondary: secondary,
     };
   } else {
-    // Light mode - use team colors as accents on white backgrounds
+    // Light mode - neutral base with team colors as accents
     return {
       // Main backgrounds stay light for readability
       mainBg: '#f8fafc',
@@ -131,40 +131,40 @@ const generateTeamTheme = (teamKey, isDark) => {
       tableBg: '#ffffff',
       inputBg: '#ffffff',
 
-      // Header and sidebar use primary color
-      sidebarBg: primary,
-      panelBg: withAlpha(primary, 0.08),
+      // Sidebar uses light neutral, NOT solid primary
+      sidebarBg: '#f1f5f9',
+      panelBg: '#f1f5f9',
 
-      // Table header uses primary
-      tableHeaderBg: primary,
+      // Table header uses light neutral bg
+      tableHeaderBg: '#f1f5f9',
       tableRowBg: '#ffffff',
       tableRowHover: withAlpha(primary, 0.05),
-      tableBorder: withAlpha(primary, 0.2),
+      tableBorder: '#e2e8f0',
 
       // Text colors
       textPrimary: '#0f172a',
       textSecondary: '#334155',
       textMuted: '#64748b',
       textDim: '#94a3b8',
-      
-      // Accent uses secondary for buttons etc
-      accent: secondary,
-      accentHover: adjustColor(secondary, -20),
-      
+
+      // Accent uses primary
+      accent: primary,
+      accentHover: adjustColor(primary, -20),
+
       // Status colors
       success: '#16a34a',
       warning: '#d97706',
       error: '#dc2626',
-      
-      // Gold uses secondary
-      gold: secondary,
-      
-      // Borders
-      border: withAlpha(primary, 0.2),
-      borderLight: withAlpha(primary, 0.15),
-      inputBorder: withAlpha(primary, 0.25),
-      
-      // Store original colors for special use
+
+      // Gold for rate stats
+      gold: '#d97706',
+
+      // Borders use neutral tones
+      border: '#e2e8f0',
+      borderLight: '#f1f5f9',
+      inputBorder: '#cbd5e1',
+
+      // Store original colors for accent use
       teamPrimary: primary,
       teamSecondary: secondary,
     };
@@ -174,7 +174,8 @@ const generateTeamTheme = (teamKey, isDark) => {
 function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
-    return saved ? saved === 'dark' : true;
+    if (saved !== 'dark' && saved !== null) { localStorage.setItem('theme', 'dark'); }
+    return true;
   });
   
   const [team, setTeam] = useState(() => {
@@ -3281,7 +3282,7 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
   };
 
   const btnBase = { padding: '6px 14px', borderRadius: 6, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' };
-  const btnActive = { background: theme.teamPrimary || theme.panelBg, color: theme.teamPrimary ? '#ffffff' : theme.textPrimary, borderColor: theme.teamPrimary || theme.border };
+  const btnActive = { background: `${theme.teamPrimary}18`, color: theme.teamPrimary, borderColor: theme.teamPrimary };
   const btnInactive = { background: 'transparent', color: theme.textMuted };
 
   const anyLowTier = results.tierInfo.some(t => t.count > 0 && !t.usable);
@@ -9130,16 +9131,16 @@ function getStyles(t) {
     container: { minHeight: '100vh', background: t.mainBg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: t.textPrimary, fontSize: 14 },
     loading: { minHeight: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
     notification: { position: 'fixed', top: 16, right: 16, padding: '12px 24px', borderRadius: 6, color: '#fff', fontWeight: 500, zIndex: 1000, fontSize: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' },
-    header: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, padding: '12px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+    header: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, padding: '12px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.3)', borderTop: `3px solid ${t.teamPrimary}` },
     headerContent: { maxWidth: 1800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     headerRight: { display: 'flex', alignItems: 'center', gap: 16 },
-    title: { margin: 0, fontSize: 24, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
-    subtitle: { margin: '2px 0 0', fontSize: 11, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' },
-    
+    title: { margin: 0, fontSize: 24, color: t.teamPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
+    subtitle: { margin: '2px 0 0', fontSize: 11, color: t.textDim, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' },
+
     // News Banner
-    newsBannerContainer: { background: t.teamSecondary || t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative', maskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)' },
+    newsBannerContainer: { background: t.panelBg, borderBottom: `1px solid ${t.border}`, borderLeft: `3px solid ${t.teamPrimary}`, overflow: 'hidden', position: 'relative', maskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)' },
     newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
-    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 40s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 13, padding: '10px 0', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.05em' },
+    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 40s linear infinite', color: t.teamPrimary, fontWeight: 600, fontSize: 13, padding: '10px 0', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.05em' },
     newsBannerSpacer: { margin: '0 50px', color: t.textDim },
     newsBannerEditBtn: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.textMuted, fontSize: 12, zIndex: 10 },
     newsBannerEdit: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' },
@@ -9148,23 +9149,23 @@ function getStyles(t) {
     newsBannerCancelBtn: { padding: '8px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
     
     nav: { display: 'flex', gap: 4 },
-    navLink: { padding: '10px 16px 8px', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, textDecoration: 'none', borderRadius: 0, fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease', borderBottom: '2px solid transparent' },
-    navLinkActive: { color: '#fff', borderBottomColor: t.teamSecondary || t.accent, background: 'rgba(255,255,255,0.08)' },
+    navLink: { padding: '10px 16px 8px', color: t.textMuted, textDecoration: 'none', borderRadius: 0, fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease', borderBottom: '2px solid transparent' },
+    navLinkActive: { color: t.teamPrimary, borderBottomColor: t.teamPrimary, background: 'transparent' },
     themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
-    teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none', colorScheme: 'dark' },
-    themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, background: t.teamPrimary ? 'rgba(255,255,255,0.1)' : 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.teamPrimary ? '#ffffff' : t.textMuted, transition: 'all 0.15s ease' },
+    teamSelect: { padding: '6px 10px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none', colorScheme: 'dark' },
+    themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted, transition: 'all 0.15s ease' },
     main: { display: 'flex', maxWidth: 1900, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
-    sidebar: { width: 270, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
+    sidebar: { width: 270, background: t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
     sidebarTabs: { display: 'flex', gap: 2, marginBottom: 12 },
-    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' },
-    sidebarTabActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
-    sidebarSearch: { width: '100%', padding: '9px 12px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, borderRadius: 4, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
+    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease', borderBottom: '2px solid transparent' },
+    sidebarTabActive: { color: t.teamPrimary, borderBottom: `2px solid ${t.teamPrimary}`, background: 'transparent' },
+    sidebarSearch: { width: '100%', padding: '9px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
     tournamentList: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflow: 'auto' },
-    emptyMsg: { color: t.teamPrimary ? 'rgba(255,255,255,0.6)' : t.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' },
+    emptyMsg: { color: t.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' },
     tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'transparent', borderRadius: 4, cursor: 'pointer', borderLeft: `3px solid transparent`, transition: 'all 0.15s ease' },
-    tournamentActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.panelBg, borderLeftColor: t.teamSecondary || t.accent },
+    tournamentActive: { background: t.panelBg, borderLeftColor: t.teamPrimary },
     tournamentInfo: { display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden', flex: 1 },
-    tournamentName: { fontWeight: 500, color: t.teamPrimary ? 'rgba(255,255,255,0.9)' : t.textSecondary, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    tournamentName: { fontWeight: 500, color: t.textSecondary, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     tournamentNameActive: { color: t.textPrimary, fontWeight: 600 },
     tournamentStats: { fontSize: 11, color: t.textDim },
     tournamentActions: { display: 'flex', gap: 4, alignItems: 'center' },
@@ -9184,17 +9185,17 @@ function getStyles(t) {
     tabRow: { marginBottom: 12 },
     tabs: { display: 'flex', gap: 4 },
     tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' },
-    tabActive: { background: t.teamPrimary || t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
-    tabCount: { marginLeft: 6, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 400 },
-    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 8, borderLeft: `3px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', position: 'sticky', top: 0, zIndex: 5 },
+    tabActive: { color: t.teamPrimary, borderBottom: `2px solid ${t.teamPrimary}`, background: 'transparent' },
+    tabCount: { marginLeft: 6, color: t.textDim, fontWeight: 400 },
+    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 8, borderLeft: `3px solid ${t.teamPrimary}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', position: 'sticky', top: 0, zIndex: 5 },
     controlGroup: { display: 'flex', alignItems: 'center', gap: 6 },
     controlDivider: { width: 1, height: 24, background: t.border, margin: '0 6px' },
     searchInput: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: '4px 0 0 4px', fontSize: 13, width: 160, outline: 'none' },
     filterSelect: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderLeft: 'none', borderRadius: '0 4px 4px 0', fontSize: 13, cursor: 'pointer', outline: 'none' },
     controlBtn: { padding: '7px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s ease' },
-    controlBtnActive: { background: t.teamSecondary || t.accent, color: '#fff', borderColor: t.teamSecondary || t.accent },
-    controlBtnHighlight: { borderColor: t.teamPrimary || t.accent, color: t.teamPrimary || t.accent },
-    filterBadge: { background: t.teamSecondary || t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600 },
+    controlBtnActive: { background: `${t.teamPrimary}18`, color: t.teamPrimary, borderColor: t.teamPrimary },
+    controlBtnHighlight: { borderColor: t.teamPrimary, color: t.teamPrimary },
+    filterBadge: { background: t.teamPrimary, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600 },
     resetBtn: { padding: '7px 12px', background: 'transparent', color: t.warning, border: `1px solid ${t.warning}40`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500, transition: 'all 0.15s ease' },
     resultsCount: { marginLeft: 'auto', color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
     advancedFilters: { background: t.panelBg, borderRadius: 6, padding: '12px 14px', marginBottom: 12 },
@@ -9205,23 +9206,23 @@ function getStyles(t) {
     statFilterControls: { display: 'flex', gap: 6 },
     operatorSelect: { padding: '5px 8px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: 3, fontSize: 12, cursor: 'pointer' },
     valueInput: { padding: '5px 8px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: 3, fontSize: 12, width: 60 },
-    tableContainer: { background: t.tableBg, borderRadius: 8, border: `1px solid ${t.teamPrimary ? t.teamPrimary : t.border}`, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.25)' },
+    tableContainer: { background: t.tableBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.25)' },
     tableWrapper: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-    th: { padding: '9px 6px', background: t.teamPrimary || t.tableHeaderBg, color: t.teamPrimary ? '#ffffff' : t.textMuted, fontWeight: 700, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `2px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, userSelect: 'none', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontFamily: "'Oswald', 'Inter', sans-serif" },
-    thRate: { background: t.teamSecondary || t.tableHeaderBg, color: t.teamSecondary ? '#ffffff' : t.gold, fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif" },
-    thSorted: { color: t.teamPrimary ? t.teamSecondary || '#ffffff' : t.textPrimary },
+    th: { padding: '9px 6px', background: t.tableHeaderBg, color: t.textMuted, fontWeight: 700, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `2px solid ${t.teamPrimary}`, userSelect: 'none', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontFamily: "'Oswald', 'Inter', sans-serif" },
+    thRate: { color: t.gold, fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif" },
+    thSorted: { color: t.teamPrimary },
     sortIndicator: { marginLeft: 3, fontSize: 10 },
     tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg, transition: 'background 0.12s ease' },
-    trAlt: { background: t.teamPrimary ? withAlpha(t.teamPrimary, 0.12) : (t.mainBg === '#0f1117' ? '#1c2438' : '#edf2f8') },
+    trAlt: { background: t.mainBg === '#0f1117' ? '#1c2438' : '#edf2f8' },
     td: { padding: '6px 6px', color: t.textPrimary, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 12 },
     tdName: { padding: '6px 6px', color: t.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 },
     tdOvr: { padding: '6px 6px', textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: 12 },
-    tdRate: { padding: '6px 6px', color: t.teamSecondary || t.gold, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 },
+    tdRate: { padding: '6px 6px', color: t.gold, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 },
     emptyTable: { padding: 48, textAlign: 'center', color: t.textMuted, fontSize: 14 },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modal: { background: t.cardBg, padding: 28, borderRadius: 10, border: `1px solid ${t.teamPrimary || t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' },
-    modalTitle: { margin: '0 0 10px', color: t.teamPrimary || t.textPrimary, fontSize: 22, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
+    modal: { background: t.cardBg, padding: 28, borderRadius: 10, border: `1px solid ${t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' },
+    modalTitle: { margin: '0 0 10px', color: t.textPrimary, fontSize: 22, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     modalText: { margin: '0 0 20px', color: t.textSecondary, fontSize: 14 },
     modalBtns: { display: 'flex', gap: 10, marginTop: 20 },
     authError: { color: t.error, fontSize: 13, margin: '0 0 14px', padding: '10px 14px', background: `${t.error}15`, borderRadius: 4 },
@@ -9229,16 +9230,16 @@ function getStyles(t) {
     textareaLarge: { width: '100%', padding: '10px 12px', background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 4, color: t.textPrimary, fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', minHeight: 140, outline: 'none' },
     formBtns: { display: 'flex', gap: 10 },
     newForm: { marginBottom: 12, padding: 12, background: t.panelBg, borderRadius: 6 },
-    saveBtn: { flex: 1, padding: '10px 14px', background: t.teamPrimary || t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    saveBtn: { flex: 1, padding: '10px 14px', background: t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
     cancelBtn: { flex: 1, padding: '10px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
-    addBtn: { padding: '8px 14px', background: t.teamSecondary || t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
-    editBtn: { padding: '8px 14px', background: 'transparent', color: t.teamPrimary || t.textMuted, border: `1px solid ${t.teamPrimary || t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13, transition: 'all 0.15s ease' },
+    addBtn: { padding: '8px 14px', background: t.teamPrimary, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    editBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13, transition: 'all 0.15s ease' },
     pageContent: { flex: 1, padding: '24px 28px', maxWidth: 900, margin: '0 auto' },
-    pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${t.teamPrimary || t.border}` },
-    pageTitle: { margin: 0, fontSize: 26, color: t.teamPrimary || t.textPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
+    pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${t.border}` },
+    pageTitle: { margin: 0, fontSize: 26, color: t.textPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     infoContent: { display: 'flex', flexDirection: 'column', gap: 20 },
-    infoSection: { background: t.panelBg, padding: 24, borderRadius: 8, borderLeft: `4px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
-    infoHeading: { margin: '0 0 12px', color: t.teamPrimary || t.textPrimary, fontSize: 18, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
+    infoSection: { background: t.panelBg, padding: 24, borderRadius: 8, borderLeft: `4px solid ${t.teamPrimary}`, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+    infoHeading: { margin: '0 0 12px', color: t.textPrimary, fontSize: 18, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     infoBody: { margin: 0, color: t.textSecondary, fontSize: 14, lineHeight: 1.7 },
     
     // Admin Login Section
