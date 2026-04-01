@@ -4466,7 +4466,7 @@ function ReviewQueuePage() {
     return `${diffDays}d ago`;
   };
 
-  const handleApprove = async (upload, assignedTournamentId, assignedDate) => {
+  const handleApprove = async (upload, assignedTournamentId, assignedDate, skipReload = false) => {
     if (!assignedTournamentId) {
       showNotif('Please select a tournament', 'error');
       return;
@@ -4656,7 +4656,7 @@ function ReviewQueuePage() {
       }).eq('id', upload.id);
 
       showNotif(`✓ Approved! Added ${newData.length} ${upload.file_type} to ${tournament.name}`);
-      loadData();
+      if (!skipReload) loadData();
     } catch (e) {
       console.error('Approve error:', e);
       showNotif('Failed to approve', 'error');
@@ -4686,10 +4686,10 @@ function ReviewQueuePage() {
       const next = new Set(prev);
       if (next.has(uploadId)) {
         next.delete(uploadId);
-      } else if (next.size < 10) {
+      } else if (next.size < 50) {
         next.add(uploadId);
       } else {
-        showNotif('Maximum 10 uploads can be selected at once', 'error');
+        showNotif('Maximum 50 uploads can be selected at once', 'error');
       }
       return next;
     });
@@ -4707,10 +4707,10 @@ function ReviewQueuePage() {
       } else {
         // Select all in group (up to limit)
         groupIds.forEach(id => {
-          if (next.size < 10) next.add(id);
+          if (next.size < 50) next.add(id);
         });
-        if (next.size >= 10 && !groupIds.every(id => next.has(id))) {
-          showNotif('Maximum 10 uploads reached', 'error');
+        if (next.size >= 50 && !groupIds.every(id => next.has(id))) {
+          showNotif('Maximum 50 uploads reached', 'error');
         }
       }
       return next;
@@ -4726,29 +4726,27 @@ function ReviewQueuePage() {
     // Get selected uploads
     const uploadsToApprove = pendingUploads.filter(u => selectedUploads.has(u.id));
     
-    // Check that all have matching tournaments
-    const missingTournament = uploadsToApprove.find(u => {
-      const selectEl = document.getElementById(`tournament-${u.id}`);
-      return !selectEl?.value;
-    });
-    if (missingTournament) {
-      showNotif('Please select tournaments for all selected uploads', 'error');
-      return;
+    // Capture all tournament selections from dropdowns BEFORE any re-renders
+    const uploadAssignments = [];
+    for (const upload of uploadsToApprove) {
+      const selectEl = document.getElementById(`tournament-${upload.id}`);
+      const tournamentId = selectEl?.value;
+      if (!tournamentId) {
+        showNotif('Please select tournaments for all selected uploads', 'error');
+        return;
+      }
+      uploadAssignments.push({ upload, tournamentId, date: upload.suggested_date });
     }
 
-    if (!confirm(`Approve ${uploadsToApprove.length} uploads?`)) return;
+    if (!confirm(`Approve ${uploadAssignments.length} uploads?`)) return;
 
     setIsBatchApproving(true);
     let successCount = 0;
     let errorCount = 0;
 
-    for (const upload of uploadsToApprove) {
+    for (const { upload, tournamentId, date } of uploadAssignments) {
       try {
-        const selectEl = document.getElementById(`tournament-${upload.id}`);
-        const tournamentId = selectEl?.value;
-        if (!tournamentId) continue;
-        
-        await handleApprove(upload, tournamentId, upload.suggested_date);
+        await handleApprove(upload, tournamentId, date, true);
         successCount++;
       } catch (e) {
         console.error('Batch approve error:', e);
@@ -4758,6 +4756,7 @@ function ReviewQueuePage() {
 
     setIsBatchApproving(false);
     setSelectedUploads(new Set());
+    loadData(); // Reload once at the end
     
     if (errorCount > 0) {
       showNotif(`Approved ${successCount}, failed ${errorCount}`, 'error');
