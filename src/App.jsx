@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, Cell, ZAxis, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP } from './tutorialImages.js';
 
 const ThemeContext = createContext();
@@ -2942,23 +2942,6 @@ const getRatingColor = (val) => {
   return '#ec4899';
 };
 
-function calcRegression(data) {
-  const n = data.length;
-  if (n < 2) return { slope: 0, intercept: 0, r: 0 };
-  let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
-  for (const d of data) {
-    sx += d.x; sy += d.y;
-    sxx += d.x * d.x; syy += d.y * d.y;
-    sxy += d.x * d.y;
-  }
-  const denom = n * sxx - sx * sx;
-  if (denom === 0) return { slope: 0, intercept: sy / n, r: 0 };
-  const slope = (n * sxy - sx * sy) / denom;
-  const intercept = (sy - slope * sx) / n;
-  const denomR = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
-  const r = denomR === 0 ? 0 : (n * sxy - sx * sy) / denomR;
-  return { slope, intercept, r };
-}
 
 const POSITION_NAMES = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
 const BATS_MAP = { 1: 'R', 2: 'L', 3: 'S' };
@@ -3001,78 +2984,91 @@ function findCardMatch(playerName, playerType, cardData) {
 
 // ============ CorrelationTab Component ============
 
-const BATTING_PRESETS = [
-  { label: 'Contact OVR → wOBA', xField: 'contact_overall', xLabel: 'Contact OVR', yKey: 'woba', yLabel: 'wOBA' },
-  { label: 'Power OVR → SLG', xField: 'power_overall', xLabel: 'Power OVR', yKey: 'slg', yLabel: 'SLG' },
-  { label: 'Eye OVR → BB%', xField: 'eye_overall', xLabel: 'Eye OVR', yKey: 'bbPct', yLabel: 'BB%' },
-  { label: 'Avoid Ks OVR → K', xField: 'avoid_ks_overall', xLabel: 'Avoid Ks OVR', yKey: 'so', yLabel: 'K' },
-  { label: 'Speed → BsR', xField: 'speed', xLabel: 'Speed', yKey: 'bsr', yLabel: 'BsR' },
-  { label: 'Gap OVR → SLG', xField: 'gap_overall', xLabel: 'Gap OVR', yKey: 'slg', yLabel: 'SLG' },
+// ============ Spearman Rho helpers ============
+
+function assignRanks(arr) {
+  const indexed = arr.map((v, i) => ({ v, i }));
+  indexed.sort((a, b) => a.v - b.v);
+  const ranks = new Array(arr.length);
+  let i = 0;
+  while (i < indexed.length) {
+    let j = i;
+    while (j < indexed.length && indexed[j].v === indexed[i].v) j++;
+    const avgRank = (i + j + 1) / 2; // 1-based average
+    for (let k = i; k < j; k++) ranks[indexed[k].i] = avgRank;
+    i = j;
+  }
+  return ranks;
+}
+
+function spearmanRho(xs, ys) {
+  const n = xs.length;
+  if (n < 3) return { rho: 0, pValue: 1, n };
+  const rx = assignRanks(xs);
+  const ry = assignRanks(ys);
+  // Pearson on ranks
+  let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < n; i++) {
+    sx += rx[i]; sy += ry[i];
+    sxx += rx[i] * rx[i]; syy += ry[i] * ry[i];
+    sxy += rx[i] * ry[i];
+  }
+  const denom = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
+  const rho = denom === 0 ? 0 : (n * sxy - sx * sy) / denom;
+  // t-test approximation for p-value
+  const t = rho * Math.sqrt((n - 2) / (1 - rho * rho + 1e-15));
+  const df = n - 2;
+  // Approximate two-tailed p-value using the t distribution (Abramowitz & Stegun)
+  const x = df / (df + t * t);
+  let p;
+  if (df <= 0) { p = 1; }
+  else {
+    // regularized incomplete beta approx via continued fraction (good enough for display)
+    const a = df / 2, b = 0.5;
+    const lnBeta = lgamma(a) + lgamma(b) - lgamma(a + b);
+    let sum = 0, term = 1;
+    for (let k = 0; k < 200; k++) {
+      if (k === 0) term = Math.pow(x, a) * Math.pow(1 - x, b) / a;
+      else term *= x * (a + k - 1) / k;
+      const contrib = term / (a + k);
+      sum += contrib;
+      if (Math.abs(contrib) < 1e-12) break;
+    }
+    const Ix = Math.exp(a * Math.log(x) + b * Math.log(1 - x) - lnBeta) * sum * a;
+    p = Math.min(1, Math.max(0, isNaN(Ix) ? 1 : Ix));
+  }
+  return { rho, pValue: p, n };
+}
+
+// Lanczos log-gamma for p-value calculation
+function lgamma(z) {
+  const g = 7;
+  const c = [0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+  z -= 1;
+  let x = c[0];
+  for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+  const t = z + g + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+
+const BATTING_ATTRS = [
+  { key: 'contact_overall', label: 'Contact', desc: 'Ability to make contact and get hits' },
+  { key: 'gap_overall', label: 'Gap', desc: 'Ability to hit doubles and triples into the gaps' },
+  { key: 'power_overall', label: 'Power', desc: 'Raw power and home run ability' },
+  { key: 'eye_overall', label: 'Eye', desc: 'Plate discipline — drawing walks' },
+  { key: 'avoid_ks_overall', label: 'Avoid Ks', desc: 'Ability to avoid striking out' },
+  { key: 'babip_bat_overall', label: 'BABIP', desc: 'Batting average on balls in play' },
 ];
 
-const PITCHING_PRESETS = [
-  { label: 'Stuff OVR → K/9', xField: 'stuff_overall', xLabel: 'Stuff OVR', yKey: 'kPer9', yLabel: 'K/9' },
-  { label: 'Control OVR → BB/9', xField: 'control_overall', xLabel: 'Control OVR', yKey: 'bbPer9', yLabel: 'BB/9' },
-  { label: 'Movement OVR → HR/9', xField: 'movement_overall', xLabel: 'Movement OVR', yKey: 'hrPer9', yLabel: 'HR/9' },
-  { label: 'Stuff OVR → SIERA', xField: 'stuff_overall', xLabel: 'Stuff OVR', yKey: 'siera', yLabel: 'SIERA' },
-  { label: 'Control OVR → FIP', xField: 'control_overall', xLabel: 'Control OVR', yKey: 'fip', yLabel: 'FIP' },
-  { label: 'Stamina → IP', xField: 'stamina', xLabel: 'Stamina', yKey: 'ip', yLabel: 'IP' },
+const PITCHING_ATTRS = [
+  { key: 'stuff_overall', label: 'Stuff', desc: 'Pitch quality — generates strikeouts' },
+  { key: 'control_overall', label: 'Control', desc: 'Command — avoids walks' },
+  { key: 'p_hr_overall', label: 'pHR', desc: 'Ability to prevent home runs' },
+  { key: 'p_babip_overall', label: 'pBABIP', desc: 'Ability to suppress hits on balls in play' },
 ];
 
-const CARD_RATING_OPTIONS = [
-  { label: 'Contact OVR', field: 'contact_overall' },
-  { label: 'Contact vL', field: 'contact_vl' },
-  { label: 'Contact vR', field: 'contact_vr' },
-  { label: 'Gap OVR', field: 'gap_overall' },
-  { label: 'Gap vL', field: 'gap_vl' },
-  { label: 'Gap vR', field: 'gap_vr' },
-  { label: 'Power OVR', field: 'power_overall' },
-  { label: 'Power vL', field: 'power_vl' },
-  { label: 'Power vR', field: 'power_vr' },
-  { label: 'Eye OVR', field: 'eye_overall' },
-  { label: 'Eye vL', field: 'eye_vl' },
-  { label: 'Eye vR', field: 'eye_vr' },
-  { label: 'Avoid Ks OVR', field: 'avoid_ks_overall' },
-  { label: 'Avoid Ks vL', field: 'avoid_ks_vl' },
-  { label: 'Avoid Ks vR', field: 'avoid_ks_vr' },
-  { label: 'Stuff OVR', field: 'stuff_overall' },
-  { label: 'Stuff vL', field: 'stuff_vl' },
-  { label: 'Stuff vR', field: 'stuff_vr' },
-  { label: 'Movement OVR', field: 'movement_overall' },
-  { label: 'Movement vL', field: 'movement_vl' },
-  { label: 'Movement vR', field: 'movement_vr' },
-  { label: 'Control OVR', field: 'control_overall' },
-  { label: 'Control vL', field: 'control_vl' },
-  { label: 'Control vR', field: 'control_vr' },
-  { label: 'Speed', field: 'speed' },
-  { label: 'Steal Rate', field: 'steal_rate' },
-  { label: 'Stealing', field: 'stealing' },
-  { label: 'Baserunning', field: 'baserunning' },
-  { label: 'Stamina', field: 'stamina' },
-  { label: 'Velocity', field: 'velocity' },
-  { label: 'BABIP (bat)', field: 'babip_bat_overall' },
-  { label: 'HR/9 (card)', field: 'p_hr_overall' },
-  { label: 'BABIP (pitch)', field: 'p_babip_overall' },
-];
-
-const BATTING_STAT_OPTIONS = [
-  { label: 'wOBA', key: 'woba' }, { label: 'AVG', key: 'avg' }, { label: 'OBP', key: 'obp' },
-  { label: 'SLG', key: 'slg' }, { label: 'OPS', key: 'ops' }, { label: 'OPS+', key: 'opsPlus' },
-  { label: 'wRC+', key: 'wrcPlus' }, { label: 'wRAA', key: 'wraa' }, { label: 'WAR', key: 'war' },
-  { label: 'BB%', key: 'bbPct' }, { label: 'K', key: 'so' }, { label: 'HR', key: 'hr' },
-  { label: 'H', key: 'h' }, { label: 'BsR', key: 'bsr' }, { label: 'SB%', key: 'sbPct' },
-  { label: 'BABIP', key: 'babip' }, { label: 'PA', key: 'pa' }, { label: 'DEF', key: 'def' },
-];
-
-const PITCHING_STAT_OPTIONS = [
-  { label: 'K/9', key: 'kPer9' }, { label: 'BB/9', key: 'bbPer9' }, { label: 'HR/9', key: 'hrPer9' },
-  { label: 'H/9', key: 'hPer9' }, { label: 'ERA', key: 'era' }, { label: 'FIP', key: 'fip' },
-  { label: 'SIERA', key: 'siera' }, { label: 'WHIP', key: 'whip' }, { label: 'WAR', key: 'war' },
-  { label: 'ERA+', key: 'eraPlus' }, { label: 'FIP-', key: 'fipMinus' }, { label: 'LOB%', key: 'lobPct' },
-  { label: 'IP', key: 'ip' }, { label: 'BRA/9', key: 'braPer9' }, { label: 'BABIP', key: 'babip' },
-];
-
-const TIER_COLORS = [
+const STAT_PRIORITY_TIER_COLORS = [
   { key: 'perfect', label: 'Perfect', color: '#a855f7', min: 100 },
   { key: 'diamond', label: 'Diamond', color: '#32EBFC', min: 90 },
   { key: 'gold', label: 'Gold', color: '#FFE61F', min: 80 },
@@ -3083,168 +3079,201 @@ const TIER_COLORS = [
 
 function getTierColor(ovr) {
   const v = parseInt(ovr) || 0;
-  for (const t of TIER_COLORS) { if (v >= t.min) return t.color; }
+  for (const t of STAT_PRIORITY_TIER_COLORS) { if (v >= t.min) return t.color; }
   return '#888';
 }
 
 function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
   const [mode, setMode] = useState('batting');
-  const [presetIdx, setPresetIdx] = useState(0);
-  const [isCustom, setIsCustom] = useState(false);
-  const [customX, setCustomX] = useState('contact_overall');
-  const [customY, setCustomY] = useState('woba');
 
-  const presets = mode === 'batting' ? BATTING_PRESETS : PITCHING_PRESETS;
-  const statOptions = mode === 'batting' ? BATTING_STAT_OPTIONS : PITCHING_STAT_OPTIONS;
-  const players = mode === 'batting' ? (battingData || []) : (pitchingData || []);
+  const parseIPVal = (ip) => { const str = String(ip || 0); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
 
-  // Determine current X/Y config
-  const currentPreset = presets[presetIdx] || presets[0];
-  const xField = isCustom ? customX : currentPreset.xField;
-  const xLabel = isCustom ? (CARD_RATING_OPTIONS.find(o => o.field === customX)?.label || customX) : currentPreset.xLabel;
-  const yKey = isCustom ? customY : currentPreset.yKey;
-  const yLabel = isCustom ? (statOptions.find(o => o.key === customY)?.label || customY) : currentPreset.yLabel;
+  const results = React.useMemo(() => {
+    const players = mode === 'batting' ? (battingData || []) : (pitchingData || []);
+    const attrs = mode === 'batting' ? BATTING_ATTRS : PITCHING_ATTRS;
+    const minQual = mode === 'batting' ? 300 : 100; // 300 AB or 100 IP
 
-  // Build scatter data
-  const scatterData = React.useMemo(() => {
-    const pts = [];
+    // Filter to qualified players with card matches
+    const qualified = [];
     for (const p of players) {
+      const sample = mode === 'batting' ? (parseInt(p.ab) || 0) : parseIPVal(p.ip);
+      if (sample < minQual) continue;
       const card = findCardMatch(p.name, mode === 'batting' ? 'batting' : 'pitching', cardData);
       if (!card) continue;
-      const xVal = parseFloat(card[xField]);
-      if (isNaN(xVal)) continue;
-      const rawY = p[yKey];
-      const yVal = parseFloat(typeof rawY === 'string' ? rawY.replace('%', '') : rawY);
-      if (isNaN(yVal)) continue;
-      const sampleSize = mode === 'batting' ? (parseInt(p.pa) || 1) : (parseFloat(p.ip) || 1);
-      pts.push({ name: p.name, x: xVal, y: yVal, ovr: parseInt(p.ovr) || 0, sampleSize });
+      const perfStat = mode === 'batting' ? (parseFloat(p.opsPlus) || 0) : (parseFloat(p.eraPlus) || 0);
+      if (perfStat === 0) continue;
+      qualified.push({ player: p, card, perfStat });
     }
-    return pts;
-  }, [players, cardData, xField, yKey, mode]);
 
-  const regression = React.useMemo(() => calcRegression(scatterData), [scatterData]);
+    // Compute Spearman rho for each attribute
+    const correlations = attrs.map(attr => {
+      const xs = [];
+      const ys = [];
+      for (const q of qualified) {
+        const attrVal = parseFloat(q.card[attr.key]);
+        if (isNaN(attrVal)) continue;
+        xs.push(attrVal);
+        ys.push(q.perfStat);
+      }
+      const result = spearmanRho(xs, ys);
+      return { ...attr, rho: result.rho, pValue: result.pValue, n: result.n };
+    });
 
-  // Compute trend line endpoints
-  const trendLine = React.useMemo(() => {
-    if (scatterData.length < 2) return [];
-    const xs = scatterData.map(d => d.x);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    return [
-      { x: minX, y: regression.slope * minX + regression.intercept },
-      { x: maxX, y: regression.slope * maxX + regression.intercept },
-    ];
-  }, [scatterData, regression]);
+    // Sort by absolute rho descending
+    correlations.sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
 
-  const rInterpretation = (r) => {
-    const a = Math.abs(r);
-    if (a >= 0.7) return 'Strong';
-    if (a >= 0.4) return 'Moderate';
-    if (a >= 0.2) return 'Weak';
+    // Assign priority ranks
+    let rank = 1;
+    for (const c of correlations) {
+      if (c.rho > 0.05 && c.pValue < 0.05) {
+        c.priority = `#${rank}`;
+        rank++;
+      } else if (c.rho < -0.05) {
+        c.priority = c.pValue < 0.05 ? 'Inverted' : 'Weak';
+      } else {
+        c.priority = 'Negligible';
+      }
+    }
+
+    return { correlations, qualifiedCount: qualified.length, totalCount: players.length };
+  }, [mode, battingData, pitchingData, cardData]);
+
+  const rhoColor = (rho, pValue) => {
+    if (pValue >= 0.05) return theme.textMuted;
+    const a = Math.abs(rho);
+    if (rho < 0) return '#ef4444';
+    if (a >= 0.5) return '#22c55e';
+    if (a >= 0.3) return '#3b82f6';
+    if (a >= 0.15) return '#eab308';
+    return theme.textMuted;
+  };
+
+  const rhoStrength = (rho) => {
+    const a = Math.abs(rho);
+    if (a >= 0.7) return 'Very Strong';
+    if (a >= 0.5) return 'Strong';
+    if (a >= 0.3) return 'Moderate';
+    if (a >= 0.15) return 'Weak';
     return 'Very Weak';
   };
 
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload;
-    if (!d) return null;
-    return (
-      <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, color: theme.textPrimary }}>
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
-        <div>{xLabel}: <strong>{d.x}</strong></div>
-        <div>{yLabel}: <strong>{d.y}</strong></div>
-        <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>OVR: {d.ovr} | {mode === 'batting' ? 'PA' : 'IP'}: {d.sampleSize}</div>
-      </div>
-    );
+  const priorityBadgeStyle = (priority) => {
+    if (priority.startsWith('#')) {
+      const num = parseInt(priority.slice(1));
+      const colors = ['#22c55e', '#3b82f6', '#8b5cf6', '#eab308', '#f97316', '#6b7280'];
+      const bg = colors[Math.min(num - 1, colors.length - 1)];
+      return { background: bg + '22', color: bg, border: `1px solid ${bg}44`, fontWeight: 700 };
+    }
+    if (priority === 'Inverted') return { background: '#ef444422', color: '#ef4444', border: '1px solid #ef444444', fontWeight: 600 };
+    return { background: theme.bgSecondary, color: theme.textMuted, border: `1px solid ${theme.border}`, fontWeight: 500 };
   };
 
   const btnBase = { padding: '6px 14px', borderRadius: 6, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' };
   const btnActive = { background: theme.teamPrimary || theme.panelBg, color: theme.teamPrimary ? '#ffffff' : theme.textPrimary, borderColor: theme.teamPrimary || theme.border };
   const btnInactive = { background: 'transparent', color: theme.textMuted };
 
+  const lowSample = results.qualifiedCount < 20;
+
   return (
     <div style={{ padding: '16px 0' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 4px', color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stat Priority Analysis</h3>
+        <p style={{ margin: 0, color: theme.textMuted, fontSize: 12, lineHeight: 1.5 }}>
+          Which card attributes actually matter in this pool? Ranked by how strongly each attribute correlates with in-game performance using Spearman's Rho.
+        </p>
+      </div>
+
       {/* Mode toggle */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
-        <button style={{...btnBase, ...(mode === 'batting' ? btnActive : btnInactive)}} onClick={() => { setMode('batting'); setPresetIdx(0); setIsCustom(false); }}>Batting</button>
-        <button style={{...btnBase, ...(mode === 'pitching' ? btnActive : btnInactive)}} onClick={() => { setMode('pitching'); setPresetIdx(0); setIsCustom(false); }}>Pitching</button>
-        <div style={{ width: 1, height: 24, background: theme.border, margin: '0 8px' }} />
-        <button style={{...btnBase, ...(!isCustom ? btnActive : btnInactive)}} onClick={() => setIsCustom(false)}>Presets</button>
-        <button style={{...btnBase, ...(isCustom ? btnActive : btnInactive)}} onClick={() => setIsCustom(true)}>Custom</button>
-      </div>
-
-      {/* Preset / Custom selectors */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        {!isCustom ? (
-          <select
-            value={presetIdx}
-            onChange={(e) => setPresetIdx(parseInt(e.target.value))}
-            style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textPrimary, fontSize: 12 }}
-          >
-            {presets.map((p, i) => <option key={i} value={i}>{p.label}</option>)}
-          </select>
-        ) : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: theme.textMuted, fontSize: 12, fontWeight: 600 }}>X (Card):</span>
-              <select value={customX} onChange={(e) => setCustomX(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textPrimary, fontSize: 12 }}>
-                {CARD_RATING_OPTIONS.map(o => <option key={o.field} value={o.field}>{o.label}</option>)}
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: theme.textMuted, fontSize: 12, fontWeight: 600 }}>Y (Stat):</span>
-              <select value={customY} onChange={(e) => setCustomY(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textPrimary, fontSize: 12 }}>
-                {statOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-              </select>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Scatter Plot */}
-      {scatterData.length < 2 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: theme.textMuted, fontSize: 14 }}>
-          Not enough matched players to plot. Need at least 2 players with card data and stats.
+        <button style={{...btnBase, ...(mode === 'batting' ? btnActive : btnInactive)}} onClick={() => setMode('batting')}>Batting</button>
+        <button style={{...btnBase, ...(mode === 'pitching' ? btnActive : btnInactive)}} onClick={() => setMode('pitching')}>Pitching</button>
+        <div style={{ marginLeft: 12, color: theme.textMuted, fontSize: 12 }}>
+          {results.qualifiedCount} qualified / {results.totalCount} total
+          <span style={{ marginLeft: 4, fontSize: 11 }}>({mode === 'batting' ? '300+ AB' : '100+ IP'})</span>
         </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={420}>
-          <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
-            <XAxis type="number" dataKey="x" name={xLabel} tick={{ fill: theme.textMuted, fontSize: 11 }} label={{ value: xLabel, position: 'bottom', offset: 0, fill: theme.textMuted, fontSize: 12 }} />
-            <YAxis type="number" dataKey="y" name={yLabel} tick={{ fill: theme.textMuted, fontSize: 11 }} label={{ value: yLabel, angle: -90, position: 'insideLeft', offset: 10, fill: theme.textMuted, fontSize: 12 }} />
-            <ZAxis type="number" dataKey="sampleSize" range={[30, 200]} />
-            <Tooltip content={<CustomTooltip />} />
-            <Scatter data={scatterData} isAnimationActive={false}>
-              {scatterData.map((entry, i) => (
-                <Cell key={i} fill={getTierColor(entry.ovr)} fillOpacity={0.85} stroke={getTierColor(entry.ovr)} strokeWidth={1} />
-              ))}
-            </Scatter>
-            {/* Trend line as a second scatter with line type */}
-            <Scatter data={trendLine} line={{ stroke: theme.accent || '#3b82f6', strokeWidth: 2, strokeDasharray: '6 3' }} shape={() => null} isAnimationActive={false} />
-          </ScatterChart>
-        </ResponsiveContainer>
+      </div>
+
+      {/* Low sample warning */}
+      {lowSample && (
+        <div style={{ background: '#eab30822', border: '1px solid #eab30844', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#eab308', fontSize: 12, lineHeight: 1.5 }}>
+          Low sample size ({results.qualifiedCount} qualified players). Results may not be reliable — need at least 20 qualified players for meaningful analysis.
+        </div>
       )}
 
-      {/* Stats panel */}
-      <div style={{ display: 'flex', gap: 24, padding: '16px 0', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: theme.textMuted, fontSize: 12 }}>Pearson r:</span>
-          <span style={{ color: Math.abs(regression.r) >= 0.4 ? '#22c55e' : Math.abs(regression.r) >= 0.2 ? '#eab308' : theme.textMuted, fontWeight: 700, fontSize: 16 }}>
-            {regression.r.toFixed(3)}
-          </span>
-          <span style={{ color: theme.textMuted, fontSize: 11 }}>({rInterpretation(regression.r)} {regression.r >= 0 ? 'positive' : 'negative'})</span>
+      {/* No data */}
+      {results.qualifiedCount < 3 ? (
+        <div style={{ padding: 40, textAlign: 'center', color: theme.textMuted, fontSize: 14 }}>
+          Not enough qualified players to analyze. Need at least 3 {mode === 'batting' ? 'batters with 300+ AB' : 'pitchers with 100+ IP'} matched to card data.
         </div>
-        <div style={{ color: theme.textMuted, fontSize: 12 }}>n = {scatterData.length} players</div>
-        {/* Tier legend */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {TIER_COLORS.map(t => (
-            <span key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: theme.textMuted }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, display: 'inline-block' }} />
-              {t.label}
-            </span>
-          ))}
-        </div>
-      </div>
+      ) : (
+        <>
+          {/* Priority ranking cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {results.correlations.map((c, idx) => (
+              <div key={c.key} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8,
+                borderLeft: `4px solid ${rhoColor(c.rho, c.pValue)}`
+              }}>
+                {/* Priority badge */}
+                <div style={{
+                  padding: '4px 10px', borderRadius: 6, fontSize: 12, minWidth: 50, textAlign: 'center',
+                  ...priorityBadgeStyle(c.priority)
+                }}>
+                  {c.priority}
+                </div>
+
+                {/* Attribute name + description */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: theme.textPrimary, fontWeight: 700, fontSize: 14, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>{c.label}</div>
+                  <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>{c.desc}</div>
+                </div>
+
+                {/* Rho value + strength */}
+                <div style={{ textAlign: 'right', minWidth: 100 }}>
+                  <div style={{ color: rhoColor(c.rho, c.pValue), fontWeight: 700, fontSize: 18, fontFamily: "'Oswald', 'Inter', sans-serif" }}>
+                    {c.rho >= 0 ? '+' : ''}{c.rho.toFixed(3)}
+                  </div>
+                  <div style={{ color: theme.textMuted, fontSize: 10, marginTop: 1 }}>
+                    {rhoStrength(c.rho)} {c.rho >= 0 ? 'positive' : 'negative'}
+                  </div>
+                </div>
+
+                {/* Significance indicator */}
+                <div style={{ minWidth: 24, textAlign: 'center' }} title={`p-value: ${c.pValue < 0.001 ? '< 0.001' : c.pValue.toFixed(3)}`}>
+                  {c.pValue < 0.01 ? (
+                    <span style={{ color: '#22c55e', fontSize: 16 }} title={`Highly significant (p = ${c.pValue < 0.001 ? '< 0.001' : c.pValue.toFixed(3)})`}>&#10003;</span>
+                  ) : c.pValue < 0.05 ? (
+                    <span style={{ color: '#eab308', fontSize: 14 }} title={`Significant (p = ${c.pValue.toFixed(3)})`}>~</span>
+                  ) : (
+                    <span style={{ color: '#ef4444', fontSize: 14 }} title={`Not significant (p = ${c.pValue.toFixed(3)})`}>&#10007;</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* How to read this */}
+          <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: '14px 16px', border: `1px solid ${theme.border}` }}>
+            <div style={{ color: theme.textPrimary, fontWeight: 700, fontSize: 12, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>How to read this</div>
+            <div style={{ color: theme.textMuted, fontSize: 12, lineHeight: 1.7 }}>
+              <div style={{ marginBottom: 4 }}>Each card attribute is ranked by how strongly it correlates with {mode === 'batting' ? 'OPS+ (offensive production per plate appearance)' : 'ERA+ (pitching effectiveness per inning)'}.</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#22c55e', fontWeight: 700 }}>+0.50+</span> <span>Strong — prioritize this stat heavily</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>+0.30+</span> <span>Moderate — meaningful advantage</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#eab308', fontWeight: 700 }}>+0.15+</span> <span>Weak — slight edge, tiebreaker</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ef4444', fontWeight: 700 }}>Negative</span> <span>Inverted — higher rating, worse performance</span></div>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <span style={{ color: '#22c55e' }}>&#10003;</span> = statistically significant &nbsp;
+                <span style={{ color: '#eab308' }}>~</span> = borderline &nbsp;
+                <span style={{ color: '#ef4444' }}>&#10007;</span> = not significant (may be noise)
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
