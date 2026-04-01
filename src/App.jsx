@@ -1,4 +1,5 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
+import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
@@ -654,9 +655,59 @@ function StatsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ROWS_PER_PAGE = 100;
 
+  // Card data for hover cards
+  const [cardData, setCardData] = useState([]);
+  const [hoveredCard, setHoveredCard] = useState(null);
+  const [hoverPosition, setHoverPosition] = useState({ top: 0, left: 0 });
+  const [hoverType, setHoverType] = useState(null);
+  const hoverTimerRef = useRef(null);
+  const hideTimerRef = useRef(null);
+
+  // Load card data once on mount
+  useEffect(() => {
+    const loadCardData = async () => {
+      try {
+        const { data, error } = await supabase.from('pt_cards').select('*');
+        if (!error && data) setCardData(data);
+      } catch (e) { console.error('Failed to load card data:', e); }
+    };
+    loadCardData();
+  }, []);
+
+  const handlePlayerHover = useCallback((e, player, playerType) => {
+    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      const match = findCardMatch(player.name, playerType, cardData);
+      if (match) {
+        const rect = e.target.getBoundingClientRect();
+        const cardW = 330, cardH = 450;
+        let left = rect.right + 10;
+        let top = rect.top;
+        if (left + cardW > window.innerWidth) left = rect.left - cardW - 10;
+        if (top + cardH > window.innerHeight) top = Math.max(10, window.innerHeight - cardH - 10);
+        if (top < 10) top = 10;
+        setHoverPosition({ top, left });
+        setHoveredCard(match);
+        setHoverType(playerType);
+      }
+    }, 300);
+  }, [cardData]);
+
+  const handlePlayerHoverEnd = useCallback(() => {
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    hideTimerRef.current = setTimeout(() => {
+      setHoveredCard(null);
+      setHoverType(null);
+    }, 150);
+  }, []);
+
   const handlePlayerClick = (player, playerType) => {
     setSelectedPlayer(player);
     setSelectedPlayerType(playerType);
+    // Clear hover card on click
+    setHoveredCard(null);
+    setHoverType(null);
   };
 
   const closePlayerModal = () => {
@@ -1691,8 +1742,8 @@ function StatsPage() {
             )}
             <div style={styles.tableContainer}>
               {activeTab === 'pitching' 
-                ? <PitchingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} /> 
-                : <BattingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} />}
+                ? <PitchingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} onPlayerHover={handlePlayerHover} onPlayerHoverEnd={handlePlayerHoverEnd} />
+                : <BattingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} onPlayerHover={handlePlayerHover} onPlayerHoverEnd={handlePlayerHoverEnd} />}
             </div>
             {filteredData.length > ROWS_PER_PAGE && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: `1px solid ${theme.border}` }}>
@@ -1719,13 +1770,22 @@ function StatsPage() {
         </div>
       </main>
       {selectedPlayer && selectedTournament && (
-        <PlayerTrendModal 
-          player={selectedPlayer} 
-          playerType={selectedPlayerType} 
+        <PlayerTrendModal
+          player={selectedPlayer}
+          playerType={selectedPlayerType}
           tournamentId={selectedTournament.id}
-          theme={theme} 
-          onClose={closePlayerModal} 
+          theme={theme}
+          onClose={closePlayerModal}
         />
+      )}
+      {hoveredCard && ReactDOM.createPortal(
+        <PlayerRatingCard
+          card={hoveredCard}
+          position={hoverPosition}
+          theme={theme}
+          isPitcher={hoverType === 'pitching'}
+        />,
+        document.body
       )}
     </Layout>
   );
@@ -1748,6 +1808,93 @@ function InfoPage() {
   const [editContent, setEditContent] = useState({ title: '', sections: [] });
   const [notification, setNotification] = useState(null);
   const [isRebuilding, setIsRebuilding] = useState(false);
+  const [cardUploadStatus, setCardUploadStatus] = useState('');
+  const [isUploadingCards, setIsUploadingCards] = useState(false);
+  const [cardCount, setCardCount] = useState(null);
+  const cardFileRef = React.useRef(null);
+
+  // Check card count on mount
+  useEffect(() => {
+    supabase.from('pt_cards').select('id', { count: 'exact', head: true }).then(({ count }) => {
+      if (count !== null) setCardCount(count);
+    });
+  }, []);
+
+  const handleCardUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCards(true);
+    setCardUploadStatus('Parsing CSV...');
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        let csvText = ev.target.result;
+        // Strip // prefix from header row if present
+        if (csvText.startsWith('//')) csvText = csvText.substring(2);
+        const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+        if (parsed.errors.length > 5) { setCardUploadStatus('Too many parse errors'); setIsUploadingCards(false); return; }
+
+        const colMap = {
+          'Card Title': 'card_title', 'LastName': 'last_name', 'FirstName': 'first_name',
+          'Position': 'position', 'Bats': 'bats', 'Throws': 'throws', 'Pitcher Role': 'pitcher_role',
+          'Contact': 'contact_overall', 'Contact vL': 'contact_vl', 'Contact vR': 'contact_vr',
+          'Gap': 'gap_overall', 'Gap vL': 'gap_vl', 'Gap vR': 'gap_vr',
+          'Power': 'power_overall', 'Power vL': 'power_vl', 'Power vR': 'power_vr',
+          'Eye': 'eye_overall', 'Eye vL': 'eye_vl', 'Eye vR': 'eye_vr',
+          'Avoid Ks': 'avoid_ks_overall', 'Avoid K vL': 'avoid_ks_vl', 'Avoid K vR': 'avoid_ks_vr',
+          'BABIP': 'babip_bat_overall', 'BABIP vL': 'babip_bat_vl', 'BABIP vR': 'babip_bat_vr',
+          'Stuff': 'stuff_overall', 'Stuff vL': 'stuff_vl', 'Stuff vR': 'stuff_vr',
+          'Movement': 'movement_overall', 'Movement vL': 'movement_vl', 'Movement vR': 'movement_vr',
+          'Control': 'control_overall', 'Control vL': 'control_vl', 'Control vR': 'control_vr',
+          'pHR': 'p_hr_overall', 'pHR vL': 'p_hr_vl', 'pHR vR': 'p_hr_vr',
+          'pBABIP': 'p_babip_overall', 'pBABIP vL': 'p_babip_vl', 'pBABIP vR': 'p_babip_vr',
+          'Fastball': 'fastball', 'Slider': 'slider', 'Curveball': 'curveball', 'Changeup': 'changeup',
+          'Cutter': 'cutter', 'Sinker': 'sinker', 'Splitter': 'splitter', 'Forkball': 'forkball',
+          'Screwball': 'screwball', 'Circlechange': 'circlechange', 'Knucklecurve': 'knucklecurve',
+          'Knuckleball': 'knuckleball', 'Stamina': 'stamina', 'Velocity': 'velocity',
+          'Speed': 'speed', 'Steal Rate': 'steal_rate', 'Stealing': 'stealing', 'Baserunning': 'baserunning',
+          'Infield Range': 'if_range', 'Infield Error': 'if_error', 'Infield Arm': 'if_arm', 'DP': 'dp',
+          'CatcherAbil': 'c_ability', 'Catcher Arm': 'c_arm',
+          'OF Range': 'of_range', 'OF Error': 'of_error', 'OF Arm': 'of_arm',
+          'Pos Rating P': 'pos_p', 'Pos Rating C': 'pos_c', 'Pos Rating 1B': 'pos_1b',
+          'Pos Rating 2B': 'pos_2b', 'Pos Rating 3B': 'pos_3b', 'Pos Rating SS': 'pos_ss',
+          'Pos Rating LF': 'pos_lf', 'Pos Rating CF': 'pos_cf', 'Pos Rating RF': 'pos_rf',
+        };
+
+        const rows = parsed.data.map(row => {
+          const mapped = {};
+          for (const [csvCol, dbCol] of Object.entries(colMap)) {
+            const val = row[csvCol];
+            if (dbCol === 'card_title' || dbCol === 'last_name' || dbCol === 'first_name' || dbCol === 'pitcher_role' || dbCol === 'velocity') {
+              mapped[dbCol] = val || null;
+            } else {
+              mapped[dbCol] = parseInt(val) || 0;
+            }
+          }
+          return mapped;
+        }).filter(r => r.last_name);
+
+        // Clear existing and insert in batches
+        setCardUploadStatus(`Clearing old data...`);
+        await supabase.from('pt_cards').delete().neq('id', 0);
+
+        const batchSize = 200;
+        for (let i = 0; i < rows.length; i += batchSize) {
+          const batch = rows.slice(i, i + batchSize);
+          setCardUploadStatus(`Uploading ${i + batch.length} / ${rows.length}...`);
+          const { error } = await supabase.from('pt_cards').insert(batch);
+          if (error) { setCardUploadStatus(`Error at batch ${i}: ${error.message}`); setIsUploadingCards(false); return; }
+        }
+        setCardUploadStatus(`Done! Uploaded ${rows.length} cards.`);
+        setCardCount(rows.length);
+      } catch (err) {
+        setCardUploadStatus(`Error: ${err.message}`);
+      }
+      setIsUploadingCards(false);
+    };
+    reader.readAsText(file);
+    if (cardFileRef.current) cardFileRef.current.value = '';
+  };
 
   useEffect(() => { loadContent(); }, []);
   const loadContent = async () => { setIsLoading(true); try { const { data } = await supabase.from('site_content').select('*').eq('id', 'info').single(); if (data?.content) setContent(data.content); } catch (e) {} setIsLoading(false); };
@@ -2001,16 +2148,36 @@ function InfoPage() {
         <div style={styles.adminLoginSection}>
           <h3 style={styles.adminLoginTitle}>🔐 Admin Access</h3>
           {hasAccess('master') ? (
-            <div style={styles.adminLoginStatus}>
-              <span style={styles.adminLoginBadge}>✓ Logged in as Admin</span>
-              <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
-              <button 
-                onClick={() => requestAuth(rebuildAllStats, 'master')} 
-                disabled={isRebuilding}
-                style={{...styles.adminLogoutBtn, background: '#f59e0b', marginLeft: 8}}
-              >
-                {isRebuilding ? 'Rebuilding...' : '🔧 Rebuild All Stats'}
-              </button>
+            <div>
+              <div style={styles.adminLoginStatus}>
+                <span style={styles.adminLoginBadge}>✓ Logged in as Admin</span>
+                <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
+                <button
+                  onClick={() => requestAuth(rebuildAllStats, 'master')}
+                  disabled={isRebuilding}
+                  style={{...styles.adminLogoutBtn, background: '#f59e0b', marginLeft: 8}}
+                >
+                  {isRebuilding ? 'Rebuilding...' : '🔧 Rebuild All Stats'}
+                </button>
+              </div>
+              {/* Card Data Upload */}
+              <div style={{ marginTop: 16, padding: 16, background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>Player Rating Cards</span>
+                  {cardCount !== null && <span style={{ fontSize: 12, color: theme.textMuted }}>{cardCount} cards loaded</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="file" accept=".csv" ref={cardFileRef} onChange={handleCardUpload} style={{ display: 'none' }} />
+                  <button
+                    onClick={() => cardFileRef.current?.click()}
+                    disabled={isUploadingCards}
+                    style={{ padding: '8px 16px', background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, cursor: isUploadingCards ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13 }}
+                  >
+                    {isUploadingCards ? 'Uploading...' : 'Upload pt_card_list.csv'}
+                  </button>
+                </div>
+                {cardUploadStatus && <div style={{ marginTop: 8, fontSize: 12, color: cardUploadStatus.startsWith('Error') ? theme.danger : theme.success }}>{cardUploadStatus}</div>}
+              </div>
             </div>
           ) : hasAccess('upload') ? (
             <div style={styles.adminLoginStatus}>
@@ -2697,7 +2864,257 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
   );
 }
 
-function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick }) {
+// ============ Player Rating Card Utilities ============
+
+const RATING_COLORS = [
+  { max: 39, color: '#ef4444', label: 'Poor' },
+  { max: 79, color: '#f97316', label: 'Below Avg' },
+  { max: 119, color: '#eab308', label: 'Average' },
+  { max: 149, color: '#22c55e', label: 'Above Avg' },
+  { max: 179, color: '#3b82f6', label: 'Great' },
+  { max: 200, color: '#06b6d4', label: 'Elite' },
+];
+
+const getRatingColor = (val) => {
+  const v = parseInt(val) || 0;
+  for (const tier of RATING_COLORS) { if (v <= tier.max) return tier.color; }
+  return '#06b6d4';
+};
+
+const POSITION_NAMES = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
+const BATS_MAP = { 1: 'R', 2: 'L', 3: 'S' };
+const THROWS_MAP = { 1: 'R', 2: 'L' };
+
+function findCardMatch(playerName, playerType, cardData) {
+  if (!playerName || !cardData || cardData.length === 0) return null;
+  const name = playerName.trim();
+  // Stat table format is "First Last" or "Last, First"
+  let searchFirst = '', searchLast = '';
+  if (name.includes(',')) {
+    const parts = name.split(',').map(s => s.trim());
+    searchLast = parts[0]; searchFirst = parts[1] || '';
+  } else {
+    const parts = name.split(' ');
+    searchFirst = parts[0] || '';
+    searchLast = parts.slice(1).join(' ');
+  }
+  const normalise = s => (s || '').toLowerCase().trim();
+  const nFirst = normalise(searchFirst), nLast = normalise(searchLast);
+
+  // Exact match
+  let matches = cardData.filter(c => normalise(c.last_name) === nLast && normalise(c.first_name) === nFirst);
+  // If no match try partial last name
+  if (matches.length === 0) {
+    matches = cardData.filter(c => normalise(c.last_name) === nLast);
+  }
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0];
+  // Disambiguate: pitchers have position=1, batters != 1
+  if (playerType === 'pitching') {
+    const pitchers = matches.filter(c => parseInt(c.position) === 1);
+    if (pitchers.length > 0) return pitchers[0];
+  } else {
+    const batters = matches.filter(c => parseInt(c.position) !== 1);
+    if (batters.length > 0) return batters[0];
+  }
+  return matches[0];
+}
+
+// ============ PlayerRatingCard Component ============
+
+function RatingBar({ label, value, maxVal = 200 }) {
+  const v = parseInt(value) || 0;
+  const pct = Math.min(100, (v / maxVal) * 100);
+  const color = getRatingColor(v);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+      <span style={{ width: 70, fontSize: 11, color: '#cbd5e1', textAlign: 'right', flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, height: 10, background: '#1e293b', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
+      </div>
+      <span style={{ width: 28, fontSize: 11, fontWeight: 600, color, textAlign: 'right', flexShrink: 0 }}>{v}</span>
+    </div>
+  );
+}
+
+function SplitsGrid({ label, ovr, vl, vr }) {
+  const Cell = ({ val }) => {
+    const v = parseInt(val) || 0;
+    return <span style={{ color: getRatingColor(v), fontWeight: 600, fontSize: 11, width: 30, textAlign: 'center' }}>{v}</span>;
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 1 }}>
+      <span style={{ width: 70, fontSize: 10, color: '#94a3b8', textAlign: 'right' }}>{label}</span>
+      <Cell val={ovr} /><Cell val={vl} /><Cell val={vr} />
+    </div>
+  );
+}
+
+function PlayerRatingCard({ card, position, theme, isPitcher }) {
+  if (!card) return null;
+  const posName = POSITION_NAMES[parseInt(card.position)] || '?';
+  const bats = BATS_MAP[parseInt(card.bats)] || '?';
+  const throws = THROWS_MAP[parseInt(card.throws)] || '?';
+  const hasPitches = isPitcher || parseInt(card.position) === 1;
+
+  const pitchList = [
+    { name: 'FB', val: card.fastball }, { name: 'SL', val: card.slider },
+    { name: 'CB', val: card.curveball }, { name: 'CH', val: card.changeup },
+    { name: 'CUT', val: card.cutter }, { name: 'SNK', val: card.sinker },
+    { name: 'SPL', val: card.splitter }, { name: 'FK', val: card.forkball },
+    { name: 'SCR', val: card.screwball }, { name: 'CC', val: card.circlechange },
+    { name: 'KC', val: card.knucklecurve }, { name: 'KN', val: card.knuckleball },
+  ].filter(p => parseInt(p.val) > 0);
+
+  const posRatings = [
+    { pos: 'P', val: card.pos_p }, { pos: 'C', val: card.pos_c },
+    { pos: '1B', val: card.pos_1b }, { pos: '2B', val: card.pos_2b },
+    { pos: '3B', val: card.pos_3b }, { pos: 'SS', val: card.pos_ss },
+    { pos: 'LF', val: card.pos_lf }, { pos: 'CF', val: card.pos_cf },
+    { pos: 'RF', val: card.pos_rf },
+  ].filter(p => parseInt(p.val) > 0);
+
+  const cardTitle = card.card_title || `${card.first_name} ${card.last_name}`;
+
+  return (
+    <div style={{
+      position: 'fixed', top: position.top, left: position.left,
+      width: 320, background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 99999, pointerEvents: 'none',
+      fontFamily: "'Inter', sans-serif", overflow: 'hidden'
+    }}>
+      {/* Header */}
+      <div style={{
+        background: `linear-gradient(135deg, ${theme.accent || '#3b82f6'}, ${adjustColor(theme.accent || '#3b82f6', -40)})`,
+        padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{cardTitle}</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>
+          {posName} | B:{bats} T:{throws}
+        </div>
+      </div>
+
+      <div style={{ padding: '8px 12px', maxHeight: 420, overflowY: 'auto' }}>
+        {/* Batting / Pitching section */}
+        {hasPitches ? (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Pitching</div>
+            <RatingBar label="Stuff" value={card.stuff_overall} />
+            <RatingBar label="Movement" value={card.movement_overall} />
+            <RatingBar label="Control" value={card.control_overall} />
+            <RatingBar label="HR/9" value={card.p_hr_overall} />
+            <RatingBar label="BABIP" value={card.p_babip_overall} />
+
+            {/* Pitching Splits */}
+            <div style={{ margin: '6px 0 4px', borderTop: '1px solid #1e293b', paddingTop: 4 }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 2, paddingLeft: 74 }}>
+                <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>OVR</span>
+                <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>vL</span>
+                <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>vR</span>
+              </div>
+              <SplitsGrid label="Stuff" ovr={card.stuff_overall} vl={card.stuff_vl} vr={card.stuff_vr} />
+              <SplitsGrid label="Movement" ovr={card.movement_overall} vl={card.movement_vl} vr={card.movement_vr} />
+              <SplitsGrid label="Control" ovr={card.control_overall} vl={card.control_vl} vr={card.control_vr} />
+            </div>
+
+            {/* Pitches */}
+            {pitchList.length > 0 && (
+              <div style={{ margin: '6px 0 4px', borderTop: '1px solid #1e293b', paddingTop: 4 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Pitches</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
+                  {pitchList.map(p => (
+                    <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#94a3b8', width: 28 }}>{p.name}</span>
+                      <div style={{ flex: 1, height: 7, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.min(100, (parseInt(p.val) / 200) * 100)}%`, height: '100%', background: getRatingColor(p.val), borderRadius: 2 }} />
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: getRatingColor(p.val), width: 24, textAlign: 'right' }}>{parseInt(p.val)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 4, fontSize: 11, color: '#94a3b8' }}>
+                  <span>Velocity: <strong style={{ color: '#e2e8f0' }}>{card.velocity || '—'}</strong></span>
+                  <span>Stamina: <strong style={{ color: getRatingColor(card.stamina) }}>{parseInt(card.stamina) || '—'}</strong></span>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Batting</div>
+            <RatingBar label="Contact" value={card.contact_overall} />
+            <RatingBar label="Gap" value={card.gap_overall} />
+            <RatingBar label="Power" value={card.power_overall} />
+            <RatingBar label="Eye" value={card.eye_overall} />
+            <RatingBar label="Avoid Ks" value={card.avoid_ks_overall} />
+            <RatingBar label="BABIP" value={card.babip_bat_overall} />
+
+            {/* Batting Splits */}
+            <div style={{ margin: '6px 0 4px', borderTop: '1px solid #1e293b', paddingTop: 4 }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 2, paddingLeft: 74 }}>
+                <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>OVR</span>
+                <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>vL</span>
+                <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>vR</span>
+              </div>
+              <SplitsGrid label="Contact" ovr={card.contact_overall} vl={card.contact_vl} vr={card.contact_vr} />
+              <SplitsGrid label="Gap" ovr={card.gap_overall} vl={card.gap_vl} vr={card.gap_vr} />
+              <SplitsGrid label="Power" ovr={card.power_overall} vl={card.power_vl} vr={card.power_vr} />
+              <SplitsGrid label="Eye" ovr={card.eye_overall} vl={card.eye_vl} vr={card.eye_vr} />
+            </div>
+          </>
+        )}
+
+        {/* Running */}
+        <div style={{ margin: '6px 0 4px', borderTop: '1px solid #1e293b', paddingTop: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Running</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
+            {[{ l: 'Speed', v: card.speed }, { l: 'Steal Rate', v: card.steal_rate }, { l: 'Stealing', v: card.stealing }, { l: 'Baserunning', v: card.baserunning }].map(r => (
+              <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: '#94a3b8' }}>{r.l}</span>
+                <span style={{ fontWeight: 600, color: getRatingColor(r.v) }}>{parseInt(r.v) || 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Fielding */}
+        <div style={{ margin: '6px 0 4px', borderTop: '1px solid #1e293b', paddingTop: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Fielding</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
+            {[
+              { l: 'IF Range', v: card.if_range }, { l: 'IF Error', v: card.if_error },
+              { l: 'IF Arm', v: card.if_arm }, { l: 'Turn DP', v: card.dp },
+              { l: 'C Ability', v: card.c_ability }, { l: 'C Arm', v: card.c_arm },
+              { l: 'OF Range', v: card.of_range }, { l: 'OF Error', v: card.of_error },
+              { l: 'OF Arm', v: card.of_arm },
+            ].filter(f => parseInt(f.v) > 0).map(f => (
+              <div key={f.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: '#94a3b8' }}>{f.l}</span>
+                <span style={{ fontWeight: 600, color: getRatingColor(f.v) }}>{parseInt(f.v)}</span>
+              </div>
+            ))}
+          </div>
+          {/* Position ratings */}
+          {posRatings.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {posRatings.map(p => (
+                <span key={p.pos} style={{
+                  padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600,
+                  background: parseInt(p.val) >= 150 ? '#06b6d422' : parseInt(p.val) >= 100 ? '#22c55e22' : '#1e293b',
+                  color: getRatingColor(p.val), border: `1px solid ${getRatingColor(p.val)}33`
+                }}>
+                  {p.pos}: {parseInt(p.val)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick, onPlayerHover, onPlayerHoverEnd }) {
   const styles = getStyles(theme);
   const { isColorblind } = useTheme();
   const SortHeader = ({ field, children, isRate }) => (
@@ -2722,7 +3139,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   </tr></thead><tbody>
     {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
-      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')}>{p.name}</td>
+      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'pitching')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
       <td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.td}>{calcIPperG(p.ip, p.g)}</td>
@@ -2737,7 +3154,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   </tbody></table></div>);
 }
 
-function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick }) {
+function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick, onPlayerHover, onPlayerHoverEnd }) {
   const styles = getStyles(theme);
   const { isColorblind } = useTheme();
   const SortHeader = ({ field, children, isRate }) => (
@@ -2762,7 +3179,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   </tr></thead><tbody>
     {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
-      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
+      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'batting')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def, isColorblind) : theme.textMuted}}>{p.def || '—'}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
