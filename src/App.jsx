@@ -224,6 +224,46 @@ function ThemeProvider({ children }) {
       document.head.appendChild(style);
     }
   }, []);
+
+  // Inject scrollbar styles (theme-reactive)
+  useEffect(() => {
+    const styleId = 'custom-scrollbar-styles';
+    let style = document.getElementById(styleId);
+    if (!style) {
+      style = document.createElement('style');
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+    const track = isDark ? '#0f1117' : '#f1f5f9';
+    const thumb = isDark ? '#2a3348' : '#cbd5e1';
+    const thumbHover = isDark ? '#3a4560' : '#94a3b8';
+    const focusColor = (teamColors[team] || teamColors.default).primary;
+    const focusGlow = isDark ? `0 0 0 2px ${focusColor}50, 0 0 8px ${focusColor}30` : `0 0 0 2px ${focusColor}40, 0 0 6px ${focusColor}20`;
+    style.textContent = `
+      * { scrollbar-width: thin; scrollbar-color: ${thumb} ${track}; }
+      *::-webkit-scrollbar { width: 8px; height: 8px; }
+      *::-webkit-scrollbar-track { background: ${track}; }
+      *::-webkit-scrollbar-thumb { background: ${thumb}; border-radius: 4px; }
+      *::-webkit-scrollbar-thumb:hover { background: ${thumbHover}; }
+      *::-webkit-scrollbar-corner { background: ${track}; }
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        box-shadow: ${focusGlow};
+        border-color: ${focusColor} !important;
+      }
+      button:focus-visible {
+        outline: none;
+        box-shadow: ${focusGlow};
+      }
+      .tournament-item:hover {
+        background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'} !important;
+        border-left-color: ${focusColor}80 !important;
+      }
+      tr:hover td {
+        background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
+      }
+    `;
+  }, [isDark, team]);
   
   useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
   useEffect(() => { localStorage.setItem('teamTheme', team); }, [team]);
@@ -1230,7 +1270,7 @@ function StatsPage() {
                 const quality = getDataQuality(getCsvCount(t));
                 const isSelected = selectedTournament?.id === t.id;
                 const isLegacy = t.category === 'legacy';
-                return (<div key={t.id} style={{...styles.tournamentItem, ...(isSelected ? styles.tournamentActive : {})}} onClick={() => renamingTournament !== t.id && selectTournament(t)}>
+                return (<div key={t.id} className="tournament-item" style={{...styles.tournamentItem, ...(isSelected ? styles.tournamentActive : {})}} onClick={() => renamingTournament !== t.id && selectTournament(t)}>
                   <div style={styles.tournamentInfo}>
                     {renamingTournament === t.id ? (
                       <input
@@ -2647,7 +2687,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
     <SortHeader field="eraPlus">ERA+</SortHeader><SortHeader field="fip">FIP</SortHeader><SortHeader field="fipMinus">FIP-</SortHeader><SortHeader field="war">WAR</SortHeader>
     {showPer9 && <SortHeader field="warPer200IP" isRate>WAR/200</SortHeader>}<SortHeader field="siera">SIERA</SortHeader>
   </tr></thead><tbody>
-    {data.map(p => (<tr key={p.id} style={styles.tr}>
+    {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
       <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')}>{p.name}</td>
       <td style={styles.td}>{p.throws}</td>
@@ -2687,7 +2727,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
     <SortHeader field="war">WAR</SortHeader>{showPer9 && <SortHeader field="warPer600PA" isRate>WAR/600</SortHeader>}
     <SortHeader field="sbPct">SB%</SortHeader><SortHeader field="bsr">BsR</SortHeader>{showPer9 && <SortHeader field="bsrPer600PA" isRate>BsR/600</SortHeader>}
   </tr></thead><tbody>
-    {data.map(p => (<tr key={p.id} style={styles.tr}>
+    {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
       <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
@@ -5414,7 +5454,7 @@ function LeaderboardsPage() {
             </thead>
             <tbody>
               {data.slice(0, 50).map((row, idx) => (
-                <tr key={row.id || row.username} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
+                <tr key={row.id || row.username} style={idx < 3 ? {background: `${theme.gold}10`} : (idx % 2 === 1 ? styles.trAlt : {})}>
                   <td style={{...styles.leaderboardTd, ...getRankStyle(row.rank || idx + 1)}}>
                     {getRankEmoji(row.rank || idx + 1)}
                   </td>
@@ -5453,7 +5493,7 @@ function LeaderboardsPage() {
             </thead>
             <tbody>
               {data.map((row, idx) => (
-                <tr key={row.username} style={idx < 3 ? {background: `${theme.gold}10`} : {}}>
+                <tr key={row.username} style={idx < 3 ? {background: `${theme.gold}10`} : (idx % 2 === 1 ? styles.trAlt : {})}>
                   <td style={{...styles.leaderboardTd, ...getRankStyle(idx + 1)}}>
                     {getRankEmoji(idx + 1)}
                   </td>
@@ -8175,20 +8215,20 @@ function getStyles(t) {
     newsBannerCancelBtn: { padding: '8px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
     
     nav: { display: 'flex', gap: 4 },
-    navLink: { padding: '8px 16px', color: t.teamPrimary ? 'rgba(255,255,255,0.8)' : t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
-    navLinkActive: { background: t.teamSecondary || t.accent, color: '#fff' },
+    navLink: { padding: '10px 16px 8px', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, textDecoration: 'none', borderRadius: 0, fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease', borderBottom: '2px solid transparent' },
+    navLinkActive: { color: '#fff', borderBottomColor: t.teamSecondary || t.accent, background: 'rgba(255,255,255,0.08)' },
     themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
     teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none', colorScheme: 'dark' },
-    themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, background: t.teamPrimary ? 'rgba(255,255,255,0.1)' : 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.teamPrimary ? '#ffffff' : t.textMuted },
+    themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, background: t.teamPrimary ? 'rgba(255,255,255,0.1)' : 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.teamPrimary ? '#ffffff' : t.textMuted, transition: 'all 0.15s ease' },
     main: { display: 'flex', maxWidth: 1900, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
     sidebar: { width: 270, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
     sidebarTabs: { display: 'flex', gap: 2, marginBottom: 12 },
-    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
+    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' },
     sidebarTabActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
     sidebarSearch: { width: '100%', padding: '9px 12px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, borderRadius: 4, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
     tournamentList: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflow: 'auto' },
     emptyMsg: { color: t.teamPrimary ? 'rgba(255,255,255,0.6)' : t.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' },
-    tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'transparent', borderRadius: 4, cursor: 'pointer', borderLeft: `3px solid transparent` },
+    tournamentItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'transparent', borderRadius: 4, cursor: 'pointer', borderLeft: `3px solid transparent`, transition: 'all 0.15s ease' },
     tournamentActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.panelBg, borderLeftColor: t.teamSecondary || t.accent },
     tournamentInfo: { display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden', flex: 1 },
     tournamentName: { fontWeight: 500, color: t.teamPrimary ? 'rgba(255,255,255,0.9)' : t.textSecondary, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
@@ -8197,7 +8237,7 @@ function getStyles(t) {
     tournamentActions: { display: 'flex', gap: 4, alignItems: 'center' },
     legacyBtn: { width: 24, height: 24, background: 'transparent', color: t.textDim, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 14, opacity: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     delBtn: { width: 24, height: 24, background: 'transparent', color: t.textDim, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 16, opacity: 0.5 },
-    newTournamentBtn: { marginTop: 10, padding: 10, background: t.panelBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
+    newTournamentBtn: { marginTop: 10, padding: 10, background: t.panelBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12, transition: 'all 0.15s ease' },
     content: { flex: 1, padding: '20px 20px', overflow: 'auto', background: t.mainBg },
     welcome: { textAlign: 'center', padding: '80px 40px' },
     welcomeTitle: { fontSize: 26, color: t.textSecondary, marginBottom: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
@@ -8207,10 +8247,10 @@ function getStyles(t) {
     tournamentTitleMain: { fontSize: 22, color: t.textSecondary, margin: 0, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     handednessContainer: { display: 'flex', gap: 16 },
     handednessGroup: { color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
-    uploadBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12 },
+    uploadBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12, transition: 'all 0.15s ease' },
     tabRow: { marginBottom: 12 },
     tabs: { display: 'flex', gap: 4 },
-    tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
+    tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' },
     tabActive: { background: t.teamPrimary || t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
     tabCount: { marginLeft: 6, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 400 },
     controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 8, borderLeft: `3px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' },
@@ -8218,11 +8258,11 @@ function getStyles(t) {
     controlDivider: { width: 1, height: 24, background: t.border, margin: '0 6px' },
     searchInput: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: '4px 0 0 4px', fontSize: 13, width: 160, outline: 'none' },
     filterSelect: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderLeft: 'none', borderRadius: '0 4px 4px 0', fontSize: 13, cursor: 'pointer', outline: 'none' },
-    controlBtn: { padding: '7px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 },
+    controlBtn: { padding: '7px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s ease' },
     controlBtnActive: { background: t.teamSecondary || t.accent, color: '#fff', borderColor: t.teamSecondary || t.accent },
     controlBtnHighlight: { borderColor: t.teamPrimary || t.accent, color: t.teamPrimary || t.accent },
     filterBadge: { background: t.teamSecondary || t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600 },
-    resetBtn: { padding: '7px 12px', background: 'transparent', color: t.warning, border: `1px solid ${t.warning}40`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500 },
+    resetBtn: { padding: '7px 12px', background: 'transparent', color: t.warning, border: `1px solid ${t.warning}40`, borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500, transition: 'all 0.15s ease' },
     resultsCount: { marginLeft: 'auto', color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
     advancedFilters: { background: t.panelBg, borderRadius: 6, padding: '12px 14px', marginBottom: 12 },
     filterGroup: { display: 'flex', gap: 20 },
@@ -8239,7 +8279,8 @@ function getStyles(t) {
     thRate: { background: t.teamSecondary || t.tableHeaderBg, color: t.teamSecondary ? '#ffffff' : t.gold, fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif" },
     thSorted: { color: t.teamPrimary ? t.teamSecondary || '#ffffff' : t.textPrimary },
     sortIndicator: { marginLeft: 3, fontSize: 10 },
-    tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg },
+    tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg, transition: 'background 0.12s ease' },
+    trAlt: { background: t.teamPrimary ? withAlpha(t.teamPrimary, 0.06) : (t.mainBg === '#0f1117' ? '#121825' : '#f4f7fb') },
     td: { padding: '6px 6px', color: t.textPrimary, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 12 },
     tdName: { padding: '6px 6px', color: t.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 },
     tdOvr: { padding: '6px 6px', textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: 12 },
@@ -8255,10 +8296,10 @@ function getStyles(t) {
     textareaLarge: { width: '100%', padding: '10px 12px', background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 4, color: t.textPrimary, fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace', minHeight: 140, outline: 'none' },
     formBtns: { display: 'flex', gap: 10 },
     newForm: { marginBottom: 12, padding: 12, background: t.panelBg, borderRadius: 6 },
-    saveBtn: { flex: 1, padding: '10px 14px', background: t.teamPrimary || t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    cancelBtn: { flex: 1, padding: '10px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    addBtn: { padding: '8px 14px', background: t.teamSecondary || t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    editBtn: { padding: '8px 14px', background: 'transparent', color: t.teamPrimary || t.textMuted, border: `1px solid ${t.teamPrimary || t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
+    saveBtn: { flex: 1, padding: '10px 14px', background: t.teamPrimary || t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    cancelBtn: { flex: 1, padding: '10px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    addBtn: { padding: '8px 14px', background: t.teamSecondary || t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    editBtn: { padding: '8px 14px', background: 'transparent', color: t.teamPrimary || t.textMuted, border: `1px solid ${t.teamPrimary || t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13, transition: 'all 0.15s ease' },
     pageContent: { flex: 1, padding: '24px 28px', maxWidth: 900, margin: '0 auto' },
     pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${t.teamPrimary || t.border}` },
     pageTitle: { margin: 0, fontSize: 26, color: t.teamPrimary || t.textPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
@@ -8272,11 +8313,11 @@ function getStyles(t) {
     adminLoginTitle: { margin: '0 0 16px', fontSize: 17, fontWeight: 700, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     adminLoginStatus: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
     adminLoginBadge: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: t.success, color: '#fff', borderRadius: 4, fontSize: 13, fontWeight: 600 },
-    adminLogoutBtn: { padding: '6px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
-    adminUpgradeBtn: { padding: '6px 14px', background: t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    adminLogoutBtn: { padding: '6px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s ease' },
+    adminUpgradeBtn: { padding: '6px 14px', background: t.accent, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s ease' },
     adminLoginPrompt: { display: 'flex', flexDirection: 'column', gap: 12 },
     adminLoginText: { margin: 0, color: t.textMuted, fontSize: 14 },
-    adminLoginBtn: { padding: '10px 20px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: 'fit-content' },
+    adminLoginBtn: { padding: '10px 20px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: 'fit-content', transition: 'all 0.15s ease' },
     
     editContainer: { display: 'flex', flexDirection: 'column', gap: 14 },
     editField: { display: 'flex', flexDirection: 'column', gap: 8 },
@@ -8375,7 +8416,7 @@ function getStyles(t) {
     dateBtnUploaded: { background: `${t.success}22`, borderColor: t.success },
     dateBtnDay: { display: 'block', fontSize: 14, fontWeight: 600, color: t.textPrimary },
     dateBtnLabel: { display: 'block', fontSize: 10, color: t.textMuted, marginTop: 2 },
-    submitBtn: { padding: '14px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'all 0.2s' },
+    submitBtn: { padding: '14px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, transition: 'all 0.15s ease' },
     submitBtnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
     submitResult: { textAlign: 'center', padding: '32px 24px', background: t.panelBg, borderRadius: 12, border: `2px solid ${t.success}` },
     submitResultIcon: { fontSize: 48, marginBottom: 12 },
@@ -8407,7 +8448,7 @@ function getStyles(t) {
     reviewContainer: { maxWidth: 1000, margin: '0 auto' },
     reviewTitle: { fontSize: 26, fontWeight: 700, color: t.textPrimary, marginBottom: 20, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     reviewTabs: { display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
-    reviewTab: { padding: '10px 16px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
+    reviewTab: { padding: '10px 16px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' },
     reviewTabActive: { background: t.panelBg, color: t.textPrimary },
     reviewTabBadge: { background: t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
     reviewList: { display: 'flex', flexDirection: 'column', gap: 16 },
@@ -8427,9 +8468,9 @@ function getStyles(t) {
     removedRow: { fontSize: 12, color: t.textSecondary, padding: '4px 0', borderBottom: `1px solid ${t.border}` },
     reviewCardActions: { display: 'flex', gap: 8, padding: 16, borderTop: `1px solid ${t.border}`, flexWrap: 'wrap', alignItems: 'center' },
     reviewSelect: { flex: 1, minWidth: 150, padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
-    approveBtn: { padding: '8px 16px', background: t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    rejectBtn: { padding: '8px 12px', background: t.error, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-    previewBtn: { padding: '8px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
+    approveBtn: { padding: '8px 16px', background: t.success, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    rejectBtn: { padding: '8px 12px', background: t.error, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease' },
+    previewBtn: { padding: '8px 12px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s ease' },
     newEventBtn: { padding: '8px 12px', background: 'transparent', color: t.accent, border: `1px solid ${t.accent}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
     newEventForm: { display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%', alignItems: 'center' },
     newEventInput: { flex: 1, minWidth: 150, padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, color: t.textPrimary, fontSize: 13 },
@@ -8451,7 +8492,7 @@ function getStyles(t) {
     leaderboardTitle: { fontSize: 30, fontWeight: 700, color: t.textPrimary, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     leaderboardSubtitle: { fontSize: 13, color: t.textMuted, marginBottom: 24 },
     leaderboardTabs: { display: 'flex', gap: 4, marginBottom: 24, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
-    leaderboardTab: { padding: '10px 20px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
+    leaderboardTab: { padding: '10px 20px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s ease', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     leaderboardTabActive: { background: t.accent, color: '#fff' },
     leaderboardSection: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' },
     leaderboardSideBySide: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 },
@@ -8471,7 +8512,7 @@ function getStyles(t) {
     // Articles Page
     addArticleForm: { background: t.cardBg, padding: 20, borderRadius: 12, marginBottom: 24, border: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: 12 },
     articleGrid: { display: 'flex', flexDirection: 'column', gap: 12 },
-    articleCard: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.15s' },
+    articleCard: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.15s ease' },
     articleCardContent: { display: 'flex', alignItems: 'center', gap: 16, flex: 1, cursor: 'pointer' },
     articleIcon: { fontSize: 32, width: 50, height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: t.panelBg, borderRadius: 8 },
     articleInfo: { flex: 1 },
@@ -8479,8 +8520,8 @@ function getStyles(t) {
     articleDescription: { margin: '6px 0 0', fontSize: 13, color: t.textMuted, lineHeight: 1.4 },
     articleDate: { fontSize: 12, color: t.textDim },
     articleActions: { display: 'flex', alignItems: 'center', gap: 8 },
-    articleDownloadBtn: { padding: '6px 12px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', textDecoration: 'none' },
-    articleRemoveBtn: { padding: '6px 10px', background: 'transparent', color: t.error, border: `1px solid ${t.error}`, borderRadius: 6, fontSize: 12, cursor: 'pointer' },
+    articleDownloadBtn: { padding: '6px 12px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', textDecoration: 'none', transition: 'all 0.15s ease' },
+    articleRemoveBtn: { padding: '6px 10px', background: 'transparent', color: t.error, border: `1px solid ${t.error}`, borderRadius: 6, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s ease' },
     articleViewerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     articleViewerContainer: { width: '90%', height: '90%', maxWidth: 1200, background: t.cardBg, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
     articleViewerHeader: { padding: '12px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -8490,6 +8531,6 @@ function getStyles(t) {
     lockIcon: { fontSize: 48, marginBottom: 16 },
     lockedTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, margin: '0 0 8px', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase' },
     lockedText: { fontSize: 14, color: t.textMuted, margin: '0 0 20px' },
-    unlockBtn: { padding: '10px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+    unlockBtn: { padding: '10px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s ease' },
   };
 }
