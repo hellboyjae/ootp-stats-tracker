@@ -1843,10 +1843,10 @@ function InfoPage() {
         let csvText = ev.target.result;
         // Strip // prefix from header row if present
         if (csvText.startsWith('//')) csvText = csvText.substring(2);
-        // Remove trailing commas from each line (this CSV has them)
-        csvText = csvText.replace(/,\s*$/gm, '');
+        // Normalize line endings to \n, then strip trailing commas per line
+        csvText = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        csvText = csvText.split('\n').map(line => line.replace(/,+$/, '')).join('\n');
         const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-        // Only block on critical errors (not "TooFewFields" from trailing commas)
         const criticalErrors = parsed.errors.filter(e => e.type !== 'FieldMismatch');
         if (criticalErrors.length > 5) { setCardUploadStatus(`Too many parse errors (${criticalErrors.length})`); setIsUploadingCards(false); return; }
 
