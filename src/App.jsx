@@ -3088,10 +3088,23 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
 
   const parseIPVal = (ip) => { const str = String(ip || 0); if (str.includes('.')) { const [w, f] = str.split('.'); return parseFloat(w) + (parseFloat(f) / 3); } return parseFloat(ip) || 0; };
 
+  // Tier assignment: Bronze + Iron merged into "Bronze+"
+  const getTierBucket = (ovr) => {
+    const v = parseInt(ovr) || 0;
+    if (v >= 100) return 'perfect';
+    if (v >= 90) return 'diamond';
+    if (v >= 80) return 'gold';
+    if (v >= 70) return 'silver';
+    return 'bronze+'; // Bronze + Iron merged
+  };
+
+  const TIER_LABELS = { 'perfect': 'Perfect', 'diamond': 'Diamond', 'gold': 'Gold', 'silver': 'Silver', 'bronze+': 'Bronze+' };
+  const TIER_ORDER = ['perfect', 'diamond', 'gold', 'silver', 'bronze+'];
+
   const results = React.useMemo(() => {
     const players = mode === 'batting' ? (battingData || []) : (pitchingData || []);
     const attrs = mode === 'batting' ? BATTING_ATTRS : PITCHING_ATTRS;
-    const minQual = mode === 'batting' ? 300 : 100; // 300 AB or 100 IP
+    const minQual = mode === 'batting' ? 300 : 100;
 
     // Filter to qualified players with card matches
     const qualified = [];
@@ -3100,51 +3113,139 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
       if (sample < minQual) continue;
       const card = findCardMatch(p.name, mode === 'batting' ? 'batting' : 'pitching', cardData);
       if (!card) continue;
-      const perfStat = mode === 'batting' ? (parseFloat(p.opsPlus) || 0) : (parseFloat(p.eraPlus) || 0);
-      if (perfStat === 0) continue;
-      qualified.push({ player: p, card, perfStat });
+      if (mode === 'batting') {
+        const opsPlus = parseFloat(p.opsPlus) || 0;
+        if (opsPlus === 0) continue;
+        qualified.push({ player: p, card, tier: getTierBucket(p.ovr), perfStats: { opsPlus } });
+      } else {
+        const era = parseFloat(p.era);
+        const fipMinus = parseFloat(p.fipMinus);
+        const siera = parseFloat(p.siera);
+        if (isNaN(era) && isNaN(fipMinus) && isNaN(siera)) continue;
+        qualified.push({ player: p, card, tier: getTierBucket(p.ovr), perfStats: { era, fipMinus, siera } });
+      }
     }
 
-    // Compute Spearman rho for each attribute
+    // Group by tier
+    const tierGroups = {};
+    for (const q of qualified) {
+      if (!tierGroups[q.tier]) tierGroups[q.tier] = [];
+      tierGroups[q.tier].push(q);
+    }
+
+    // Track tier sample sizes
+    const tierInfo = TIER_ORDER.map(t => ({ key: t, label: TIER_LABELS[t], count: (tierGroups[t] || []).length, usable: (tierGroups[t] || []).length >= 20 }));
+
+    // Compute within-tier correlations, then aggregate
     const correlations = attrs.map(attr => {
-      const xs = [];
-      const ys = [];
-      for (const q of qualified) {
-        const attrVal = parseFloat(q.card[attr.key]);
-        if (isNaN(attrVal)) continue;
-        xs.push(attrVal);
-        ys.push(q.perfStat);
+      const tierRhos = [];
+      const tierDetails = [];
+
+      for (const tierKey of TIER_ORDER) {
+        const group = tierGroups[tierKey];
+        if (!group || group.length < 3) continue; // Need at least 3 for any correlation
+
+        if (mode === 'batting') {
+          // Single measure: OPS+ (higher = better, positive rho = helps)
+          const xs = [], ys = [];
+          for (const q of group) {
+            const attrVal = parseFloat(q.card[attr.key]);
+            if (isNaN(attrVal)) continue;
+            xs.push(attrVal);
+            ys.push(q.perfStats.opsPlus);
+          }
+          if (xs.length >= 3) {
+            const result = spearmanRho(xs, ys);
+            tierRhos.push(result.rho);
+            tierDetails.push({ tier: tierKey, rho: result.rho, pValue: result.pValue, n: result.n, lowSample: group.length < 20 });
+          }
+        } else {
+          // Three measures: ERA, FIP-, SIERA (all lower = better, negative rho = helps)
+          const measures = [
+            { key: 'era', getter: q => q.perfStats.era },
+            { key: 'fipMinus', getter: q => q.perfStats.fipMinus },
+            { key: 'siera', getter: q => q.perfStats.siera },
+          ];
+          const measureRhos = [];
+          for (const m of measures) {
+            const xs = [], ys = [];
+            for (const q of group) {
+              const attrVal = parseFloat(q.card[attr.key]);
+              const perfVal = m.getter(q);
+              if (isNaN(attrVal) || isNaN(perfVal)) continue;
+              xs.push(attrVal);
+              ys.push(perfVal);
+            }
+            if (xs.length >= 3) {
+              const result = spearmanRho(xs, ys);
+              measureRhos.push(result.rho);
+            }
+          }
+          if (measureRhos.length > 0) {
+            const avgMeasureRho = measureRhos.reduce((s, r) => s + r, 0) / measureRhos.length;
+            tierRhos.push(avgMeasureRho);
+            // For tier detail, compute combined p from one representative
+            const xs = [], ys = [];
+            for (const q of group) {
+              const attrVal = parseFloat(q.card[attr.key]);
+              if (isNaN(attrVal)) continue;
+              // Use ERA as representative for p-value
+              const perfVal = q.perfStats.era;
+              if (isNaN(perfVal)) continue;
+              xs.push(attrVal);
+              ys.push(perfVal);
+            }
+            const repResult = xs.length >= 3 ? spearmanRho(xs, ys) : { rho: 0, pValue: 1, n: 0 };
+            tierDetails.push({ tier: tierKey, rho: avgMeasureRho, pValue: repResult.pValue, n: group.length, lowSample: group.length < 20 });
+          }
+        }
       }
-      const result = spearmanRho(xs, ys);
-      return { ...attr, rho: result.rho, pValue: result.pValue, n: result.n };
+
+      // Average rho across tiers
+      const avgRho = tierRhos.length > 0 ? tierRhos.reduce((s, r) => s + r, 0) / tierRhos.length : 0;
+      // Average p-value across tiers for significance display
+      const avgPValue = tierDetails.length > 0 ? tierDetails.reduce((s, d) => s + d.pValue, 0) / tierDetails.length : 1;
+      const totalN = tierDetails.reduce((s, d) => s + d.n, 0);
+
+      return { ...attr, rho: avgRho, pValue: avgPValue, n: totalN, tierCount: tierRhos.length, tierDetails };
     });
 
-    // Sort by absolute rho descending
-    correlations.sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
+    // For batters: positive rho = helps, sort by rho descending (most helpful first)
+    // For pitchers: negative rho = helps (lower ERA/FIP-/SIERA is better), sort by rho ascending (most negative first)
+    if (mode === 'batting') {
+      correlations.sort((a, b) => b.rho - a.rho);
+    } else {
+      correlations.sort((a, b) => a.rho - b.rho);
+    }
 
     // Assign priority ranks
     let rank = 1;
     for (const c of correlations) {
-      if (c.rho > 0.05 && c.pValue < 0.05) {
+      const helps = mode === 'batting' ? (c.rho > 0.05) : (c.rho < -0.05);
+      const hurts = mode === 'batting' ? (c.rho < -0.05) : (c.rho > 0.05);
+      if (helps) {
         c.priority = `#${rank}`;
         rank++;
-      } else if (c.rho < -0.05) {
-        c.priority = c.pValue < 0.05 ? 'Inverted' : 'Weak';
+      } else if (hurts) {
+        c.priority = 'Inverted';
       } else {
         c.priority = 'Negligible';
       }
     }
 
-    return { correlations, qualifiedCount: qualified.length, totalCount: players.length };
+    return { correlations, qualifiedCount: qualified.length, totalCount: players.length, tierInfo };
   }, [mode, battingData, pitchingData, cardData]);
 
-  const rhoColor = (rho, pValue) => {
-    if (pValue >= 0.05) return theme.textMuted;
-    const a = Math.abs(rho);
-    if (rho < 0) return '#ef4444';
-    if (a >= 0.5) return '#22c55e';
-    if (a >= 0.3) return '#3b82f6';
-    if (a >= 0.15) return '#eab308';
+  // For display: "effective rho" — for pitchers we negate so positive = helps (intuitive display)
+  const displayRho = (rho) => mode === 'pitching' ? -rho : rho;
+
+  const rhoColor = (rho) => {
+    const effective = Math.abs(rho);
+    const helps = mode === 'batting' ? (rho > 0) : (rho < 0);
+    if (!helps && effective > 0.05) return '#ef4444'; // Inverted
+    if (effective >= 0.5) return '#22c55e';
+    if (effective >= 0.3) return '#3b82f6';
+    if (effective >= 0.15) return '#eab308';
     return theme.textMuted;
   };
 
@@ -3155,6 +3256,17 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
     if (a >= 0.3) return 'Moderate';
     if (a >= 0.15) return 'Weak';
     return 'Very Weak';
+  };
+
+  // Strength indicator: strong=green checkmark, moderate=blue +, weak=yellow ~, not sig=red X
+  const strengthIndicator = (rho) => {
+    const a = Math.abs(rho);
+    const helps = mode === 'batting' ? (rho > 0) : (rho < 0);
+    if (!helps && a > 0.05) return { symbol: '\u2717', color: '#ef4444', title: 'Inverted — hurts performance' };
+    if (a >= 0.5) return { symbol: '\u2713', color: '#22c55e', title: 'Strong correlation' };
+    if (a >= 0.3) return { symbol: '+', color: '#3b82f6', title: 'Moderate correlation' };
+    if (a >= 0.15) return { symbol: '~', color: '#eab308', title: 'Weak correlation' };
+    return { symbol: '\u2717', color: '#ef4444', title: 'Not significant' };
   };
 
   const priorityBadgeStyle = (priority) => {
@@ -3172,7 +3284,7 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
   const btnActive = { background: theme.teamPrimary || theme.panelBg, color: theme.teamPrimary ? '#ffffff' : theme.textPrimary, borderColor: theme.teamPrimary || theme.border };
   const btnInactive = { background: 'transparent', color: theme.textMuted };
 
-  const lowSample = results.qualifiedCount < 20;
+  const anyLowTier = results.tierInfo.some(t => t.count > 0 && !t.usable);
 
   return (
     <div style={{ padding: '16px 0' }}>
@@ -3180,12 +3292,12 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
       <div style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 4px', color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stat Priority Analysis</h3>
         <p style={{ margin: 0, color: theme.textMuted, fontSize: 12, lineHeight: 1.5 }}>
-          Which card attributes actually matter in this pool? Ranked by how strongly each attribute correlates with in-game performance using Spearman's Rho.
+          Which card attributes actually matter in this pool? Correlations are computed within each OVR tier to isolate attribute impact from card quality, then averaged across tiers.
         </p>
       </div>
 
       {/* Mode toggle */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <button style={{...btnBase, ...(mode === 'batting' ? btnActive : btnInactive)}} onClick={() => setMode('batting')}>Batting</button>
         <button style={{...btnBase, ...(mode === 'pitching' ? btnActive : btnInactive)}} onClick={() => setMode('pitching')}>Pitching</button>
         <div style={{ marginLeft: 12, color: theme.textMuted, fontSize: 12 }}>
@@ -3194,11 +3306,22 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
         </div>
       </div>
 
-      {/* Low sample warning */}
-      {lowSample && (
-        <div style={{ background: '#eab30822', border: '1px solid #eab30844', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#eab308', fontSize: 12, lineHeight: 1.5 }}>
-          Low sample size ({results.qualifiedCount} qualified players). Results may not be reliable — need at least 20 qualified players for meaningful analysis.
-        </div>
+      {/* Tier breakdown */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ color: theme.textMuted, fontSize: 11 }}>Tier samples:</span>
+        {results.tierInfo.map(t => (
+          <span key={t.key} style={{
+            padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+            background: t.count === 0 ? 'transparent' : t.usable ? theme.cardBg : '#eab30811',
+            border: `1px solid ${t.count === 0 ? theme.border + '44' : t.usable ? theme.border : '#eab30844'}`,
+            color: t.count === 0 ? theme.textMuted + '66' : t.usable ? theme.textMuted : '#eab308'
+          }}>
+            {t.label}: {t.count}{!t.usable && t.count > 0 ? '*' : ''}
+          </span>
+        ))}
+      </div>
+      {anyLowTier && (
+        <div style={{ color: '#eab308', fontSize: 11, marginBottom: 12 }}>* Tier has fewer than 20 qualified players — results may be less reliable</div>
       )}
 
       {/* No data */}
@@ -3210,65 +3333,68 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
         <>
           {/* Priority ranking cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {results.correlations.map((c, idx) => (
-              <div key={c.key} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8,
-                borderLeft: `4px solid ${rhoColor(c.rho, c.pValue)}`
-              }}>
-                {/* Priority badge */}
-                <div style={{
-                  padding: '4px 10px', borderRadius: 6, fontSize: 12, minWidth: 50, textAlign: 'center',
-                  ...priorityBadgeStyle(c.priority)
+            {results.correlations.map((c) => {
+              const indicator = strengthIndicator(c.rho);
+              const effRho = displayRho(c.rho);
+              return (
+                <div key={c.key} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                  background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8,
+                  borderLeft: `4px solid ${rhoColor(c.rho)}`
                 }}>
-                  {c.priority}
-                </div>
-
-                {/* Attribute name + description */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: theme.textPrimary, fontWeight: 700, fontSize: 14, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>{c.label}</div>
-                  <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>{c.desc}</div>
-                </div>
-
-                {/* Rho value + strength */}
-                <div style={{ textAlign: 'right', minWidth: 100 }}>
-                  <div style={{ color: rhoColor(c.rho, c.pValue), fontWeight: 700, fontSize: 18, fontFamily: "'Oswald', 'Inter', sans-serif" }}>
-                    {c.rho >= 0 ? '+' : ''}{c.rho.toFixed(3)}
+                  {/* Priority badge */}
+                  <div style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 12, minWidth: 50, textAlign: 'center',
+                    ...priorityBadgeStyle(c.priority)
+                  }}>
+                    {c.priority}
                   </div>
-                  <div style={{ color: theme.textMuted, fontSize: 10, marginTop: 1 }}>
-                    {rhoStrength(c.rho)} {c.rho >= 0 ? 'positive' : 'negative'}
+
+                  {/* Attribute name + description */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: theme.textPrimary, fontWeight: 700, fontSize: 14, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>{c.label}</div>
+                    <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>
+                      {c.desc}
+                      {c.tierCount > 0 && <span style={{ marginLeft: 6 }}>({c.tierCount} tier{c.tierCount !== 1 ? 's' : ''} averaged)</span>}
+                    </div>
+                  </div>
+
+                  {/* Rho value + strength — show effective rho (positive = helps for both modes) */}
+                  <div style={{ textAlign: 'right', minWidth: 100 }}>
+                    <div style={{ color: rhoColor(c.rho), fontWeight: 700, fontSize: 18, fontFamily: "'Oswald', 'Inter', sans-serif" }}>
+                      {effRho >= 0 ? '+' : ''}{effRho.toFixed(3)}
+                    </div>
+                    <div style={{ color: theme.textMuted, fontSize: 10, marginTop: 1 }}>
+                      {rhoStrength(c.rho)} {c.priority === 'Inverted' ? 'inverted' : effRho >= 0 ? 'positive' : 'negative'}
+                    </div>
+                  </div>
+
+                  {/* Strength indicator */}
+                  <div style={{ minWidth: 24, textAlign: 'center' }} title={indicator.title}>
+                    <span style={{ color: indicator.color, fontSize: 16, fontWeight: 700 }}>{indicator.symbol}</span>
                   </div>
                 </div>
-
-                {/* Significance indicator */}
-                <div style={{ minWidth: 24, textAlign: 'center' }} title={`p-value: ${c.pValue < 0.001 ? '< 0.001' : c.pValue.toFixed(3)}`}>
-                  {c.pValue < 0.01 ? (
-                    <span style={{ color: '#22c55e', fontSize: 16 }} title={`Highly significant (p = ${c.pValue < 0.001 ? '< 0.001' : c.pValue.toFixed(3)})`}>&#10003;</span>
-                  ) : c.pValue < 0.05 ? (
-                    <span style={{ color: '#eab308', fontSize: 14 }} title={`Significant (p = ${c.pValue.toFixed(3)})`}>~</span>
-                  ) : (
-                    <span style={{ color: '#ef4444', fontSize: 14 }} title={`Not significant (p = ${c.pValue.toFixed(3)})`}>&#10007;</span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* How to read this */}
           <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: '14px 16px', border: `1px solid ${theme.border}` }}>
             <div style={{ color: theme.textPrimary, fontWeight: 700, fontSize: 12, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>How to read this</div>
             <div style={{ color: theme.textMuted, fontSize: 12, lineHeight: 1.7 }}>
-              <div style={{ marginBottom: 4 }}>Each card attribute is ranked by how strongly it correlates with {mode === 'batting' ? 'OPS+ (offensive production per plate appearance)' : 'ERA+ (pitching effectiveness per inning)'}.</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#22c55e', fontWeight: 700 }}>+0.50+</span> <span>Strong — prioritize this stat heavily</span></div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>+0.30+</span> <span>Moderate — meaningful advantage</span></div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#eab308', fontWeight: 700 }}>+0.15+</span> <span>Weak — slight edge, tiebreaker</span></div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ef4444', fontWeight: 700 }}>Negative</span> <span>Inverted — higher rating, worse performance</span></div>
+              <div style={{ marginBottom: 4 }}>
+                {mode === 'batting'
+                  ? 'Each card attribute is ranked by how strongly it correlates with OPS+ (offensive production) within each OVR tier, then averaged.'
+                  : 'Each card attribute is ranked by how strongly it correlates with ERA, FIP-, and SIERA within each OVR tier, then averaged across tiers and all three measures.'}
               </div>
-              <div style={{ marginTop: 8 }}>
-                <span style={{ color: '#22c55e' }}>&#10003;</span> = statistically significant &nbsp;
-                <span style={{ color: '#eab308' }}>~</span> = borderline &nbsp;
-                <span style={{ color: '#ef4444' }}>&#10007;</span> = not significant (may be noise)
+              <div style={{ marginBottom: 4, fontSize: 11, color: theme.textMuted }}>
+                {mode === 'pitching' && 'For pitchers, lower ERA/FIP-/SIERA is better — the displayed rho is flipped so positive = helpful.'}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#22c55e', fontWeight: 700 }}>&#10003;</span> <span>Strong (+0.50) — prioritize this stat heavily</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>+</span> <span>Moderate (+0.30) — meaningful advantage</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#eab308', fontWeight: 700 }}>~</span> <span>Weak (+0.15) — slight edge, tiebreaker</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ef4444', fontWeight: 700 }}>&#10007;</span> <span>Inverted or not significant</span></div>
               </div>
             </div>
           </div>
