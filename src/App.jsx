@@ -1877,6 +1877,10 @@ function InfoPage() {
           'Pos Rating LF': 'pos_lf', 'Pos Rating CF': 'pos_cf', 'Pos Rating RF': 'pos_rf',
         };
 
+        console.log('PapaParse headers:', parsed.meta?.fields?.slice(0, 15));
+        console.log('PapaParse row count:', parsed.data?.length);
+        console.log('PapaParse first row sample:', parsed.data?.[0] ? Object.entries(parsed.data[0]).slice(0, 5) : 'none');
+
         const rows = parsed.data.map(row => {
           const mapped = {};
           for (const [csvCol, dbCol] of Object.entries(colMap)) {
@@ -1889,6 +1893,8 @@ function InfoPage() {
           }
           return mapped;
         }).filter(r => r.last_name);
+        console.log('Mapped rows with last_name:', rows.length);
+        if (rows.length <= 5) console.log('All mapped rows:', JSON.stringify(rows));
 
         setCardUploadStatus(`Parsed ${rows.length} cards. Clearing old data...`);
 
