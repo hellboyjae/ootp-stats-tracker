@@ -663,12 +663,23 @@ function StatsPage() {
   const hoverTimerRef = useRef(null);
   const hideTimerRef = useRef(null);
 
-  // Load card data once on mount
+  // Load card data once on mount (paginated to get all 2600+ rows)
   useEffect(() => {
     const loadCardData = async () => {
       try {
-        const { data, error } = await supabase.from('pt_cards').select('*');
-        if (!error && data) setCardData(data);
+        let allCards = [];
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase.from('pt_cards').select('*').range(from, from + pageSize - 1);
+          if (error) { console.error('Card load error:', error); break; }
+          if (!data || data.length === 0) break;
+          allCards = allCards.concat(data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+        if (allCards.length > 0) setCardData(allCards);
+        console.log(`Loaded ${allCards.length} player cards`);
       } catch (e) { console.error('Failed to load card data:', e); }
     };
     loadCardData();
@@ -1776,6 +1787,7 @@ function StatsPage() {
           tournamentId={selectedTournament.id}
           theme={theme}
           onClose={closePlayerModal}
+          cardData={cardData}
         />
       )}
       {hoveredCard && ReactDOM.createPortal(
@@ -2485,7 +2497,7 @@ function StatFilter({ label, filter, onChange, theme }) {
 }
 
 // Player Trend Modal - shows performance over time
-function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) {
+function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose, cardData }) {
   const styles = getStyles(theme);
   const [trendData, setTrendData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -2700,9 +2712,25 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
   const primaryColor = theme.teamPrimary || '#3b82f6';
   const secondaryColor = theme.teamSecondary || '#f59e0b';
 
+  const matchedCard = cardData ? findCardMatch(player.name, playerType, cardData) : null;
+
   return (
     <div style={modalStyles.overlay} onClick={onClose}>
-      <div style={modalStyles.modal} onClick={e => e.stopPropagation()}>
+      <div style={{...modalStyles.modal, maxWidth: matchedCard ? 1060 : 700, display: 'flex', gap: 0, padding: 0, overflow: 'hidden'}} onClick={e => e.stopPropagation()}>
+        {/* Rating Card - left side */}
+        {matchedCard && (
+          <div style={{ width: 340, flexShrink: 0, background: '#0f172a', overflowY: 'auto', maxHeight: '90vh' }}>
+            <PlayerRatingCard
+              card={matchedCard}
+              position={null}
+              theme={theme}
+              isPitcher={playerType === 'pitching'}
+              embedded={true}
+            />
+          </div>
+        )}
+        {/* Trend content - right side */}
+        <div style={{ flex: 1, padding: 24, overflowY: 'auto', maxHeight: '90vh' }}>
         <div style={modalStyles.header}>
           <div style={modalStyles.playerInfo}>
             <h2 style={modalStyles.playerName}>{player.name}</h2>
@@ -2863,6 +2891,7 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );
@@ -2871,18 +2900,20 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
 // ============ Player Rating Card Utilities ============
 
 const RATING_COLORS = [
-  { max: 39, color: '#ef4444', label: 'Poor' },
-  { max: 79, color: '#f97316', label: 'Below Avg' },
-  { max: 119, color: '#eab308', label: 'Average' },
-  { max: 149, color: '#22c55e', label: 'Above Avg' },
-  { max: 179, color: '#3b82f6', label: 'Great' },
-  { max: 200, color: '#06b6d4', label: 'Elite' },
+  { max: 49, color: '#ef4444' },
+  { max: 69, color: '#f97316' },
+  { max: 79, color: '#eab308' },
+  { max: 95, color: '#22c55e' },
+  { max: 109, color: '#2dd4bf' },
+  { max: 140, color: '#3b82f6' },
+  { max: 180, color: '#a855f7' },
+  { max: 999, color: '#ec4899' },
 ];
 
 const getRatingColor = (val) => {
   const v = parseInt(val) || 0;
   for (const tier of RATING_COLORS) { if (v <= tier.max) return tier.color; }
-  return '#06b6d4';
+  return '#ec4899';
 };
 
 const POSITION_NAMES = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
@@ -2954,7 +2985,7 @@ function SplitsGrid({ label, ovr, vl, vr }) {
   );
 }
 
-function PlayerRatingCard({ card, position, theme, isPitcher }) {
+function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
   if (!card) return null;
   const posName = POSITION_NAMES[parseInt(card.position)] || '?';
   const bats = BATS_MAP[parseInt(card.bats)] || '?';
@@ -2980,13 +3011,12 @@ function PlayerRatingCard({ card, position, theme, isPitcher }) {
 
   const cardTitle = card.card_title || `${card.first_name} ${card.last_name}`;
 
+  const containerStyle = embedded
+    ? { width: '100%', background: '#0f172a', fontFamily: "'Inter', sans-serif", overflow: 'hidden' }
+    : { position: 'fixed', top: position.top, left: position.left, width: 320, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 99999, pointerEvents: 'none', fontFamily: "'Inter', sans-serif", overflow: 'hidden' };
+
   return (
-    <div style={{
-      position: 'fixed', top: position.top, left: position.left,
-      width: 320, background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 99999, pointerEvents: 'none',
-      fontFamily: "'Inter', sans-serif", overflow: 'hidden'
-    }}>
+    <div style={containerStyle}>
       {/* Header */}
       <div style={{
         background: `linear-gradient(135deg, ${theme.accent || '#3b82f6'}, ${adjustColor(theme.accent || '#3b82f6', -40)})`,
