@@ -80,113 +80,41 @@ const teamColors = {
 };
 
 // Generate a full theme from team colors
-const generateTeamTheme = (teamKey, isDark) => {
+const generateTeamTheme = (teamKey) => {
   const team = teamColors[teamKey] || teamColors.default;
   const primary = team.primary;
   const secondary = team.secondary;
-  
-  if (isDark) {
-    // Dark mode - neutral base with team colors as accents only
-    return {
-      // Main backgrounds stay dark for readability
-      mainBg: '#0f1117',
-      cardBg: '#161b26',
-      tableBg: '#161b26',
-      inputBg: '#131720',
 
-      // Sidebar and panels use dark base with subtle team tint
-      sidebarBg: blendWithBase(primary, '#131720', 0.08),
-      panelBg: '#1a2033',
-
-      // Table header uses soft team color wash
-      tableHeaderBg: blendWithBase(primary, '#1a2033', 0.15),
-      tableRowBg: '#161b26',
-      tableRowHover: withAlpha(primary, 0.12),
-      tableBorder: '#1e293b',
-
-      // Text colors
-      textPrimary: '#e8edf5',
-      textSecondary: '#a4b1c7',
-      textMuted: '#8893a7',
-      textDim: '#5b6780',
-
-      // Accent uses primary for colored text/borders, secondary as secondary accent
-      accent: primary,
-      accentHover: adjustColor(primary, -20),
-
-      // Status colors
-      success: '#22c55e',
-      warning: '#f59e0b',
-      error: '#ef4444',
-
-      // Gold for rate stats — consistent warm gold
-      gold: '#fbbf24',
-
-      // Borders use neutral tones, not team colors
-      border: '#1e293b',
-      borderLight: '#334155',
-      inputBorder: '#1e293b',
-
-      // Store original colors for accent use
-      teamPrimary: primary,
-      teamSecondary: secondary,
-    };
-  } else {
-    // Light mode - neutral base with team colors as accents
-    return {
-      // Main backgrounds stay light for readability
-      mainBg: '#f8fafc',
-      cardBg: '#ffffff',
-      tableBg: '#ffffff',
-      inputBg: '#ffffff',
-
-      // Sidebar uses light base with subtle team tint
-      sidebarBg: blendWithBase(primary, '#f1f5f9', 0.06),
-      panelBg: '#f1f5f9',
-
-      // Table header uses soft team color wash
-      tableHeaderBg: blendWithBase(primary, '#f1f5f9', 0.10),
-      tableRowBg: '#ffffff',
-      tableRowHover: withAlpha(primary, 0.06),
-      tableBorder: '#e2e8f0',
-
-      // Text colors
-      textPrimary: '#0f172a',
-      textSecondary: '#334155',
-      textMuted: '#64748b',
-      textDim: '#94a3b8',
-
-      // Accent uses primary
-      accent: primary,
-      accentHover: adjustColor(primary, -20),
-
-      // Status colors
-      success: '#16a34a',
-      warning: '#d97706',
-      error: '#dc2626',
-
-      // Gold for rate stats
-      gold: '#d97706',
-
-      // Borders use neutral tones
-      border: '#e2e8f0',
-      borderLight: '#f1f5f9',
-      inputBorder: '#cbd5e1',
-
-      // Store original colors for accent use
-      teamPrimary: primary,
-      teamSecondary: secondary,
-    };
-  }
+  return {
+    mainBg: '#0f1117',
+    cardBg: '#161b26',
+    tableBg: '#161b26',
+    inputBg: '#131720',
+    sidebarBg: blendWithBase(primary, '#131720', 0.08),
+    panelBg: '#1a2033',
+    tableHeaderBg: blendWithBase(primary, '#1a2033', 0.15),
+    tableRowBg: '#161b26',
+    tableRowHover: withAlpha(primary, 0.12),
+    tableBorder: '#1e293b',
+    textPrimary: '#e8edf5',
+    textSecondary: '#a4b1c7',
+    textMuted: '#8893a7',
+    textDim: '#5b6780',
+    accent: primary,
+    accentHover: adjustColor(primary, -20),
+    success: '#22c55e',
+    warning: '#f59e0b',
+    error: '#ef4444',
+    gold: '#fbbf24',
+    border: '#1e293b',
+    borderLight: '#334155',
+    inputBorder: '#1e293b',
+    teamPrimary: primary,
+    teamSecondary: secondary,
+  };
 };
 
 function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved !== 'dark' && saved !== null) { localStorage.setItem('theme', 'dark'); }
-    return true;
-  });
-  
   const [team, setTeam] = useState(() => {
     return localStorage.getItem('teamTheme') || 'default';
   });
@@ -245,11 +173,11 @@ function ThemeProvider({ children }) {
       style.id = styleId;
       document.head.appendChild(style);
     }
-    const track = isDark ? '#0f1117' : '#f1f5f9';
-    const thumb = isDark ? '#2a3348' : '#cbd5e1';
-    const thumbHover = isDark ? '#3a4560' : '#94a3b8';
+    const track = '#0f1117';
+    const thumb = '#2a3348';
+    const thumbHover = '#3a4560';
     const focusColor = (teamColors[team] || teamColors.default).primary;
-    const focusGlow = isDark ? `0 0 0 2px ${focusColor}50, 0 0 8px ${focusColor}30` : `0 0 0 2px ${focusColor}40, 0 0 6px ${focusColor}20`;
+    const focusGlow = `0 0 0 2px ${focusColor}50, 0 0 8px ${focusColor}30`;
     style.textContent = `
       * { scrollbar-width: thin; scrollbar-color: ${thumb} ${track}; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -267,18 +195,18 @@ function ThemeProvider({ children }) {
         box-shadow: ${focusGlow};
       }
       .tournament-item:hover {
-        background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'} !important;
+        background: rgba(255,255,255,0.06) !important;
         border-left-color: ${focusColor}80 !important;
       }
       tr:hover td {
-        background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
+        background: rgba(255,255,255,0.03);
       }
       .hover-card {
         transition: transform 0.18s ease, box-shadow 0.18s ease;
       }
       .hover-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0,0,0,${isDark ? '0.4' : '0.15'}) !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
       }
       .player-name-link {
         transition: all 0.12s ease;
@@ -300,32 +228,23 @@ function ThemeProvider({ children }) {
       .loading-spinner {
         width: 32px;
         height: 32px;
-        border: 3px solid ${isDark ? '#2a3348' : '#cbd5e1'};
+        border: 3px solid #2a3348;
         border-top-color: ${focusColor};
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin: 0 auto 12px;
       }
     `;
-  }, [isDark, team]);
-  
-  useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
+  }, [team]);
   useEffect(() => { localStorage.setItem('teamTheme', team); }, [team]);
   useEffect(() => { localStorage.setItem('colorblindMode', isColorblind ? 'true' : 'false'); }, [isColorblind]);
   
-  const toggle = () => setIsDark(!isDark);
   const toggleColorblind = () => setIsColorblind(!isColorblind);
   const setTeamTheme = (teamKey) => setTeam(teamKey);
-  
-  // Generate full theme based on team and dark/light mode
-  let theme;
-  if (team === 'default') {
-    theme = isDark ? darkTheme : lightTheme;
-  } else {
-    theme = generateTeamTheme(team, isDark);
-  }
-  
-  return <ThemeContext.Provider value={{ isDark, toggle, theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind }}>{children}</ThemeContext.Provider>;
+
+  const theme = team === 'default' ? darkTheme : generateTeamTheme(team);
+
+  return <ThemeContext.Provider value={{ theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind }}>{children}</ThemeContext.Provider>;
 }
 
 function useTheme() { return useContext(ThemeContext); }
@@ -558,7 +477,7 @@ function NewsBanner({ theme, styles }) {
 }
 
 function Layout({ children, notification, pendingCount = 0 }) {
-  const { isDark, toggle, theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
+  const { theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
   const { hasAccess } = useAuth();
   const styles = getStyles(theme);
   
@@ -609,7 +528,6 @@ function Layout({ children, notification, pendingCount = 0 }) {
               ))}
             </select>
             <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
-            <button onClick={toggle} style={styles.themeToggle} title={isDark ? 'Light' : 'Dark'}>{isDark ? '☀' : '☾'}</button>
           </div>
         </div>
       </div></header>
@@ -3632,7 +3550,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   </tr></thead><tbody>
     {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
-      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'pitching')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
+      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: getOvrColor(p.ovr, isColorblind)}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'pitching')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
       <td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.td}>{calcIPperG(p.ip, p.g)}</td>
@@ -3672,7 +3590,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   </tr></thead><tbody>
     {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
-      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'batting')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
+      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: getOvrColor(p.ovr, isColorblind)}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'batting')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def, isColorblind) : theme.textMuted}}>{p.def || '—'}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
@@ -9124,15 +9042,7 @@ const darkTheme = {
   gold: '#fbbf24',
   tableHeaderBg: '#1a2033', tableRowBg: '#161b26', tableRowHover: '#1e2740', tableBorder: '#2a3348',
   border: '#2a3348', borderLight: '#3a4560', inputBg: '#131720', inputBorder: '#2a3348',
-};
-
-const lightTheme = {
-  mainBg: '#f8fafc', cardBg: '#ffffff', panelBg: '#f1f5f9', tableBg: '#ffffff', sidebarBg: '#eef2f7',
-  textPrimary: '#0f172a', textSecondary: '#334155', textMuted: '#64748b', textDim: '#94a3b8',
-  accent: '#2563eb', accentHover: '#1d4ed8', success: '#16a34a', warning: '#d97706', error: '#dc2626',
-  gold: '#d97706',
-  tableHeaderBg: '#e8edf5', tableRowBg: '#ffffff', tableRowHover: '#f1f5f9', tableBorder: '#e2e8f0',
-  border: '#cbd5e1', borderLight: '#e2e8f0', inputBg: '#ffffff', inputBorder: '#cbd5e1',
+  teamPrimary: '#3b82f6', teamSecondary: '#fbbf24',
 };
 
 function getStyles(t) {
