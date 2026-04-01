@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP } from './tutorialImages.js';
 
 const ThemeContext = createContext();
+const BannerContext = createContext();
 
 // Helper to lighten/darken colors
 const adjustColor = (hex, amount) => {
@@ -409,25 +410,30 @@ function getStatColor(value, threshold, colorblind, invert = false) {
   return value > threshold ? pos : value < threshold ? neg : undefined;
 }
 
-function NewsBanner({ theme, styles }) {
-  const { hasAccess, requestAuth } = useAuth();
-  const [bannerText, setBannerText] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState('');
+const DEFAULT_BANNER = "Try our live draft assistant and get early access when OOTP 27 releases! Reach out to hellboyjae98 on discord to get started!";
+
+function BannerProvider({ children }) {
+  const [bannerText, setBannerText] = useState(DEFAULT_BANNER);
 
   useEffect(() => {
-    loadBanner();
+    (async () => {
+      try {
+        const { data } = await supabase.from('site_content').select('*').eq('id', 'news_banner').single();
+        if (data?.content?.text) setBannerText(data.content.text);
+      } catch (e) { /* keep default */ }
+    })();
   }, []);
 
-  const loadBanner = async () => {
-    try {
-      const { data } = await supabase.from('site_content').select('*').eq('id', 'news_banner').single();
-      if (data?.content?.text) setBannerText(data.content.text);
-      else setBannerText("Try our live draft assistant and get early access when OOTP 27 releases! Reach out to hellboyjae98 on discord to get started!");
-    } catch (e) {
-      setBannerText("Try our live draft assistant and get early access when OOTP 27 releases! Reach out to hellboyjae98 on discord to get started!");
-    }
-  };
+  return <BannerContext.Provider value={{ bannerText, setBannerText }}>{children}</BannerContext.Provider>;
+}
+
+function NewsBanner() {
+  const { theme } = useTheme();
+  const { hasAccess, requestAuth } = useAuth();
+  const { bannerText, setBannerText } = useContext(BannerContext);
+  const styles = getStyles(theme);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
 
   const saveBanner = async () => {
     try {
@@ -446,16 +452,14 @@ function NewsBanner({ theme, styles }) {
     }, 'master');
   };
 
-  if (!bannerText && !isEditing) return null;
-
   return (
     <div style={styles.newsBannerContainer}>
       {isEditing ? (
         <div style={styles.newsBannerEdit}>
-          <input 
-            type="text" 
-            value={editText} 
-            onChange={(e) => setEditText(e.target.value)} 
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
             style={styles.newsBannerInput}
             placeholder="Enter banner text..."
           />
@@ -531,7 +535,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
           </div>
         </div>
       </div></header>
-      <NewsBanner theme={theme} styles={styles} />
+      <NewsBanner />
       {children}
     </div>
   );
@@ -9022,7 +9026,7 @@ function WelcomePage() {
 }
 
 export default function App() {
-  return (<BrowserRouter><ThemeProvider><AuthProvider><Routes>
+  return (<BrowserRouter><ThemeProvider><AuthProvider><BannerProvider><Routes>
     <Route path="/" element={<WelcomePage />} />
     <Route path="/stats" element={<StatsPage />} />
     <Route path="/info" element={<InfoPage />} />
@@ -9032,7 +9036,7 @@ export default function App() {
     <Route path="/review" element={<ReviewQueuePage />} />
     <Route path="/leaderboards" element={<LeaderboardsPage />} />
     <Route path="/draft-assistant" element={<DraftAssistantPage />} />
-  </Routes></AuthProvider></ThemeProvider></BrowserRouter>);
+  </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
 const darkTheme = {
