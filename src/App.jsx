@@ -1831,8 +1831,12 @@ function InfoPage() {
         let csvText = ev.target.result;
         // Strip // prefix from header row if present
         if (csvText.startsWith('//')) csvText = csvText.substring(2);
+        // Remove trailing commas from each line (this CSV has them)
+        csvText = csvText.replace(/,\s*$/gm, '');
         const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-        if (parsed.errors.length > 5) { setCardUploadStatus('Too many parse errors'); setIsUploadingCards(false); return; }
+        // Only block on critical errors (not "TooFewFields" from trailing commas)
+        const criticalErrors = parsed.errors.filter(e => e.type !== 'FieldMismatch');
+        if (criticalErrors.length > 5) { setCardUploadStatus(`Too many parse errors (${criticalErrors.length})`); setIsUploadingCards(false); return; }
 
         const colMap = {
           'Card Title': 'card_title', 'LastName': 'last_name', 'FirstName': 'first_name',
