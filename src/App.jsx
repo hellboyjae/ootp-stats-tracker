@@ -1890,19 +1890,29 @@ function InfoPage() {
           return mapped;
         }).filter(r => r.last_name);
 
-        // Clear existing and insert in batches
-        setCardUploadStatus(`Clearing old data...`);
-        await supabase.from('pt_cards').delete().neq('id', 0);
+        setCardUploadStatus(`Parsed ${rows.length} cards. Clearing old data...`);
 
-        const batchSize = 200;
+        // Clear existing data - use gt(0) to match all rows
+        const { error: delError } = await supabase.from('pt_cards').delete().gt('id', 0);
+        if (delError) console.warn('Delete warning:', delError.message);
+
+        // Insert in small batches to avoid payload limits
+        let inserted = 0;
+        const batchSize = 100;
         for (let i = 0; i < rows.length; i += batchSize) {
           const batch = rows.slice(i, i + batchSize);
           setCardUploadStatus(`Uploading ${i + batch.length} / ${rows.length}...`);
-          const { error } = await supabase.from('pt_cards').insert(batch);
-          if (error) { setCardUploadStatus(`Error at batch ${i}: ${error.message}`); setIsUploadingCards(false); return; }
+          const { error, data: insertedData } = await supabase.from('pt_cards').insert(batch).select('id');
+          if (error) {
+            setCardUploadStatus(`Error at row ${i}: ${error.message}`);
+            console.error('Insert error at batch', i, error);
+            setIsUploadingCards(false);
+            return;
+          }
+          inserted += (insertedData?.length || batch.length);
         }
-        setCardUploadStatus(`Done! Uploaded ${rows.length} cards.`);
-        setCardCount(rows.length);
+        setCardUploadStatus(`Done! Uploaded ${inserted} cards.`);
+        setCardCount(inserted);
       } catch (err) {
         setCardUploadStatus(`Error: ${err.message}`);
       }
