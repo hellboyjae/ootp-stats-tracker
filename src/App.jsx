@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, Cell, ZAxis, ReferenceLine } from 'recharts';
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP } from './tutorialImages.js';
 
 const ThemeContext = createContext();
@@ -1630,8 +1630,17 @@ function StatsPage() {
               <div style={styles.tabs}>
                 <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching?.length || 0}</span></button>
                 <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting?.length || 0}</span></button>
+                {cardData.length > 0 && <button style={{...styles.tab, ...(activeTab === 'analysis' ? styles.tabActive : {})}} onClick={() => setActiveTab('analysis')}>Analysis</button>}
               </div>
             </div>
+            {activeTab === 'analysis' ? (
+              <CorrelationTab
+                battingData={selectedTournament.batting || []}
+                pitchingData={selectedTournament.pitching || []}
+                cardData={cardData}
+                theme={theme}
+              />
+            ) : (<>
             <div style={styles.controlBar}>
               {selectedTournament.rotatingFormat && (
                 <div 
@@ -1777,6 +1786,7 @@ function StatsPage() {
                 </button>
               </div>
             )}
+            </>)}
           </>)}
         </div>
       </main>
@@ -2932,6 +2942,24 @@ const getRatingColor = (val) => {
   return '#ec4899';
 };
 
+function calcRegression(data) {
+  const n = data.length;
+  if (n < 2) return { slope: 0, intercept: 0, r: 0 };
+  let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+  for (const d of data) {
+    sx += d.x; sy += d.y;
+    sxx += d.x * d.x; syy += d.y * d.y;
+    sxy += d.x * d.y;
+  }
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return { slope: 0, intercept: sy / n, r: 0 };
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  const denomR = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
+  const r = denomR === 0 ? 0 : (n * sxy - sx * sy) / denomR;
+  return { slope, intercept, r };
+}
+
 const POSITION_NAMES = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
 const BATS_MAP = { 1: 'R', 2: 'L', 3: 'S' };
 const THROWS_MAP = { 1: 'R', 2: 'L' };
@@ -2969,6 +2997,256 @@ function findCardMatch(playerName, playerType, cardData) {
     if (batters.length > 0) return batters[0];
   }
   return matches[0];
+}
+
+// ============ CorrelationTab Component ============
+
+const BATTING_PRESETS = [
+  { label: 'Contact OVR → wOBA', xField: 'contact_overall', xLabel: 'Contact OVR', yKey: 'woba', yLabel: 'wOBA' },
+  { label: 'Power OVR → SLG', xField: 'power_overall', xLabel: 'Power OVR', yKey: 'slg', yLabel: 'SLG' },
+  { label: 'Eye OVR → BB%', xField: 'eye_overall', xLabel: 'Eye OVR', yKey: 'bbPct', yLabel: 'BB%' },
+  { label: 'Avoid Ks OVR → K', xField: 'avoid_ks_overall', xLabel: 'Avoid Ks OVR', yKey: 'so', yLabel: 'K' },
+  { label: 'Speed → BsR', xField: 'speed', xLabel: 'Speed', yKey: 'bsr', yLabel: 'BsR' },
+  { label: 'Gap OVR → SLG', xField: 'gap_overall', xLabel: 'Gap OVR', yKey: 'slg', yLabel: 'SLG' },
+];
+
+const PITCHING_PRESETS = [
+  { label: 'Stuff OVR → K/9', xField: 'stuff_overall', xLabel: 'Stuff OVR', yKey: 'kPer9', yLabel: 'K/9' },
+  { label: 'Control OVR → BB/9', xField: 'control_overall', xLabel: 'Control OVR', yKey: 'bbPer9', yLabel: 'BB/9' },
+  { label: 'Movement OVR → HR/9', xField: 'movement_overall', xLabel: 'Movement OVR', yKey: 'hrPer9', yLabel: 'HR/9' },
+  { label: 'Stuff OVR → SIERA', xField: 'stuff_overall', xLabel: 'Stuff OVR', yKey: 'siera', yLabel: 'SIERA' },
+  { label: 'Control OVR → FIP', xField: 'control_overall', xLabel: 'Control OVR', yKey: 'fip', yLabel: 'FIP' },
+  { label: 'Stamina → IP', xField: 'stamina', xLabel: 'Stamina', yKey: 'ip', yLabel: 'IP' },
+];
+
+const CARD_RATING_OPTIONS = [
+  { label: 'Contact OVR', field: 'contact_overall' },
+  { label: 'Contact vL', field: 'contact_vl' },
+  { label: 'Contact vR', field: 'contact_vr' },
+  { label: 'Gap OVR', field: 'gap_overall' },
+  { label: 'Gap vL', field: 'gap_vl' },
+  { label: 'Gap vR', field: 'gap_vr' },
+  { label: 'Power OVR', field: 'power_overall' },
+  { label: 'Power vL', field: 'power_vl' },
+  { label: 'Power vR', field: 'power_vr' },
+  { label: 'Eye OVR', field: 'eye_overall' },
+  { label: 'Eye vL', field: 'eye_vl' },
+  { label: 'Eye vR', field: 'eye_vr' },
+  { label: 'Avoid Ks OVR', field: 'avoid_ks_overall' },
+  { label: 'Avoid Ks vL', field: 'avoid_ks_vl' },
+  { label: 'Avoid Ks vR', field: 'avoid_ks_vr' },
+  { label: 'Stuff OVR', field: 'stuff_overall' },
+  { label: 'Stuff vL', field: 'stuff_vl' },
+  { label: 'Stuff vR', field: 'stuff_vr' },
+  { label: 'Movement OVR', field: 'movement_overall' },
+  { label: 'Movement vL', field: 'movement_vl' },
+  { label: 'Movement vR', field: 'movement_vr' },
+  { label: 'Control OVR', field: 'control_overall' },
+  { label: 'Control vL', field: 'control_vl' },
+  { label: 'Control vR', field: 'control_vr' },
+  { label: 'Speed', field: 'speed' },
+  { label: 'Steal Rate', field: 'steal_rate' },
+  { label: 'Stealing', field: 'stealing' },
+  { label: 'Baserunning', field: 'baserunning' },
+  { label: 'Stamina', field: 'stamina' },
+  { label: 'Velocity', field: 'velocity' },
+  { label: 'BABIP (bat)', field: 'babip_bat_overall' },
+  { label: 'HR/9 (card)', field: 'p_hr_overall' },
+  { label: 'BABIP (pitch)', field: 'p_babip_overall' },
+];
+
+const BATTING_STAT_OPTIONS = [
+  { label: 'wOBA', key: 'woba' }, { label: 'AVG', key: 'avg' }, { label: 'OBP', key: 'obp' },
+  { label: 'SLG', key: 'slg' }, { label: 'OPS', key: 'ops' }, { label: 'OPS+', key: 'opsPlus' },
+  { label: 'wRC+', key: 'wrcPlus' }, { label: 'wRAA', key: 'wraa' }, { label: 'WAR', key: 'war' },
+  { label: 'BB%', key: 'bbPct' }, { label: 'K', key: 'so' }, { label: 'HR', key: 'hr' },
+  { label: 'H', key: 'h' }, { label: 'BsR', key: 'bsr' }, { label: 'SB%', key: 'sbPct' },
+  { label: 'BABIP', key: 'babip' }, { label: 'PA', key: 'pa' }, { label: 'DEF', key: 'def' },
+];
+
+const PITCHING_STAT_OPTIONS = [
+  { label: 'K/9', key: 'kPer9' }, { label: 'BB/9', key: 'bbPer9' }, { label: 'HR/9', key: 'hrPer9' },
+  { label: 'H/9', key: 'hPer9' }, { label: 'ERA', key: 'era' }, { label: 'FIP', key: 'fip' },
+  { label: 'SIERA', key: 'siera' }, { label: 'WHIP', key: 'whip' }, { label: 'WAR', key: 'war' },
+  { label: 'ERA+', key: 'eraPlus' }, { label: 'FIP-', key: 'fipMinus' }, { label: 'LOB%', key: 'lobPct' },
+  { label: 'IP', key: 'ip' }, { label: 'BRA/9', key: 'braPer9' }, { label: 'BABIP', key: 'babip' },
+];
+
+const TIER_COLORS = [
+  { key: 'perfect', label: 'Perfect', color: '#a855f7', min: 100 },
+  { key: 'diamond', label: 'Diamond', color: '#32EBFC', min: 90 },
+  { key: 'gold', label: 'Gold', color: '#FFE61F', min: 80 },
+  { key: 'silver', label: 'Silver', color: '#E0E0E0', min: 70 },
+  { key: 'bronze', label: 'Bronze', color: '#cd7f32', min: 60 },
+  { key: 'iron', label: 'Iron', color: '#888', min: 0 },
+];
+
+function getTierColor(ovr) {
+  const v = parseInt(ovr) || 0;
+  for (const t of TIER_COLORS) { if (v >= t.min) return t.color; }
+  return '#888';
+}
+
+function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
+  const [mode, setMode] = useState('batting');
+  const [presetIdx, setPresetIdx] = useState(0);
+  const [isCustom, setIsCustom] = useState(false);
+  const [customX, setCustomX] = useState('contact_overall');
+  const [customY, setCustomY] = useState('woba');
+
+  const presets = mode === 'batting' ? BATTING_PRESETS : PITCHING_PRESETS;
+  const statOptions = mode === 'batting' ? BATTING_STAT_OPTIONS : PITCHING_STAT_OPTIONS;
+  const players = mode === 'batting' ? (battingData || []) : (pitchingData || []);
+
+  // Determine current X/Y config
+  const currentPreset = presets[presetIdx] || presets[0];
+  const xField = isCustom ? customX : currentPreset.xField;
+  const xLabel = isCustom ? (CARD_RATING_OPTIONS.find(o => o.field === customX)?.label || customX) : currentPreset.xLabel;
+  const yKey = isCustom ? customY : currentPreset.yKey;
+  const yLabel = isCustom ? (statOptions.find(o => o.key === customY)?.label || customY) : currentPreset.yLabel;
+
+  // Build scatter data
+  const scatterData = React.useMemo(() => {
+    const pts = [];
+    for (const p of players) {
+      const card = findCardMatch(p.name, mode === 'batting' ? 'batting' : 'pitching', cardData);
+      if (!card) continue;
+      const xVal = parseFloat(card[xField]);
+      if (isNaN(xVal)) continue;
+      const rawY = p[yKey];
+      const yVal = parseFloat(typeof rawY === 'string' ? rawY.replace('%', '') : rawY);
+      if (isNaN(yVal)) continue;
+      const sampleSize = mode === 'batting' ? (parseInt(p.pa) || 1) : (parseFloat(p.ip) || 1);
+      pts.push({ name: p.name, x: xVal, y: yVal, ovr: parseInt(p.ovr) || 0, sampleSize });
+    }
+    return pts;
+  }, [players, cardData, xField, yKey, mode]);
+
+  const regression = React.useMemo(() => calcRegression(scatterData), [scatterData]);
+
+  // Compute trend line endpoints
+  const trendLine = React.useMemo(() => {
+    if (scatterData.length < 2) return [];
+    const xs = scatterData.map(d => d.x);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    return [
+      { x: minX, y: regression.slope * minX + regression.intercept },
+      { x: maxX, y: regression.slope * maxX + regression.intercept },
+    ];
+  }, [scatterData, regression]);
+
+  const rInterpretation = (r) => {
+    const a = Math.abs(r);
+    if (a >= 0.7) return 'Strong';
+    if (a >= 0.4) return 'Moderate';
+    if (a >= 0.2) return 'Weak';
+    return 'Very Weak';
+  };
+
+  const CustomTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload;
+    if (!d) return null;
+    return (
+      <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, color: theme.textPrimary }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
+        <div>{xLabel}: <strong>{d.x}</strong></div>
+        <div>{yLabel}: <strong>{d.y}</strong></div>
+        <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>OVR: {d.ovr} | {mode === 'batting' ? 'PA' : 'IP'}: {d.sampleSize}</div>
+      </div>
+    );
+  };
+
+  const btnBase = { padding: '6px 14px', borderRadius: 6, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' };
+  const btnActive = { background: theme.teamPrimary || theme.panelBg, color: theme.teamPrimary ? '#ffffff' : theme.textPrimary, borderColor: theme.teamPrimary || theme.border };
+  const btnInactive = { background: 'transparent', color: theme.textMuted };
+
+  return (
+    <div style={{ padding: '16px 0' }}>
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
+        <button style={{...btnBase, ...(mode === 'batting' ? btnActive : btnInactive)}} onClick={() => { setMode('batting'); setPresetIdx(0); setIsCustom(false); }}>Batting</button>
+        <button style={{...btnBase, ...(mode === 'pitching' ? btnActive : btnInactive)}} onClick={() => { setMode('pitching'); setPresetIdx(0); setIsCustom(false); }}>Pitching</button>
+        <div style={{ width: 1, height: 24, background: theme.border, margin: '0 8px' }} />
+        <button style={{...btnBase, ...(!isCustom ? btnActive : btnInactive)}} onClick={() => setIsCustom(false)}>Presets</button>
+        <button style={{...btnBase, ...(isCustom ? btnActive : btnInactive)}} onClick={() => setIsCustom(true)}>Custom</button>
+      </div>
+
+      {/* Preset / Custom selectors */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {!isCustom ? (
+          <select
+            value={presetIdx}
+            onChange={(e) => setPresetIdx(parseInt(e.target.value))}
+            style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textPrimary, fontSize: 12 }}
+          >
+            {presets.map((p, i) => <option key={i} value={i}>{p.label}</option>)}
+          </select>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: theme.textMuted, fontSize: 12, fontWeight: 600 }}>X (Card):</span>
+              <select value={customX} onChange={(e) => setCustomX(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textPrimary, fontSize: 12 }}>
+                {CARD_RATING_OPTIONS.map(o => <option key={o.field} value={o.field}>{o.label}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: theme.textMuted, fontSize: 12, fontWeight: 600 }}>Y (Stat):</span>
+              <select value={customY} onChange={(e) => setCustomY(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textPrimary, fontSize: 12 }}>
+                {statOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Scatter Plot */}
+      {scatterData.length < 2 ? (
+        <div style={{ padding: 40, textAlign: 'center', color: theme.textMuted, fontSize: 14 }}>
+          Not enough matched players to plot. Need at least 2 players with card data and stats.
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={420}>
+          <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
+            <XAxis type="number" dataKey="x" name={xLabel} tick={{ fill: theme.textMuted, fontSize: 11 }} label={{ value: xLabel, position: 'bottom', offset: 0, fill: theme.textMuted, fontSize: 12 }} />
+            <YAxis type="number" dataKey="y" name={yLabel} tick={{ fill: theme.textMuted, fontSize: 11 }} label={{ value: yLabel, angle: -90, position: 'insideLeft', offset: 10, fill: theme.textMuted, fontSize: 12 }} />
+            <ZAxis type="number" dataKey="sampleSize" range={[30, 200]} />
+            <Tooltip content={<CustomTooltip />} />
+            <Scatter data={scatterData} isAnimationActive={false}>
+              {scatterData.map((entry, i) => (
+                <Cell key={i} fill={getTierColor(entry.ovr)} fillOpacity={0.85} stroke={getTierColor(entry.ovr)} strokeWidth={1} />
+              ))}
+            </Scatter>
+            {/* Trend line as a second scatter with line type */}
+            <Scatter data={trendLine} line={{ stroke: theme.accent || '#3b82f6', strokeWidth: 2, strokeDasharray: '6 3' }} shape={() => null} isAnimationActive={false} />
+          </ScatterChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* Stats panel */}
+      <div style={{ display: 'flex', gap: 24, padding: '16px 0', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: theme.textMuted, fontSize: 12 }}>Pearson r:</span>
+          <span style={{ color: Math.abs(regression.r) >= 0.4 ? '#22c55e' : Math.abs(regression.r) >= 0.2 ? '#eab308' : theme.textMuted, fontWeight: 700, fontSize: 16 }}>
+            {regression.r.toFixed(3)}
+          </span>
+          <span style={{ color: theme.textMuted, fontSize: 11 }}>({rInterpretation(regression.r)} {regression.r >= 0 ? 'positive' : 'negative'})</span>
+        </div>
+        <div style={{ color: theme.textMuted, fontSize: 12 }}>n = {scatterData.length} players</div>
+        {/* Tier legend */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {TIER_COLORS.map(t => (
+            <span key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: theme.textMuted }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, display: 'inline-block' }} />
+              {t.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============ PlayerRatingCard Component ============
