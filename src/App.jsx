@@ -262,6 +262,39 @@ function ThemeProvider({ children }) {
       tr:hover td {
         background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
       }
+      .hover-card {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+      }
+      .hover-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,${isDark ? '0.4' : '0.15'}) !important;
+      }
+      .player-name-link {
+        transition: all 0.12s ease;
+      }
+      .player-name-link:hover {
+        text-decoration: underline;
+        filter: brightness(1.25);
+      }
+      button:hover {
+        filter: brightness(1.12);
+      }
+      button:active {
+        filter: brightness(0.95);
+        transform: scale(0.98);
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .loading-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid ${isDark ? '#2a3348' : '#cbd5e1'};
+        border-top-color: ${focusColor};
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 12px;
+      }
     `;
   }, [isDark, team]);
   
@@ -1227,7 +1260,7 @@ function StatsPage() {
   };
 
   const filteredTournaments = tournaments.filter(t => (t.category || 'tournaments') === sidebarTab).filter(t => !tournamentSearch || t.name.toLowerCase().includes(tournamentSearch.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading...</p></div></Layout>;
   const filteredData = selectedTournament ? getFilteredData(selectedTournament[activeTab] || [], activeTab) : [];
   const totalData = selectedTournament ? (selectedTournament[activeTab]?.length || 0) : 0;
 
@@ -1939,7 +1972,7 @@ function InfoPage() {
     setIsRebuilding(false);
   };
 
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading...</p></div></Layout>;
 
   return (
     <Layout notification={notification}>
@@ -2027,7 +2060,7 @@ function VideosPage() {
   const addVideo = () => { requestAuth(() => { const info = extractVideoId(newVideoUrl); if (!info) { showNotif('Invalid URL', 'error'); return; } saveVideos([{ ...info, title: newVideoTitle || 'Untitled', addedAt: new Date().toISOString() }, ...videos]); setNewVideoUrl(''); setNewVideoTitle(''); setShowAddForm(false); showNotif('Added!'); }, 'master'); };
   const removeVideo = (i) => { requestAuth(() => { if (!confirm('Remove?')) return; saveVideos(videos.filter((_, idx) => idx !== i)); showNotif('Removed'); }, 'master'); };
 
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading...</p></div></Layout>;
 
   return (
     <Layout notification={notification}>
@@ -2049,7 +2082,7 @@ function VideosPage() {
         </div>)}
         {videos.length === 0 ? <p style={styles.emptyMsg}>No videos yet.</p> : (
           <div style={styles.videoGrid}>
-            {videos.map((v, i) => (<div key={i} style={styles.videoCard}>
+            {videos.map((v, i) => (<div key={i} className="hover-card" style={styles.videoCard}>
               <div style={styles.thumbnailContainer} onClick={() => setPlayingVideo(i)}>
                 {getThumbnail(v) ? <img src={getThumbnail(v)} alt={v.title} style={styles.thumbnail} /> : <div style={styles.thumbnailPlaceholder}>▶</div>}
               </div>
@@ -2167,7 +2200,7 @@ function ArticlesPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><p>Loading...</p></div></Layout>;
+  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading...</p></div></Layout>;
 
   return (
     <Layout notification={notification}>
@@ -2240,7 +2273,7 @@ function ArticlesPage() {
         ) : (
           <div style={styles.articleGrid}>
             {articles.map((article) => (
-              <div key={article.id} style={styles.articleCard}>
+              <div key={article.id} className="hover-card" style={styles.articleCard}>
                 <div style={styles.articleCardContent} onClick={() => setViewingArticle(article)}>
                   <div style={styles.articleIcon}>📄</div>
                   <div style={styles.articleInfo}>
@@ -2689,7 +2722,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   </tr></thead><tbody>
     {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
-      <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')}>{p.name}</td>
+      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')}>{p.name}</td>
       <td style={styles.td}>{p.throws}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.td}>{calcIPperG(p.ip, p.g)}</td>
@@ -2729,7 +2762,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   </tr></thead><tbody>
     {data.map((p, idx) => (<tr key={p.id} style={{...styles.tr, ...(idx % 2 === 1 ? styles.trAlt : {})}}>
       <td style={styles.td}>{p.pos}</td>
-      <td style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
+      <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: onPlayerClick ? theme.accent : styles.tdName.color}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
       <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td><td style={{...styles.td, color: p.def ? getDefColor(p.def, isColorblind) : theme.textMuted}}>{p.def || '—'}</td>
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
@@ -4972,7 +5005,7 @@ function ReviewQueuePage() {
           </div>
 
           {isLoading ? (
-            <div style={styles.loading}>Loading...</div>
+            <div style={styles.loading}><div className="loading-spinner"></div>Loading...</div>
           ) : (
             <>
               {/* Pending Tab */}
@@ -5057,7 +5090,7 @@ function ReviewQueuePage() {
                           
                           {/* Group Items */}
                           {group.uploads.map(upload => (
-                    <div key={upload.id} style={{
+                    <div key={upload.id} className="hover-card" style={{
                       ...styles.reviewCard,
                       marginBottom: 0,
                       borderRadius: group.uploads.indexOf(upload) === group.uploads.length - 1 ? '0 0 8px 8px' : 0,
@@ -5227,7 +5260,7 @@ function ReviewQueuePage() {
                   {criticalUploads.length === 0 ? (
                     <div style={styles.emptyState}>✓ No critical issues</div>
                   ) : criticalUploads.map(upload => (
-                    <div key={upload.id} style={{...styles.reviewCard, borderColor: theme.error}}>
+                    <div key={upload.id} className="hover-card" style={{...styles.reviewCard, borderColor: theme.error}}>
                       <div style={styles.reviewCardHeader}>
                         <span style={styles.reviewCardFile}>🚨 {upload.file_name}</span>
                         <span style={styles.reviewCardTime}>{timeAgo(upload.created_at)}</span>
@@ -5521,7 +5554,7 @@ function LeaderboardsPage() {
   if (isLoading) {
     return (
       <Layout notification={notification}>
-        <div style={styles.loading}><p>Loading leaderboards...</p></div>
+        <div style={styles.loading}><div className="loading-spinner"></div><p>Loading leaderboards...</p></div>
       </Layout>
     );
   }
@@ -8195,7 +8228,7 @@ const lightTheme = {
 function getStyles(t) {
   return {
     container: { minHeight: '100vh', background: t.mainBg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: t.textPrimary, fontSize: 14 },
-    loading: { minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
+    loading: { minHeight: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
     notification: { position: 'fixed', top: 16, right: 16, padding: '12px 24px', borderRadius: 6, color: '#fff', fontWeight: 500, zIndex: 1000, fontSize: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' },
     header: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, padding: '12px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.3)' },
     headerContent: { maxWidth: 1800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -8204,7 +8237,7 @@ function getStyles(t) {
     subtitle: { margin: '2px 0 0', fontSize: 11, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' },
     
     // News Banner
-    newsBannerContainer: { background: t.teamSecondary || t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
+    newsBannerContainer: { background: t.teamSecondary || t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative', maskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)' },
     newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
     newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 40s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 13, padding: '10px 0', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.05em' },
     newsBannerSpacer: { margin: '0 50px', color: t.textDim },
@@ -8253,7 +8286,7 @@ function getStyles(t) {
     tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' },
     tabActive: { background: t.teamPrimary || t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
     tabCount: { marginLeft: 6, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 400 },
-    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 8, borderLeft: `3px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' },
+    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 8, borderLeft: `3px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', position: 'sticky', top: 0, zIndex: 5 },
     controlGroup: { display: 'flex', alignItems: 'center', gap: 6 },
     controlDivider: { width: 1, height: 24, background: t.border, margin: '0 6px' },
     searchInput: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: '4px 0 0 4px', fontSize: 13, width: 160, outline: 'none' },
@@ -8286,7 +8319,7 @@ function getStyles(t) {
     tdOvr: { padding: '6px 6px', textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: 12 },
     tdRate: { padding: '6px 6px', color: t.teamSecondary || t.gold, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 },
     emptyTable: { padding: 48, textAlign: 'center', color: t.textMuted, fontSize: 14 },
-    modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+    modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     modal: { background: t.cardBg, padding: 28, borderRadius: 10, border: `1px solid ${t.teamPrimary || t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' },
     modalTitle: { margin: '0 0 10px', color: t.teamPrimary || t.textPrimary, fontSize: 22, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     modalText: { margin: '0 0 20px', color: t.textSecondary, fontSize: 14 },
@@ -8340,7 +8373,7 @@ function getStyles(t) {
     videoTitle: { display: 'block', color: t.textPrimary, fontWeight: 500, fontSize: 14, marginBottom: 4 },
     videoPlatform: { color: t.textDim, fontSize: 12 },
     removeVideoBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, background: `${t.error}dd`, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 14 },
-    videoPlayerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+    videoPlayerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     videoPlayerContainer: { position: 'relative', width: '90%', maxWidth: 1000, aspectRatio: '16/9' },
     videoPlayer: { width: '100%', height: '100%', borderRadius: 6 },
     closePlayerBtn: { position: 'absolute', top: -40, right: 0, background: 'transparent', color: '#fff', border: 'none', fontSize: 32, cursor: 'pointer' },
@@ -8522,7 +8555,7 @@ function getStyles(t) {
     articleActions: { display: 'flex', alignItems: 'center', gap: 8 },
     articleDownloadBtn: { padding: '6px 12px', background: t.accent, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', textDecoration: 'none', transition: 'all 0.15s ease' },
     articleRemoveBtn: { padding: '6px 10px', background: 'transparent', color: t.error, border: `1px solid ${t.error}`, borderRadius: 6, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s ease' },
-    articleViewerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    articleViewerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     articleViewerContainer: { width: '90%', height: '90%', maxWidth: 1200, background: t.cardBg, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
     articleViewerHeader: { padding: '12px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     articleViewerTitle: { margin: 0, fontSize: 17, fontWeight: 700, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif" },
