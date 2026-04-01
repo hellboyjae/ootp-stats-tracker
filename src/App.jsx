@@ -1156,7 +1156,7 @@ function StatsPage() {
     return { L: ((counts.L / total) * 100).toFixed(0), S: ((counts.S / total) * 100).toFixed(0), R: ((counts.R / total) * 100).toFixed(0) };
   };
 
-  const getCsvCount = (t) => (t.uploadedHashes?.length || 0);
+  const getCsvCount = (t) => (t.uploadedDates?.length || 0);
   const getDataQuality = (count) => {
     const g = isColorblind ? CB_POSITIVE : '#22C55E';
     const r = isColorblind ? CB_NEGATIVE : '#EF4444';
@@ -8145,8 +8145,8 @@ function getStyles(t) {
     themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
     teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none', colorScheme: 'dark' },
     themeToggle: { width: 36, height: 36, borderRadius: 6, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, background: t.teamPrimary ? 'rgba(255,255,255,0.1)' : 'transparent', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.teamPrimary ? '#ffffff' : t.textMuted },
-    main: { display: 'flex', margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
-    sidebar: { width: 280, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
+    main: { display: 'flex', maxWidth: 1900, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
+    sidebar: { width: 270, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
     sidebarTabs: { display: 'flex', gap: 2, marginBottom: 12 },
     sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11 },
     sidebarTabActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
@@ -8163,7 +8163,7 @@ function getStyles(t) {
     legacyBtn: { width: 24, height: 24, background: 'transparent', color: t.textDim, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 14, opacity: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     delBtn: { width: 24, height: 24, background: 'transparent', color: t.textDim, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 16, opacity: 0.5 },
     newTournamentBtn: { marginTop: 10, padding: 10, background: t.panelBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
-    content: { flex: 1, padding: '20px 16px', overflow: 'auto', background: t.mainBg },
+    content: { flex: 1, padding: '20px 20px', overflow: 'auto', background: t.mainBg },
     welcome: { textAlign: 'center', padding: '80px 40px' },
     welcomeTitle: { fontSize: 24, color: t.textSecondary, marginBottom: 10, fontWeight: 600 },
     welcomeText: { color: t.textDim, fontSize: 14 },
