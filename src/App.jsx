@@ -8280,7 +8280,7 @@ function getStyles(t) {
     thSorted: { color: t.teamPrimary ? t.teamSecondary || '#ffffff' : t.textPrimary },
     sortIndicator: { marginLeft: 3, fontSize: 10 },
     tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg, transition: 'background 0.12s ease' },
-    trAlt: { background: t.teamPrimary ? withAlpha(t.teamPrimary, 0.06) : (t.mainBg === '#0f1117' ? '#121825' : '#f4f7fb') },
+    trAlt: { background: t.teamPrimary ? withAlpha(t.teamPrimary, 0.12) : (t.mainBg === '#0f1117' ? '#1c2438' : '#edf2f8') },
     td: { padding: '6px 6px', color: t.textPrimary, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 12 },
     tdName: { padding: '6px 6px', color: t.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 },
     tdOvr: { padding: '6px 6px', textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: 12 },
