@@ -43,41 +43,41 @@ const blendWithBase = (color, base, ratio) => {
 const teamColors = {
   default: { primary: '#3b82f6', secondary: '#fbbf24', name: 'Default' },
   // AL East
-  yankees: { primary: '#003087', secondary: '#C4CED4', name: 'Yankees' },
-  redsox: { primary: '#BD3039', secondary: '#0C2340', name: 'Red Sox' },
-  rays: { primary: '#092C5C', secondary: '#8FBCE6', name: 'Rays' },
-  bluejays: { primary: '#134A8E', secondary: '#1D2D5C', name: 'Blue Jays' },
-  orioles: { primary: '#DF4601', secondary: '#000000', name: 'Orioles' },
+  yankees: { primary: '#7B9BC7', secondary: '#C4CED4', name: 'Yankees' },     // Pinstripe steel-blue
+  redsox: { primary: '#E04250', secondary: '#1a3a5c', name: 'Red Sox' },       // Fenway red
+  rays: { primary: '#7DC8E8', secondary: '#1a3a5c', name: 'Rays' },            // Sunburst sky blue
+  bluejays: { primary: '#3A8FE0', secondary: '#1D4B8C', name: 'Blue Jays' },   // Royal blue
+  orioles: { primary: '#F47B28', secondary: '#2a2a2a', name: 'Orioles' },      // Bird orange
   // AL Central
-  guardians: { primary: '#00385D', secondary: '#E50022', name: 'Guardians' },
-  twins: { primary: '#002B5C', secondary: '#D31145', name: 'Twins' },
-  whitesox: { primary: '#27251F', secondary: '#C4CED4', name: 'White Sox' },
-  tigers: { primary: '#0C2340', secondary: '#FA4616', name: 'Tigers' },
-  royals: { primary: '#004687', secondary: '#BD9B60', name: 'Royals' },
+  guardians: { primary: '#E63946', secondary: '#1a3a5c', name: 'Guardians' },  // Winged-G red
+  twins: { primary: '#D63550', secondary: '#1a3a5c', name: 'Twins' },          // TC crimson
+  whitesox: { primary: '#A0A8B4', secondary: '#2a2a2a', name: 'White Sox' },   // Silver
+  tigers: { primary: '#F76A2B', secondary: '#1a3a5c', name: 'Tigers' },        // Old English D orange
+  royals: { primary: '#4A90D9', secondary: '#BD9B60', name: 'Royals' },        // Crown blue
   // AL West
-  astros: { primary: '#002D62', secondary: '#EB6E1F', name: 'Astros' },
-  rangers: { primary: '#003278', secondary: '#C0111F', name: 'Rangers' },
-  mariners: { primary: '#0C2C56', secondary: '#005C5C', name: 'Mariners' },
-  angels: { primary: '#BA0021', secondary: '#003263', name: 'Angels' },
-  athletics: { primary: '#003831', secondary: '#EFB21E', name: 'Athletics' },
+  astros: { primary: '#EB6E1F', secondary: '#1a3a5c', name: 'Astros' },        // Star orange (warmer/darker)
+  rangers: { primary: '#4878C8', secondary: '#C0111F', name: 'Rangers' },      // Texas blue
+  mariners: { primary: '#20B2AA', secondary: '#1a3a5c', name: 'Mariners' },    // NW teal
+  angels: { primary: '#DB2C41', secondary: '#2a4a7c', name: 'Angels' },        // Halo red
+  athletics: { primary: '#E8B830', secondary: '#4CAF50', name: 'Athletics' },  // Kelly gold (iconic A's gold)
   // NL East
-  braves: { primary: '#CE1141', secondary: '#13274F', name: 'Braves' },
-  phillies: { primary: '#E81828', secondary: '#002D72', name: 'Phillies' },
-  mets: { primary: '#002D72', secondary: '#FF5910', name: 'Mets' },
-  marlins: { primary: '#00A3E0', secondary: '#EF3340', name: 'Marlins' },
-  nationals: { primary: '#AB0003', secondary: '#14225A', name: 'Nationals' },
+  braves: { primary: '#D43A4C', secondary: '#1a3050', name: 'Braves' },        // Tomahawk red
+  phillies: { primary: '#F04848', secondary: '#2a4a7c', name: 'Phillies' },    // Phanatic scarlet
+  mets: { primary: '#FF7033', secondary: '#2a5090', name: 'Mets' },            // Amazin' orange
+  marlins: { primary: '#38C8E8', secondary: '#EF3340', name: 'Marlins' },      // Miami cyan
+  nationals: { primary: '#C93535', secondary: '#1a3050', name: 'Nationals' },   // Curly W red
   // NL Central
-  brewers: { primary: '#12284B', secondary: '#FFC52F', name: 'Brewers' },
-  cardinals: { primary: '#C41E3A', secondary: '#0C2340', name: 'Cardinals' },
-  cubs: { primary: '#0E3386', secondary: '#CC3433', name: 'Cubs' },
-  reds: { primary: '#C6011F', secondary: '#000000', name: 'Reds' },
-  pirates: { primary: '#27251F', secondary: '#FDB827', name: 'Pirates' },
+  brewers: { primary: '#DBA520', secondary: '#1a3050', name: 'Brewers' },      // Barrel gold (amber)
+  cardinals: { primary: '#E03050', secondary: '#1a3050', name: 'Cardinals' },   // Bird-on-bat red
+  cubs: { primary: '#5080E0', secondary: '#CC3433', name: 'Cubs' },            // Wrigley blue
+  reds: { primary: '#E02828', secondary: '#2a2a2a', name: 'Reds' },            // Cincy red
+  pirates: { primary: '#F5D030', secondary: '#2a2a2a', name: 'Pirates' },      // Jolly Roger yellow
   // NL West
-  dodgers: { primary: '#005A9C', secondary: '#EF3E42', name: 'Dodgers' },
-  padres: { primary: '#2F241D', secondary: '#FFC425', name: 'Padres' },
-  giants: { primary: '#FD5A1E', secondary: '#27251F', name: 'Giants' },
-  dbacks: { primary: '#A71930', secondary: '#E3D4AD', name: 'D-backs' },
-  rockies: { primary: '#333366', secondary: '#C4CED4', name: 'Rockies' },
+  dodgers: { primary: '#3880D0', secondary: '#EF3E42', name: 'Dodgers' },      // Dodger blue
+  padres: { primary: '#C8A04C', secondary: '#3a2a1a', name: 'Padres' },        // Friar brown-gold
+  giants: { primary: '#F06030', secondary: '#2a2a2a', name: 'Giants' },        // Bay orange
+  dbacks: { primary: '#C83848', secondary: '#E3D4AD', name: 'D-backs' },       // Sedona red
+  rockies: { primary: '#8B6BBF', secondary: '#C4CED4', name: 'Rockies' },      // Mountain purple
 };
 
 // Generate a full theme from team colors
