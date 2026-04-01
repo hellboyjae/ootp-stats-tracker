@@ -79,26 +79,26 @@ const generateTeamTheme = (teamKey, isDark) => {
     // Dark mode - use team's TRUE primary color prominently
     return {
       // Main backgrounds stay dark for readability
-      mainBg: '#0a0e17',
-      cardBg: '#0f1419',
-      tableBg: '#111827',
-      inputBg: '#0f1419',
-      
+      mainBg: '#0f1117',
+      cardBg: '#161b26',
+      tableBg: '#161b26',
+      inputBg: '#131720',
+
       // Header and sidebar use TRUE primary color
       sidebarBg: primary,
-      panelBg: '#141a23',
-      
+      panelBg: '#1a2033',
+
       // Table header uses primary color
       tableHeaderBg: primary,
-      tableRowBg: '#111827',
+      tableRowBg: '#161b26',
       tableRowHover: withAlpha(primary, 0.15),
       tableBorder: withAlpha(primary, 0.3),
       
       // Text colors
-      textPrimary: '#e2e8f0',
-      textSecondary: '#94a3b8',
-      textMuted: '#94a3b8',
-      textDim: '#64748b',
+      textPrimary: '#e8edf5',
+      textSecondary: '#a4b1c7',
+      textMuted: '#8893a7',
+      textDim: '#5b6780',
       
       // Accent uses secondary color for contrast
       accent: secondary,
@@ -116,7 +116,7 @@ const generateTeamTheme = (teamKey, isDark) => {
       border: withAlpha(primary, 0.4),
       borderLight: withAlpha(secondary, 0.3),
       inputBorder: withAlpha(primary, 0.4),
-      
+
       // Store original colors for special use
       teamPrimary: primary,
       teamSecondary: secondary,
@@ -129,20 +129,20 @@ const generateTeamTheme = (teamKey, isDark) => {
       cardBg: '#ffffff',
       tableBg: '#ffffff',
       inputBg: '#ffffff',
-      
+
       // Header and sidebar use primary color
       sidebarBg: primary,
       panelBg: withAlpha(primary, 0.08),
-      
+
       // Table header uses primary
       tableHeaderBg: primary,
       tableRowBg: '#ffffff',
       tableRowHover: withAlpha(primary, 0.05),
       tableBorder: withAlpha(primary, 0.2),
-      
+
       // Text colors
       textPrimary: '#0f172a',
-      textSecondary: '#475569',
+      textSecondary: '#334155',
       textMuted: '#64748b',
       textDim: '#94a3b8',
       
@@ -184,6 +184,27 @@ function ThemeProvider({ children }) {
     return localStorage.getItem('colorblindMode') === 'true';
   });
   
+  // Load Google Fonts (Oswald + Inter)
+  useEffect(() => {
+    const fontId = 'google-fonts-link';
+    if (!document.getElementById(fontId)) {
+      const preconnect1 = document.createElement('link');
+      preconnect1.rel = 'preconnect';
+      preconnect1.href = 'https://fonts.googleapis.com';
+      document.head.appendChild(preconnect1);
+      const preconnect2 = document.createElement('link');
+      preconnect2.rel = 'preconnect';
+      preconnect2.href = 'https://fonts.gstatic.com';
+      preconnect2.crossOrigin = 'anonymous';
+      document.head.appendChild(preconnect2);
+      const fontLink = document.createElement('link');
+      fontLink.id = fontId;
+      fontLink.rel = 'stylesheet';
+      fontLink.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap';
+      document.head.appendChild(fontLink);
+    }
+  }, []);
+
   // Inject keyframes for news banner animation and select dropdown styles
   useEffect(() => {
     const styleId = 'news-banner-keyframes';
@@ -196,8 +217,8 @@ function ThemeProvider({ children }) {
           100% { transform: translateX(-100%); }
         }
         select option, select optgroup {
-          background: #1a1a2e;
-          color: #e2e8f0;
+          background: #161b26;
+          color: #e8edf5;
         }
       `;
       document.head.appendChild(style);
@@ -2349,6 +2370,9 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
       fontWeight: 700,
       color: theme.textPrimary,
       margin: 0,
+      fontFamily: "'Oswald', 'Inter', sans-serif",
+      textTransform: 'uppercase',
+      letterSpacing: '0.02em',
     },
     playerMeta: {
       fontSize: 14,
@@ -2369,10 +2393,13 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
       marginBottom: 16,
     },
     chartTitle: {
-      fontSize: 14,
-      fontWeight: 600,
+      fontSize: 13,
+      fontWeight: 700,
       color: theme.textSecondary,
       marginBottom: 16,
+      fontFamily: "'Oswald', 'Inter', sans-serif",
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
     },
     noData: {
       textAlign: 'center',
@@ -2392,15 +2419,19 @@ function PlayerTrendModal({ player, playerType, tournamentId, theme, onClose }) 
       textAlign: 'center',
     },
     statLabel: {
-      fontSize: 11,
+      fontSize: 10,
       color: theme.textMuted,
       textTransform: 'uppercase',
       marginBottom: 4,
+      fontFamily: "'Oswald', 'Inter', sans-serif",
+      letterSpacing: '0.06em',
     },
     statValue: {
       fontSize: 24,
       fontWeight: 700,
       color: theme.textPrimary,
+      fontFamily: "'Inter', sans-serif",
+      fontVariantNumeric: 'tabular-nums',
     },
     legend: {
       display: 'flex',
@@ -6444,7 +6475,7 @@ function DraftAssistantPage() {
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div style={{ minWidth: 0 }}>
-              <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                 🎯 {tournamentData?.name}
               </h1>
               <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 13 }}>
@@ -6862,7 +6893,7 @@ function DraftAssistantPage() {
               onClick={e => e.stopPropagation()}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 18 }}>📋 Quick Guide</h2>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 18, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>📋 Quick Guide</h2>
                 <button onClick={() => setShowQuickGuide(false)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer' }}>×</button>
               </div>
               <div style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 1.6 }}>
@@ -6906,7 +6937,7 @@ function DraftAssistantPage() {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 24, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <h1 style={{ color: theme.textPrimary, margin: 0, fontSize: 24, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>
               🎯 Draft Assistant - {tournamentData?.name}
             </h1>
             <p style={{ color: theme.textMuted, margin: '2px 0 0 0', fontSize: 13 }}>
@@ -7640,7 +7671,7 @@ function DraftAssistantPage() {
               onClick={e => e.stopPropagation()}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 22 }}>📋 Draft Assistant Guide</h2>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 22, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' }}>📋 Draft Assistant Guide</h2>
                 <button onClick={() => setShowQuickGuide(false)} style={{ background: 'transparent', border: 'none', color: theme.textMuted, fontSize: 24, cursor: 'pointer' }}>×</button>
               </div>
 
@@ -7875,7 +7906,7 @@ function WelcomePage() {
 
   // Don't render until we know if we should show
   if (!shouldShow) {
-    return <div style={{ background: '#0a1929', minHeight: '100vh' }} />;
+    return <div style={{ background: '#0f1117', minHeight: '100vh' }} />;
   }
 
   return (
@@ -7890,7 +7921,7 @@ function WelcomePage() {
       background: `
         radial-gradient(ellipse 80% 50% at 50% 120%, rgba(30, 60, 114, 0.4) 0%, transparent 50%),
         radial-gradient(ellipse 60% 30% at 50% 0%, rgba(255, 149, 0, 0.08) 0%, transparent 50%),
-        linear-gradient(180deg, #0a1929 0%, #0d2137 50%, #0a1929 100%)
+        linear-gradient(180deg, #0f1117 0%, #131a28 50%, #0f1117 100%)
       `,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       overflow: 'hidden'
@@ -7940,26 +7971,29 @@ function WelcomePage() {
       <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600 }}>
         <h1 style={{
           fontSize: 'clamp(3rem, 10vw, 5rem)',
-          fontWeight: 900,
-          letterSpacing: '-0.03em',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
           marginBottom: 8,
           background: 'linear-gradient(135deg, #ff9500 0%, #ffb347 40%, #ff9500 80%, #ffcc80 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
           animation: 'shimmer 3s ease-in-out infinite',
-          backgroundSize: '200% 100%'
+          backgroundSize: '200% 100%',
+          fontFamily: "'Oswald', 'Inter', sans-serif",
+          textTransform: 'uppercase'
         }}>
           BeaneCounter
         </h1>
         
         <p style={{
           fontSize: '1.1rem',
-          fontWeight: 600,
+          fontWeight: 500,
           color: '#5b9bd5',
-          letterSpacing: '0.2em',
+          letterSpacing: '0.25em',
           textTransform: 'uppercase',
-          marginBottom: 30
+          marginBottom: 30,
+          fontFamily: "'Oswald', 'Inter', sans-serif"
         }}>
           OOTP Perfect Team Stats Tool
         </p>
@@ -7983,14 +8017,15 @@ function WelcomePage() {
             gap: 12,
             padding: '20px 50px',
             fontSize: '1.1rem',
-            fontWeight: 700,
+            fontWeight: 600,
             color: '#fff',
             background: 'linear-gradient(135deg, #ff9500 0%, #e68600 100%)',
             border: 'none',
             borderRadius: 60,
             cursor: 'pointer',
             textTransform: 'uppercase',
-            letterSpacing: '0.08em',
+            letterSpacing: '0.12em',
+            fontFamily: "'Oswald', 'Inter', sans-serif",
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             boxShadow: '0 4px 15px rgba(255, 149, 0, 0.4)',
             animation: 'buttonPulse 2.5s ease-in-out infinite'
@@ -8100,38 +8135,38 @@ export default function App() {
 }
 
 const darkTheme = {
-  mainBg: '#0a0e17', cardBg: '#0f1419', panelBg: '#141a23', tableBg: '#111827', sidebarBg: '#070b11',
-  textPrimary: '#e2e8f0', textSecondary: '#94a3b8', textMuted: '#64748b', textDim: '#475569',
+  mainBg: '#0f1117', cardBg: '#161b26', panelBg: '#1a2033', tableBg: '#161b26', sidebarBg: '#0b0e14',
+  textPrimary: '#e8edf5', textSecondary: '#a4b1c7', textMuted: '#8893a7', textDim: '#5b6780',
   accent: '#3b82f6', accentHover: '#2563eb', success: '#22c55e', warning: '#f59e0b', error: '#ef4444',
   gold: '#fbbf24',
-  tableHeaderBg: '#1e293b', tableRowBg: '#111827', tableRowHover: '#1a2332', tableBorder: '#1e293b',
-  border: '#1e293b', borderLight: '#334155', inputBg: '#0f1419', inputBorder: '#334155',
+  tableHeaderBg: '#1a2033', tableRowBg: '#161b26', tableRowHover: '#1e2740', tableBorder: '#2a3348',
+  border: '#2a3348', borderLight: '#3a4560', inputBg: '#131720', inputBorder: '#2a3348',
 };
 
 const lightTheme = {
-  mainBg: '#f8fafc', cardBg: '#ffffff', panelBg: '#f1f5f9', tableBg: '#ffffff', sidebarBg: '#f1f5f9',
-  textPrimary: '#0f172a', textSecondary: '#475569', textMuted: '#64748b', textDim: '#94a3b8',
+  mainBg: '#f8fafc', cardBg: '#ffffff', panelBg: '#f1f5f9', tableBg: '#ffffff', sidebarBg: '#eef2f7',
+  textPrimary: '#0f172a', textSecondary: '#334155', textMuted: '#64748b', textDim: '#94a3b8',
   accent: '#2563eb', accentHover: '#1d4ed8', success: '#16a34a', warning: '#d97706', error: '#dc2626',
   gold: '#d97706',
-  tableHeaderBg: '#f1f5f9', tableRowBg: '#ffffff', tableRowHover: '#f8fafc', tableBorder: '#e2e8f0',
-  border: '#e2e8f0', borderLight: '#cbd5e1', inputBg: '#ffffff', inputBorder: '#cbd5e1',
+  tableHeaderBg: '#e8edf5', tableRowBg: '#ffffff', tableRowHover: '#f1f5f9', tableBorder: '#e2e8f0',
+  border: '#cbd5e1', borderLight: '#e2e8f0', inputBg: '#ffffff', inputBorder: '#cbd5e1',
 };
 
 function getStyles(t) {
   return {
-    container: { minHeight: '100vh', background: t.mainBg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: t.textPrimary, fontSize: 14 },
+    container: { minHeight: '100vh', background: t.mainBg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: t.textPrimary, fontSize: 14 },
     loading: { minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted },
     notification: { position: 'fixed', top: 16, right: 16, padding: '12px 24px', borderRadius: 6, color: '#fff', fontWeight: 500, zIndex: 1000, fontSize: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' },
-    header: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, padding: '12px 24px' },
+    header: { background: t.sidebarBg, borderBottom: `1px solid ${t.border}`, padding: '12px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.3)' },
     headerContent: { maxWidth: 1800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     headerRight: { display: 'flex', alignItems: 'center', gap: 16 },
-    title: { margin: 0, fontSize: 22, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontWeight: 700 },
-    subtitle: { margin: '2px 0 0', fontSize: 12, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 500 },
+    title: { margin: 0, fontSize: 24, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
+    subtitle: { margin: '2px 0 0', fontSize: 11, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' },
     
     // News Banner
     newsBannerContainer: { background: t.teamSecondary || t.sidebarBg, borderBottom: `1px solid ${t.border}`, overflow: 'hidden', position: 'relative' },
     newsBannerScroll: { display: 'flex', alignItems: 'center', position: 'relative' },
-    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 40s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 14, padding: '10px 0' },
+    newsBannerText: { display: 'inline-block', whiteSpace: 'nowrap', animation: 'scrollBanner 40s linear infinite', color: t.teamPrimary ? '#ffffff' : t.gold, fontWeight: 600, fontSize: 13, padding: '10px 0', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.05em' },
     newsBannerSpacer: { margin: '0 50px', color: t.textDim },
     newsBannerEditBtn: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.textMuted, fontSize: 12, zIndex: 10 },
     newsBannerEdit: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' },
@@ -8140,7 +8175,7 @@ function getStyles(t) {
     newsBannerCancelBtn: { padding: '8px 14px', background: t.textMuted, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
     
     nav: { display: 'flex', gap: 4 },
-    navLink: { padding: '8px 16px', color: t.teamPrimary ? 'rgba(255,255,255,0.8)' : t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 500, fontSize: 13 },
+    navLink: { padding: '8px 16px', color: t.teamPrimary ? 'rgba(255,255,255,0.8)' : t.textMuted, textDecoration: 'none', borderRadius: 4, fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     navLinkActive: { background: t.teamSecondary || t.accent, color: '#fff' },
     themeControls: { display: 'flex', alignItems: 'center', gap: 8 },
     teamSelect: { padding: '6px 10px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.3)' : t.border}`, borderRadius: 6, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 12, cursor: 'pointer', outline: 'none', colorScheme: 'dark' },
@@ -8148,7 +8183,7 @@ function getStyles(t) {
     main: { display: 'flex', maxWidth: 1900, margin: '0 auto', minHeight: 'calc(100vh - 58px)' },
     sidebar: { width: 270, background: t.teamPrimary || t.sidebarBg, borderRight: `1px solid ${t.border}`, padding: 14, flexShrink: 0, display: 'flex', flexDirection: 'column' },
     sidebarTabs: { display: 'flex', gap: 2, marginBottom: 12 },
-    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11 },
+    sidebarTabBtn: { flex: 1, padding: '8px 6px', background: 'transparent', color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 11, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     sidebarTabActive: { background: t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
     sidebarSearch: { width: '100%', padding: '9px 12px', background: t.teamPrimary ? 'rgba(255,255,255,0.15)' : t.inputBg, border: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, borderRadius: 4, color: t.teamPrimary ? '#ffffff' : t.textPrimary, fontSize: 13, boxSizing: 'border-box', marginBottom: 10, outline: 'none' },
     tournamentList: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflow: 'auto' },
@@ -8165,20 +8200,20 @@ function getStyles(t) {
     newTournamentBtn: { marginTop: 10, padding: 10, background: t.panelBg, color: t.textSecondary, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12 },
     content: { flex: 1, padding: '20px 20px', overflow: 'auto', background: t.mainBg },
     welcome: { textAlign: 'center', padding: '80px 40px' },
-    welcomeTitle: { fontSize: 24, color: t.textSecondary, marginBottom: 10, fontWeight: 600 },
+    welcomeTitle: { fontSize: 26, color: t.textSecondary, marginBottom: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     welcomeText: { color: t.textDim, fontSize: 14 },
     tournamentHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     tournamentMeta: { display: 'flex', alignItems: 'baseline', gap: 20 },
-    tournamentTitleMain: { fontSize: 20, color: t.textSecondary, margin: 0, fontWeight: 600 },
+    tournamentTitleMain: { fontSize: 22, color: t.textSecondary, margin: 0, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     handednessContainer: { display: 'flex', gap: 16 },
     handednessGroup: { color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
     uploadBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12 },
     tabRow: { marginBottom: 12 },
     tabs: { display: 'flex', gap: 4 },
-    tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
+    tab: { padding: '8px 18px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     tabActive: { background: t.teamPrimary || t.panelBg, color: t.teamPrimary ? '#ffffff' : t.textPrimary },
     tabCount: { marginLeft: 6, color: t.teamPrimary ? 'rgba(255,255,255,0.7)' : t.textDim, fontWeight: 400 },
-    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 6, borderLeft: `3px solid ${t.teamPrimary || t.accent}` },
+    controlBar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: t.panelBg, borderRadius: 8, borderLeft: `3px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' },
     controlGroup: { display: 'flex', alignItems: 'center', gap: 6 },
     controlDivider: { width: 1, height: 24, background: t.border, margin: '0 6px' },
     searchInput: { padding: '7px 12px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: '4px 0 0 4px', fontSize: 13, width: 160, outline: 'none' },
@@ -8197,11 +8232,11 @@ function getStyles(t) {
     statFilterControls: { display: 'flex', gap: 6 },
     operatorSelect: { padding: '5px 8px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: 3, fontSize: 12, cursor: 'pointer' },
     valueInput: { padding: '5px 8px', background: t.inputBg, color: t.textPrimary, border: `1px solid ${t.border}`, borderRadius: 3, fontSize: 12, width: 60 },
-    tableContainer: { background: t.tableBg, borderRadius: 6, border: `1px solid ${t.teamPrimary ? t.teamPrimary : t.border}`, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
+    tableContainer: { background: t.tableBg, borderRadius: 8, border: `1px solid ${t.teamPrimary ? t.teamPrimary : t.border}`, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.25)' },
     tableWrapper: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-    th: { padding: '8px 6px', background: t.teamPrimary || t.tableHeaderBg, color: t.teamPrimary ? '#ffffff' : t.textMuted, fontWeight: 600, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, userSelect: 'none', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.02em', zIndex: 10, boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
-    thRate: { background: t.teamSecondary || t.tableHeaderBg, color: t.teamSecondary ? '#ffffff' : t.gold, fontSize: 10, fontWeight: 700 },
+    th: { padding: '9px 6px', background: t.teamPrimary || t.tableHeaderBg, color: t.teamPrimary ? '#ffffff' : t.textMuted, fontWeight: 700, textAlign: 'center', position: 'sticky', top: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `2px solid ${t.teamPrimary ? 'rgba(255,255,255,0.2)' : t.border}`, userSelect: 'none', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontFamily: "'Oswald', 'Inter', sans-serif" },
+    thRate: { background: t.teamSecondary || t.tableHeaderBg, color: t.teamSecondary ? '#ffffff' : t.gold, fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif" },
     thSorted: { color: t.teamPrimary ? t.teamSecondary || '#ffffff' : t.textPrimary },
     sortIndicator: { marginLeft: 3, fontSize: 10 },
     tr: { borderBottom: `1px solid ${t.tableBorder}`, background: t.tableRowBg },
@@ -8211,8 +8246,8 @@ function getStyles(t) {
     tdRate: { padding: '6px 6px', color: t.teamSecondary || t.gold, textAlign: 'center', fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 600 },
     emptyTable: { padding: 48, textAlign: 'center', color: t.textMuted, fontSize: 14 },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modal: { background: t.cardBg, padding: 28, borderRadius: 8, border: `1px solid ${t.teamPrimary || t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
-    modalTitle: { margin: '0 0 10px', color: t.teamPrimary || t.textPrimary, fontSize: 20, fontWeight: 600 },
+    modal: { background: t.cardBg, padding: 28, borderRadius: 10, border: `1px solid ${t.teamPrimary || t.border}`, maxWidth: 400, width: '90%', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' },
+    modalTitle: { margin: '0 0 10px', color: t.teamPrimary || t.textPrimary, fontSize: 22, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     modalText: { margin: '0 0 20px', color: t.textSecondary, fontSize: 14 },
     modalBtns: { display: 'flex', gap: 10, marginTop: 20 },
     authError: { color: t.error, fontSize: 13, margin: '0 0 14px', padding: '10px 14px', background: `${t.error}15`, borderRadius: 4 },
@@ -8226,15 +8261,15 @@ function getStyles(t) {
     editBtn: { padding: '8px 14px', background: 'transparent', color: t.teamPrimary || t.textMuted, border: `1px solid ${t.teamPrimary || t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
     pageContent: { flex: 1, padding: '24px 28px', maxWidth: 900, margin: '0 auto' },
     pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${t.teamPrimary || t.border}` },
-    pageTitle: { margin: 0, fontSize: 24, color: t.teamPrimary || t.textPrimary, fontWeight: 600 },
+    pageTitle: { margin: 0, fontSize: 26, color: t.teamPrimary || t.textPrimary, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     infoContent: { display: 'flex', flexDirection: 'column', gap: 20 },
-    infoSection: { background: t.panelBg, padding: 24, borderRadius: 6, borderLeft: `4px solid ${t.teamPrimary || t.accent}` },
-    infoHeading: { margin: '0 0 12px', color: t.teamPrimary || t.textPrimary, fontSize: 18, fontWeight: 600 },
+    infoSection: { background: t.panelBg, padding: 24, borderRadius: 8, borderLeft: `4px solid ${t.teamPrimary || t.accent}`, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+    infoHeading: { margin: '0 0 12px', color: t.teamPrimary || t.textPrimary, fontSize: 18, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     infoBody: { margin: 0, color: t.textSecondary, fontSize: 14, lineHeight: 1.7 },
     
     // Admin Login Section
     adminLoginSection: { marginTop: 40, padding: 24, background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}` },
-    adminLoginTitle: { margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    adminLoginTitle: { margin: '0 0 16px', fontSize: 17, fontWeight: 700, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     adminLoginStatus: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
     adminLoginBadge: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: t.success, color: '#fff', borderRadius: 4, fontSize: 13, fontWeight: 600 },
     adminLogoutBtn: { padding: '6px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontSize: 13 },
@@ -8313,13 +8348,13 @@ function getStyles(t) {
     
     // Submit Data Page
     submitPageLayout: { minHeight: 'calc(100vh - 60px)', display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 24, padding: '24px 24px' },
-    submitFormPanel: { background: t.cardBg, borderRadius: 8, padding: 24, border: `1px solid ${t.border}` },
+    submitFormPanel: { background: t.cardBg, borderRadius: 10, padding: 24, border: `1px solid ${t.border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' },
     submitInfoPanel: { background: t.panelBg, borderRadius: 8, border: `1px solid ${t.border}`, overflow: 'hidden', height: 'fit-content', position: 'sticky', top: 24 },
-    submitTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
-    submitSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
+    submitTitle: { fontSize: 24, fontWeight: 700, color: t.textPrimary, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
+    submitSubtitle: { fontSize: 13, color: t.textMuted, marginBottom: 24 },
     submitForm: { display: 'flex', flexDirection: 'column', gap: 20 },
     formSection: { display: 'flex', flexDirection: 'column', gap: 8 },
-    formLabel: { fontSize: 14, fontWeight: 600, color: t.textPrimary },
+    formLabel: { fontSize: 13, fontWeight: 600, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     formHint: { fontSize: 12, color: t.textMuted, marginTop: -4 },
     formInput: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, outline: 'none' },
     formSelect: { padding: '12px 14px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer', outline: 'none' },
@@ -8344,18 +8379,18 @@ function getStyles(t) {
     submitBtnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
     submitResult: { textAlign: 'center', padding: '32px 24px', background: t.panelBg, borderRadius: 12, border: `2px solid ${t.success}` },
     submitResultIcon: { fontSize: 48, marginBottom: 12 },
-    submitResultTitle: { fontSize: 20, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
+    submitResultTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase' },
     submitResultDetails: { fontSize: 14, color: t.textSecondary, marginBottom: 16 },
     submitResultNote: { fontSize: 13, color: t.textMuted, marginBottom: 20 },
     submitAnotherBtn: { padding: '10px 20px', background: 'transparent', color: t.accent, border: `1px solid ${t.accent}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 },
     
     // Info Panel (right side)
     infoPanelHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: `1px solid ${t.border}`, background: t.cardBg },
-    infoPanelTitle: { fontSize: 15, fontWeight: 600, color: t.textPrimary, margin: 0 },
+    infoPanelTitle: { fontSize: 15, fontWeight: 700, color: t.textPrimary, margin: 0, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     infoPanelEditBtn: { background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 13, padding: '4px 8px' },
     infoPanelContent: { padding: 20, maxHeight: 'calc(100vh - 200px)', overflow: 'auto' },
     infoPanelSection: { marginBottom: 20 },
-    infoPanelHeading: { fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 8 },
+    infoPanelHeading: { fontSize: 14, fontWeight: 700, color: t.textPrimary, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     infoPanelBody: { fontSize: 13, color: t.textSecondary, lineHeight: 1.6 },
     infoPanelEmpty: { color: t.textMuted, fontSize: 13, fontStyle: 'italic' },
     infoPanelEdit: { padding: 16 },
@@ -8370,14 +8405,14 @@ function getStyles(t) {
     // Review Queue Page
     reviewPage: { minHeight: 'calc(100vh - 60px)', padding: '24px' },
     reviewContainer: { maxWidth: 1000, margin: '0 auto' },
-    reviewTitle: { fontSize: 24, fontWeight: 700, color: t.textPrimary, marginBottom: 20 },
+    reviewTitle: { fontSize: 26, fontWeight: 700, color: t.textPrimary, marginBottom: 20, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     reviewTabs: { display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
-    reviewTab: { padding: '10px 16px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 },
+    reviewTab: { padding: '10px 16px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     reviewTabActive: { background: t.panelBg, color: t.textPrimary },
     reviewTabBadge: { background: t.accent, color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
     reviewList: { display: 'flex', flexDirection: 'column', gap: 16 },
     emptyState: { textAlign: 'center', padding: '48px 24px', color: t.textMuted, fontSize: 16 },
-    reviewCard: { background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 8, overflow: 'hidden' },
+    reviewCard: { background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 10, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.15)' },
     reviewCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: t.panelBg, borderBottom: `1px solid ${t.border}` },
     reviewCardFile: { fontWeight: 600, color: t.textPrimary },
     reviewCardTime: { fontSize: 12, color: t.textMuted },
@@ -8413,22 +8448,22 @@ function getStyles(t) {
     leaderboardPage: { minHeight: 'calc(100vh - 60px)', padding: '24px' },
     leaderboardContainer: { maxWidth: 800, margin: '0 auto' },
     leaderboardContainerWide: { maxWidth: 1400, margin: '0 auto' },
-    leaderboardTitle: { fontSize: 28, fontWeight: 700, color: t.textPrimary, marginBottom: 8 },
-    leaderboardSubtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
+    leaderboardTitle: { fontSize: 30, fontWeight: 700, color: t.textPrimary, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
+    leaderboardSubtitle: { fontSize: 13, color: t.textMuted, marginBottom: 24 },
     leaderboardTabs: { display: 'flex', gap: 4, marginBottom: 24, borderBottom: `1px solid ${t.border}`, paddingBottom: 12 },
-    leaderboardTab: { padding: '10px 20px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.15s' },
+    leaderboardTab: { padding: '10px 20px', background: 'transparent', color: t.textMuted, border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.15s', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' },
     leaderboardTabActive: { background: t.accent, color: '#fff' },
-    leaderboardSection: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden' },
+    leaderboardSection: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' },
     leaderboardSideBySide: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 },
-    leaderboardCard: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden' },
-    leaderboardCardTitle: { margin: 0, padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    leaderboardCard: { background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}`, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' },
+    leaderboardCardTitle: { margin: 0, padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 16, fontWeight: 700, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     weekSelector: { display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${t.border}`, background: t.panelBg },
     weekSelectorCentered: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 24 },
     leaderboardWeekLabel: { fontSize: 14, fontWeight: 600, color: t.textSecondary },
     weekSelect: { padding: '8px 12px', background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textPrimary, fontSize: 14, cursor: 'pointer' },
     leaderboardTableWrapper: { overflowX: 'auto', maxHeight: 600, overflowY: 'auto' },
     leaderboardTable: { width: '100%', borderCollapse: 'collapse' },
-    leaderboardTh: { padding: '12px 14px', background: t.panelBg, textAlign: 'center', fontWeight: 600, fontSize: 12, color: t.textMuted, borderBottom: `1px solid ${t.border}`, position: 'sticky', top: 0 },
+    leaderboardTh: { padding: '12px 14px', background: t.panelBg, textAlign: 'center', fontWeight: 700, fontSize: 11, color: t.textMuted, borderBottom: `2px solid ${t.border}`, position: 'sticky', top: 0, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' },
     leaderboardTd: { padding: '10px 14px', textAlign: 'center', borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textPrimary },
     allTimeExplainer: { padding: '16px 20px', background: t.panelBg, borderBottom: `1px solid ${t.border}`, fontSize: 13, color: t.textMuted, fontStyle: 'italic' },
     allTimeExplainerSmall: { margin: 0, padding: '12px 20px', fontSize: 12, color: t.textDim, fontStyle: 'italic', borderBottom: `1px solid ${t.border}` },
@@ -8440,7 +8475,7 @@ function getStyles(t) {
     articleCardContent: { display: 'flex', alignItems: 'center', gap: 16, flex: 1, cursor: 'pointer' },
     articleIcon: { fontSize: 32, width: 50, height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: t.panelBg, borderRadius: 8 },
     articleInfo: { flex: 1 },
-    articleTitle: { margin: 0, fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    articleTitle: { margin: 0, fontSize: 16, fontWeight: 700, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif" },
     articleDescription: { margin: '6px 0 0', fontSize: 13, color: t.textMuted, lineHeight: 1.4 },
     articleDate: { fontSize: 12, color: t.textDim },
     articleActions: { display: 'flex', alignItems: 'center', gap: 8 },
@@ -8449,11 +8484,11 @@ function getStyles(t) {
     articleViewerOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
     articleViewerContainer: { width: '90%', height: '90%', maxWidth: 1200, background: t.cardBg, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
     articleViewerHeader: { padding: '12px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    articleViewerTitle: { margin: 0, fontSize: 16, fontWeight: 600, color: t.textPrimary },
+    articleViewerTitle: { margin: 0, fontSize: 17, fontWeight: 700, color: t.textPrimary, fontFamily: "'Oswald', 'Inter', sans-serif" },
     articleViewer: { flex: 1, width: '100%', border: 'none' },
     lockedContent: { textAlign: 'center', padding: '60px 20px', background: t.cardBg, borderRadius: 12, border: `1px solid ${t.border}` },
     lockIcon: { fontSize: 48, marginBottom: 16 },
-    lockedTitle: { fontSize: 20, fontWeight: 600, color: t.textPrimary, margin: '0 0 8px' },
+    lockedTitle: { fontSize: 22, fontWeight: 700, color: t.textPrimary, margin: '0 0 8px', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase' },
     lockedText: { fontSize: 14, color: t.textMuted, margin: '0 0 20px' },
     unlockBtn: { padding: '10px 24px', background: t.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   };
