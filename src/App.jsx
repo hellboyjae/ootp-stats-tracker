@@ -1460,9 +1460,11 @@ function StatsPage() {
               <div style={styles.tournamentMeta}>
                 <h2 style={styles.tournamentTitleMain}>{selectedTournament.name}</h2>
                 {((selectedTournament.pitching?.length || 0) > 0 || (selectedTournament.batting?.length || 0) > 0) && (
-                  <div style={styles.handednessContainer}>
-                    {(selectedTournament.pitching?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.pitching, 'throws'); return <span style={styles.handednessGroup}>T: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
-                    {(selectedTournament.batting?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.batting, 'bats'); return <span style={styles.handednessGroup}>B: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={styles.handednessContainer}>
+                      {(selectedTournament.pitching?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.pitching, 'throws'); return <span style={{...styles.handednessGroup, color: theme.textPrimary}}>T: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
+                      {(selectedTournament.batting?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.batting, 'bats'); return <span style={{...styles.handednessGroup, color: theme.textPrimary}}>B: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
+                    </div>
                     {(() => {
                       const f = getEventFriendliness(selectedTournament.batting, selectedTournament.pitching);
                       if (!f) return null;
@@ -1475,7 +1477,7 @@ function StatsPage() {
                           : theme.textDim;
                       return (
                         <span
-                          style={{ position: 'relative', display: 'inline-flex', alignItems: 'baseline', gap: 4 }}
+                          style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}
                           onMouseEnter={() => setShowFriendlinessTooltip(true)}
                           onMouseLeave={() => setShowFriendlinessTooltip(false)}
                         >
