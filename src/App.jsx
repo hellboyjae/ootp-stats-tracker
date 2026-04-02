@@ -9137,10 +9137,13 @@ function DatabasePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [posFilter, setPosFilter] = useState('All');
+  const [batsFilter, setBatsFilter] = useState('All');
+  const [throwsFilter, setThrowsFilter] = useState('All');
   const [sortBy, setSortBy] = useState('card_title');
   const [sortDir, setSortDir] = useState('asc');
   const [selectedCard, setSelectedCard] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [minStat, setMinStat] = useState({ key: '', value: '' });
   const PAGE_SIZE = 100;
 
   useEffect(() => {
@@ -9178,12 +9181,24 @@ function DatabasePage() {
   const filtered = cardData.filter(card => {
     const displayPos = getDisplayPos(card);
     if (posFilter !== 'All' && displayPos !== posFilter) return false;
+    if (batsFilter !== 'All') {
+      const b = BATS_MAP[parseInt(card.bats)] || '?';
+      if (b !== batsFilter) return false;
+    }
+    if (throwsFilter !== 'All') {
+      const t = THROWS_MAP[parseInt(card.throws)] || '?';
+      if (t !== throwsFilter) return false;
+    }
     if (search) {
       const s = search.toLowerCase();
       const title = (card.card_title || '').toLowerCase();
       const last = (card.last_name || '').toLowerCase();
       const first = (card.first_name || '').toLowerCase();
       if (!title.includes(s) && !last.includes(s) && !first.includes(s)) return false;
+    }
+    if (minStat.key && minStat.value) {
+      const v = parseInt(card[minStat.key]) || 0;
+      if (v < parseInt(minStat.value)) return false;
     }
     return true;
   });
@@ -9202,173 +9217,247 @@ function DatabasePage() {
 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const pageData = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const halfPoint = Math.ceil(pageData.length / 2);
+  const leftData = pageData.slice(0, halfPoint);
+  const rightData = pageData.slice(halfPoint);
 
   const handleSort = (col) => {
     if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortBy(col); setSortDir('asc'); }
   };
 
+  const resetFilters = () => { setSearch(''); setPosFilter('All'); setBatsFilter('All'); setThrowsFilter('All'); setMinStat({ key: '', value: '' }); setCurrentPage(1); setSelectedCard(null); };
   const handleSearch = (val) => { setSearch(val); setCurrentPage(1); setSelectedCard(null); };
   const handlePosFilter = (val) => { setPosFilter(val); setCurrentPage(1); setSelectedCard(null); };
 
   const ThHeader = ({ col, label }) => (
-    <th style={{...styles.th, ...(sortBy === col ? styles.thSorted : {})}} onClick={() => handleSort(col)}>
+    <th style={{...styles.th, ...(sortBy === col ? styles.thSorted : {}), padding: '7px 4px'}} onClick={() => handleSort(col)}>
       {label}{sortBy === col && <span style={styles.sortIndicator}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
     </th>
   );
 
-  // Determine if current filter shows pitchers or batters (or mixed)
   const showPitchers = posFilter === 'SP' || posFilter === 'RP/CL';
   const showBatters = posFilter !== 'All' && !showPitchers;
-  // For "All" position, show mixed table — use a combined layout
-
   const positions = ['All', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'SP', 'RP/CL'];
+  const statFilterOptions = showPitchers
+    ? [{ k: '', l: 'None' }, { k: 'stuff_overall', l: 'Stuff' }, { k: 'movement_overall', l: 'Movement' }, { k: 'control_overall', l: 'Control' }, { k: 'p_hr_overall', l: 'pHR' }, { k: 'p_babip_overall', l: 'pBABIP' }, { k: 'stamina', l: 'Stamina' }]
+    : [{ k: '', l: 'None' }, { k: 'contact_overall', l: 'Contact' }, { k: 'gap_overall', l: 'Gap' }, { k: 'power_overall', l: 'Power' }, { k: 'eye_overall', l: 'Eye' }, { k: 'avoid_ks_overall', l: 'Avoid K' }, { k: 'babip_bat_overall', l: 'BABIP' }, { k: 'speed', l: 'Speed' }, { k: 'stuff_overall', l: 'Stuff' }, { k: 'movement_overall', l: 'Movement' }, { k: 'control_overall', l: 'Control' }];
+
+  const hasActiveFilters = search || posFilter !== 'All' || batsFilter !== 'All' || throwsFilter !== 'All' || (minStat.key && minStat.value);
+
+  const renderRow = (card, i, globalIdx) => {
+    const isPitcher = isPitcherCard(card);
+    const displayPos = getDisplayPos(card);
+    const isSelected = selectedCard?.id === card.id;
+    return (
+      <React.Fragment key={card.id || globalIdx}>
+        <tr
+          style={{...styles.tr, ...(globalIdx % 2 === 1 ? styles.trAlt : {}), cursor: 'pointer', ...(isSelected ? { background: withAlpha(theme.teamPrimary, 0.15) } : {})}}
+          onClick={() => setSelectedCard(isSelected ? null : card)}
+        >
+          <td style={{...styles.tdName, fontSize: 11, padding: '5px 4px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis'}}>{card.card_title || `${card.first_name} ${card.last_name}`}</td>
+          <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{displayPos}</td>
+          {showPitchers ? (
+            <>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{THROWS_MAP[parseInt(card.throws)] || '?'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.stuff_overall)}}>{parseInt(card.stuff_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.movement_overall)}}>{parseInt(card.movement_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.control_overall)}}>{parseInt(card.control_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.p_hr_overall)}}>{parseInt(card.p_hr_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.p_babip_overall)}}>{parseInt(card.p_babip_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.stamina)}}>{parseInt(card.stamina) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{card.velocity || '—'}</td>
+            </>
+          ) : showBatters ? (
+            <>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{BATS_MAP[parseInt(card.bats)] || '?'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.contact_overall)}}>{parseInt(card.contact_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.gap_overall)}}>{parseInt(card.gap_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.power_overall)}}>{parseInt(card.power_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.eye_overall)}}>{parseInt(card.eye_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.avoid_ks_overall)}}>{parseInt(card.avoid_ks_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.babip_bat_overall)}}>{parseInt(card.babip_bat_overall) || 0}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
+            </>
+          ) : (
+            <>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{isPitcher ? `T:${THROWS_MAP[parseInt(card.throws)] || '?'}` : `B:${BATS_MAP[parseInt(card.bats)] || '?'}`}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.contact_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.contact_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.gap_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.gap_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.power_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.power_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.eye_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.eye_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: isPitcher ? getRatingColor(card.stuff_overall) : theme.textDim}}>{isPitcher ? parseInt(card.stuff_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: isPitcher ? getRatingColor(card.movement_overall) : theme.textDim}}>{isPitcher ? parseInt(card.movement_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: isPitcher ? getRatingColor(card.control_overall) : theme.textDim}}>{isPitcher ? parseInt(card.control_overall) || 0 : '—'}</td>
+              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
+            </>
+          )}
+        </tr>
+        {isSelected && (
+          <tr><td colSpan={showPitchers || showBatters ? 10 : 11} style={{ padding: 0, background: theme.panelBg, borderBottom: `2px solid ${theme.teamPrimary}` }}>
+            <PlayerRatingCard card={card} position={{}} theme={theme} isPitcher={isPitcher} embedded={true} />
+          </td></tr>
+        )}
+      </React.Fragment>
+    );
+  };
+
+  const colCount = showPitchers || showBatters ? 10 : 11;
+
+  const renderTableHead = () => (
+    <thead>
+      <tr>
+        <ThHeader col="card_title" label="Card Title" />
+        <ThHeader col="displayPos" label="Pos" />
+        {showPitchers ? (
+          <>
+            <ThHeader col="throws" label="T" />
+            <ThHeader col="stuff_overall" label="STF" />
+            <ThHeader col="movement_overall" label="MOV" />
+            <ThHeader col="control_overall" label="CTL" />
+            <ThHeader col="p_hr_overall" label="pHR" />
+            <ThHeader col="p_babip_overall" label="pBABIP" />
+            <ThHeader col="stamina" label="STA" />
+            <th style={{...styles.th, padding: '7px 4px'}}>Velo</th>
+          </>
+        ) : showBatters ? (
+          <>
+            <ThHeader col="bats" label="B" />
+            <ThHeader col="contact_overall" label="CON" />
+            <ThHeader col="gap_overall" label="GAP" />
+            <ThHeader col="power_overall" label="POW" />
+            <ThHeader col="eye_overall" label="EYE" />
+            <ThHeader col="avoid_ks_overall" label="AvK" />
+            <ThHeader col="babip_bat_overall" label="BAB" />
+            <ThHeader col="speed" label="SPD" />
+          </>
+        ) : (
+          <>
+            <th style={{...styles.th, padding: '7px 4px'}}>Hand</th>
+            <ThHeader col="contact_overall" label="CON" />
+            <ThHeader col="gap_overall" label="GAP" />
+            <ThHeader col="power_overall" label="POW" />
+            <ThHeader col="eye_overall" label="EYE" />
+            <ThHeader col="stuff_overall" label="STF" />
+            <ThHeader col="movement_overall" label="MOV" />
+            <ThHeader col="control_overall" label="CTL" />
+            <ThHeader col="speed" label="SPD" />
+          </>
+        )}
+      </tr>
+    </thead>
+  );
 
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading card database...</p></div></Layout>;
 
+  const selectStyle = { padding: '7px 10px', background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 12, cursor: 'pointer', outline: 'none' };
+  const paginationBtnStyle = (disabled) => ({ padding: '6px 14px', background: disabled ? theme.inputBg : theme.panelBg, color: disabled ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: disabled ? 'default' : 'pointer', fontSize: 12, fontWeight: 500 });
+
   return (
     <Layout notification={notification}>
-      <div style={{ padding: '20px 20px', background: theme.mainBg, minHeight: 'calc(100vh - 100px)' }}>
+      <div style={{ padding: '16px 20px', background: theme.mainBg, minHeight: 'calc(100vh - 100px)' }}>
         {/* Control bar */}
-        <div style={styles.controlBar}>
+        <div style={{...styles.controlBar, flexWrap: 'wrap', gap: 8}}>
           <input
             type="text"
             placeholder="Search by name..."
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
-            style={styles.searchInput}
+            style={{...styles.searchInput, borderRadius: 4, width: 180}}
           />
-          <select value={posFilter} onChange={(e) => handlePosFilter(e.target.value)} style={styles.filterSelect}>
-            {positions.map(p => <option key={p} value={p}>{p}</option>)}
+          <select value={posFilter} onChange={(e) => handlePosFilter(e.target.value)} style={selectStyle}>
+            {positions.map(p => <option key={p} value={p}>{p === 'All' ? 'All Positions' : p}</option>)}
           </select>
+          <select value={batsFilter} onChange={(e) => { setBatsFilter(e.target.value); setCurrentPage(1); setSelectedCard(null); }} style={selectStyle}>
+            <option value="All">All Bats</option>
+            <option value="R">Bats R</option>
+            <option value="L">Bats L</option>
+            <option value="S">Switch</option>
+          </select>
+          <select value={throwsFilter} onChange={(e) => { setThrowsFilter(e.target.value); setCurrentPage(1); setSelectedCard(null); }} style={selectStyle}>
+            <option value="All">All Throws</option>
+            <option value="R">Throws R</option>
+            <option value="L">Throws L</option>
+          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderLeft: `1px solid ${theme.border}`, paddingLeft: 8 }}>
+            <span style={{ color: theme.textDim, fontSize: 11 }}>Min</span>
+            <select value={minStat.key} onChange={(e) => { setMinStat(s => ({ ...s, key: e.target.value })); setCurrentPage(1); setSelectedCard(null); }} style={{...selectStyle, width: 90}}>
+              {statFilterOptions.map(o => <option key={o.k} value={o.k}>{o.l}</option>)}
+            </select>
+            {minStat.key && (
+              <input
+                type="number"
+                value={minStat.value}
+                onChange={(e) => { setMinStat(s => ({ ...s, value: e.target.value })); setCurrentPage(1); setSelectedCard(null); }}
+                placeholder="0"
+                style={{ padding: '7px 6px', background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 12, width: 50, outline: 'none' }}
+              />
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: `1px solid ${theme.border}`, paddingLeft: 8 }}>
+            <span style={{ color: theme.textDim, fontSize: 11 }}>Sort</span>
+            <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }} style={{...selectStyle, width: 100}}>
+              <option value="card_title">Name</option>
+              <option value="displayPos">Position</option>
+              <option value="contact_overall">Contact</option>
+              <option value="gap_overall">Gap</option>
+              <option value="power_overall">Power</option>
+              <option value="eye_overall">Eye</option>
+              <option value="avoid_ks_overall">Avoid K</option>
+              <option value="babip_bat_overall">BABIP</option>
+              <option value="speed">Speed</option>
+              <option value="stuff_overall">Stuff</option>
+              <option value="movement_overall">Movement</option>
+              <option value="control_overall">Control</option>
+              <option value="stamina">Stamina</option>
+            </select>
+            <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{...selectStyle, padding: '7px 8px', fontWeight: 600, fontSize: 11, minWidth: 24}}>{sortDir === 'asc' ? '▲' : '▼'}</button>
+          </div>
+          {hasActiveFilters && <button onClick={resetFilters} style={styles.resetBtn}>Reset</button>}
           <div style={styles.resultsCount}>{sorted.length} cards</div>
         </div>
 
-        {/* Table */}
-        <div style={styles.tableContainer}>
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <ThHeader col="card_title" label="Card Title" />
-                  <ThHeader col="displayPos" label="Pos" />
-                  {showPitchers ? (
-                    <>
-                      <ThHeader col="throws" label="Throws" />
-                      <ThHeader col="stuff_overall" label="Stuff" />
-                      <ThHeader col="movement_overall" label="Movement" />
-                      <ThHeader col="control_overall" label="Control" />
-                      <ThHeader col="p_hr_overall" label="pHR" />
-                      <ThHeader col="p_babip_overall" label="pBABIP" />
-                      <ThHeader col="stamina" label="Stamina" />
-                      <th style={styles.th}>Velo</th>
-                    </>
-                  ) : showBatters ? (
-                    <>
-                      <ThHeader col="bats" label="Bats" />
-                      <ThHeader col="contact_overall" label="Contact" />
-                      <ThHeader col="gap_overall" label="Gap" />
-                      <ThHeader col="power_overall" label="Power" />
-                      <ThHeader col="eye_overall" label="Eye" />
-                      <ThHeader col="avoid_ks_overall" label="Avoid K" />
-                      <ThHeader col="babip_bat_overall" label="BABIP" />
-                      <ThHeader col="speed" label="Speed" />
-                    </>
-                  ) : (
-                    <>
-                      <th style={styles.th}>Hand</th>
-                      <ThHeader col="contact_overall" label="CON" />
-                      <ThHeader col="gap_overall" label="GAP" />
-                      <ThHeader col="power_overall" label="POW" />
-                      <ThHeader col="eye_overall" label="EYE" />
-                      <ThHeader col="stuff_overall" label="STF" />
-                      <ThHeader col="movement_overall" label="MOV" />
-                      <ThHeader col="control_overall" label="CTL" />
-                      <ThHeader col="speed" label="SPD" />
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {pageData.length === 0 ? (
-                  <tr><td colSpan={showPitchers || showBatters ? 10 : 11} style={styles.emptyTable}>No cards found</td></tr>
-                ) : pageData.map((card, i) => {
-                  const isPitcher = isPitcherCard(card);
-                  const displayPos = getDisplayPos(card);
-                  const isSelected = selectedCard?.id === card.id;
-                  return (
-                    <React.Fragment key={card.id || i}>
-                      <tr
-                        style={{...styles.tr, ...(i % 2 === 1 ? styles.trAlt : {}), cursor: 'pointer', ...(isSelected ? { background: withAlpha(theme.teamPrimary, 0.15) } : {})}}
-                        onClick={() => setSelectedCard(isSelected ? null : card)}
-                      >
-                        <td style={styles.tdName}>{card.card_title || `${card.first_name} ${card.last_name}`}</td>
-                        <td style={styles.td}>{displayPos}</td>
-                        {showPitchers ? (
-                          <>
-                            <td style={styles.td}>{THROWS_MAP[parseInt(card.throws)] || '?'}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.stuff_overall)}}>{parseInt(card.stuff_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.movement_overall)}}>{parseInt(card.movement_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.control_overall)}}>{parseInt(card.control_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.p_hr_overall)}}>{parseInt(card.p_hr_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.p_babip_overall)}}>{parseInt(card.p_babip_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.stamina)}}>{parseInt(card.stamina) || 0}</td>
-                            <td style={styles.td}>{card.velocity || '—'}</td>
-                          </>
-                        ) : showBatters ? (
-                          <>
-                            <td style={styles.td}>{BATS_MAP[parseInt(card.bats)] || '?'}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.contact_overall)}}>{parseInt(card.contact_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.gap_overall)}}>{parseInt(card.gap_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.power_overall)}}>{parseInt(card.power_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.eye_overall)}}>{parseInt(card.eye_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.avoid_ks_overall)}}>{parseInt(card.avoid_ks_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.babip_bat_overall)}}>{parseInt(card.babip_bat_overall) || 0}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
-                          </>
-                        ) : (
-                          <>
-                            <td style={styles.td}>{isPitcher ? `T:${THROWS_MAP[parseInt(card.throws)] || '?'}` : `B:${BATS_MAP[parseInt(card.bats)] || '?'}`}</td>
-                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.contact_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.contact_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.gap_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.gap_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.power_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.power_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.eye_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.eye_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: isPitcher ? getRatingColor(card.stuff_overall) : theme.textDim}}>{isPitcher ? parseInt(card.stuff_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: isPitcher ? getRatingColor(card.movement_overall) : theme.textDim}}>{isPitcher ? parseInt(card.movement_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: isPitcher ? getRatingColor(card.control_overall) : theme.textDim}}>{isPitcher ? parseInt(card.control_overall) || 0 : '—'}</td>
-                            <td style={{...styles.td, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
-                          </>
-                        )}
-                      </tr>
-                      {isSelected && (
-                        <tr><td colSpan={showPitchers || showBatters ? 10 : 11} style={{ padding: 0, background: theme.panelBg, borderBottom: `2px solid ${theme.teamPrimary}` }}>
-                          <PlayerRatingCard card={card} position={{}} theme={theme} isPitcher={isPitcher} embedded={true} />
-                        </td></tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Two-column table layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {/* Left table */}
+          <div style={styles.tableContainer}>
+            <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+              <table style={styles.table}>
+                {renderTableHead()}
+                <tbody>
+                  {leftData.length === 0 ? (
+                    <tr><td colSpan={colCount} style={styles.emptyTable}>No cards found</td></tr>
+                  ) : leftData.map((card, i) => renderRow(card, i, i))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Right table */}
+          <div style={styles.tableContainer}>
+            <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+              <table style={styles.table}>
+                {renderTableHead()}
+                <tbody>
+                  {rightData.length === 0 ? (
+                    <tr><td colSpan={colCount} style={{...styles.emptyTable, padding: 24, fontSize: 12}}>&nbsp;</td></tr>
+                  ) : rightData.map((card, i) => renderRow(card, i, halfPoint + i))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
-            <button
-              onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setSelectedCard(null); }}
-              disabled={currentPage === 1}
-              style={{ padding: '6px 12px', background: currentPage === 1 ? theme.inputBg : theme.panelBg, color: currentPage === 1 ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: currentPage === 1 ? 'default' : 'pointer', fontSize: 12 }}
-            >Prev</button>
+            <button onClick={() => { setCurrentPage(1); setSelectedCard(null); }} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>First</button>
+            <button onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setSelectedCard(null); }} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>Prev</button>
             <span style={{ color: theme.textSecondary, fontSize: 12, fontFamily: 'ui-monospace, monospace' }}>
               Page {currentPage} / {totalPages}
             </span>
-            <button
-              onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setSelectedCard(null); }}
-              disabled={currentPage === totalPages}
-              style={{ padding: '6px 12px', background: currentPage === totalPages ? theme.inputBg : theme.panelBg, color: currentPage === totalPages ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: currentPage === totalPages ? 'default' : 'pointer', fontSize: 12 }}
-            >Next</button>
+            <button onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setSelectedCard(null); }} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Next</button>
+            <button onClick={() => { setCurrentPage(totalPages); setSelectedCard(null); }} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Last</button>
           </div>
         )}
       </div>
