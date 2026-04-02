@@ -1896,6 +1896,7 @@ function InfoPage() {
         const colMap = {
           'Card Title': 'card_title', 'LastName': 'last_name', 'FirstName': 'first_name',
           'Position': 'position', 'Bats': 'bats', 'Throws': 'throws', 'Pitcher Role': 'pitcher_role',
+          'Contact': 'contact_overall', 'Contact vL': 'contact_vl', 'Contact vR': 'contact_vr',
           'Gap': 'gap_overall', 'Gap vL': 'gap_vl', 'Gap vR': 'gap_vr',
           'Power': 'power_overall', 'Power vL': 'power_vl', 'Power vR': 'power_vr',
           'Eye': 'eye_overall', 'Eye vL': 'eye_vl', 'Eye vR': 'eye_vr',
@@ -3085,6 +3086,7 @@ function lgamma(z) {
 }
 
 const BATTING_ATTRS = [
+  { key: 'contact_overall', label: 'Contact', desc: 'Ability to make contact and get hits' },
   { key: 'gap_overall', label: 'Gap', desc: 'Ability to hit doubles and triples into the gaps' },
   { key: 'power_overall', label: 'Power', desc: 'Raw power and home run ability' },
   { key: 'eye_overall', label: 'Eye', desc: 'Plate discipline — drawing walks' },
@@ -3556,6 +3558,7 @@ function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
         ) : (
           <>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Batting</div>
+            <RatingBar label="Contact" value={card.contact_overall} />
             <RatingBar label="Gap" value={card.gap_overall} />
             <RatingBar label="Power" value={card.power_overall} />
             <RatingBar label="Eye" value={card.eye_overall} />
@@ -3569,6 +3572,7 @@ function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
                 <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>vL</span>
                 <span style={{ width: 30, fontSize: 9, color: '#64748b', textAlign: 'center' }}>vR</span>
               </div>
+              <SplitsGrid label="Contact" ovr={card.contact_overall} vl={card.contact_vl} vr={card.contact_vr} />
               <SplitsGrid label="Gap" ovr={card.gap_overall} vl={card.gap_vl} vr={card.gap_vr} />
               <SplitsGrid label="Power" ovr={card.power_overall} vl={card.power_vl} vr={card.power_vr} />
               <SplitsGrid label="Eye" ovr={card.eye_overall} vl={card.eye_vl} vr={card.eye_vr} />
