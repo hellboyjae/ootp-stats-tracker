@@ -9230,8 +9230,9 @@ function DatabasePage() {
   const handleSearch = (val) => { setSearch(val); setCurrentPage(1); setSelectedCard(null); };
   const handlePosFilter = (val) => { setPosFilter(val); setCurrentPage(1); setSelectedCard(null); };
 
+  const dbTh = { ...styles.th, padding: '10px 8px', fontSize: 13, letterSpacing: '0.05em' };
   const ThHeader = ({ col, label }) => (
-    <th style={{...styles.th, ...(sortBy === col ? styles.thSorted : {}), padding: '7px 4px'}} onClick={() => handleSort(col)}>
+    <th style={{...dbTh, ...(sortBy === col ? styles.thSorted : {})}} onClick={() => handleSort(col)}>
       {label}{sortBy === col && <span style={styles.sortIndicator}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
     </th>
   );
@@ -9245,6 +9246,10 @@ function DatabasePage() {
 
   const hasActiveFilters = search || posFilter !== 'All' || batsFilter !== 'All' || throwsFilter !== 'All' || (minStat.key && minStat.value);
 
+  const dbTd = { ...styles.td, padding: '8px 8px', fontSize: 14, fontWeight: 600 };
+  const dbTdName = { ...styles.tdName, padding: '8px 8px', fontSize: 14 };
+  const dbTdRating = (val) => ({ ...dbTd, color: getRatingColor(val) });
+
   const renderRow = (card, i, globalIdx) => {
     const isPitcher = isPitcherCard(card);
     const displayPos = getDisplayPos(card);
@@ -9255,41 +9260,41 @@ function DatabasePage() {
           style={{...styles.tr, ...(globalIdx % 2 === 1 ? styles.trAlt : {}), cursor: 'pointer', ...(isSelected ? { background: withAlpha(theme.teamPrimary, 0.15) } : {})}}
           onClick={() => setSelectedCard(isSelected ? null : card)}
         >
-          <td style={{...styles.tdName, fontSize: 11, padding: '5px 4px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis'}}>{card.card_title || `${card.first_name} ${card.last_name}`}</td>
-          <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{displayPos}</td>
+          <td style={dbTdName}>{card.card_title || `${card.first_name} ${card.last_name}`}</td>
+          <td style={dbTd}>{displayPos}</td>
           {showPitchers ? (
             <>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{THROWS_MAP[parseInt(card.throws)] || '?'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.stuff_overall)}}>{parseInt(card.stuff_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.movement_overall)}}>{parseInt(card.movement_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.control_overall)}}>{parseInt(card.control_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.p_hr_overall)}}>{parseInt(card.p_hr_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.p_babip_overall)}}>{parseInt(card.p_babip_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.stamina)}}>{parseInt(card.stamina) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{card.velocity || '—'}</td>
+              <td style={dbTd}>{THROWS_MAP[parseInt(card.throws)] || '?'}</td>
+              <td style={dbTdRating(card.stuff_overall)}>{parseInt(card.stuff_overall) || 0}</td>
+              <td style={dbTdRating(card.movement_overall)}>{parseInt(card.movement_overall) || 0}</td>
+              <td style={dbTdRating(card.control_overall)}>{parseInt(card.control_overall) || 0}</td>
+              <td style={dbTdRating(card.p_hr_overall)}>{parseInt(card.p_hr_overall) || 0}</td>
+              <td style={dbTdRating(card.p_babip_overall)}>{parseInt(card.p_babip_overall) || 0}</td>
+              <td style={dbTdRating(card.stamina)}>{parseInt(card.stamina) || 0}</td>
+              <td style={dbTd}>{card.velocity || '—'}</td>
             </>
           ) : showBatters ? (
             <>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{BATS_MAP[parseInt(card.bats)] || '?'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.contact_overall)}}>{parseInt(card.contact_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.gap_overall)}}>{parseInt(card.gap_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.power_overall)}}>{parseInt(card.power_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.eye_overall)}}>{parseInt(card.eye_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.avoid_ks_overall)}}>{parseInt(card.avoid_ks_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.babip_bat_overall)}}>{parseInt(card.babip_bat_overall) || 0}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
+              <td style={dbTd}>{BATS_MAP[parseInt(card.bats)] || '?'}</td>
+              <td style={dbTdRating(card.contact_overall)}>{parseInt(card.contact_overall) || 0}</td>
+              <td style={dbTdRating(card.gap_overall)}>{parseInt(card.gap_overall) || 0}</td>
+              <td style={dbTdRating(card.power_overall)}>{parseInt(card.power_overall) || 0}</td>
+              <td style={dbTdRating(card.eye_overall)}>{parseInt(card.eye_overall) || 0}</td>
+              <td style={dbTdRating(card.avoid_ks_overall)}>{parseInt(card.avoid_ks_overall) || 0}</td>
+              <td style={dbTdRating(card.babip_bat_overall)}>{parseInt(card.babip_bat_overall) || 0}</td>
+              <td style={dbTdRating(card.speed)}>{parseInt(card.speed) || 0}</td>
             </>
           ) : (
             <>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11}}>{isPitcher ? `T:${THROWS_MAP[parseInt(card.throws)] || '?'}` : `B:${BATS_MAP[parseInt(card.bats)] || '?'}`}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.contact_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.contact_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.gap_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.gap_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.power_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.power_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: !isPitcher ? getRatingColor(card.eye_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.eye_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: isPitcher ? getRatingColor(card.stuff_overall) : theme.textDim}}>{isPitcher ? parseInt(card.stuff_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: isPitcher ? getRatingColor(card.movement_overall) : theme.textDim}}>{isPitcher ? parseInt(card.movement_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: isPitcher ? getRatingColor(card.control_overall) : theme.textDim}}>{isPitcher ? parseInt(card.control_overall) || 0 : '—'}</td>
-              <td style={{...styles.td, padding: '5px 3px', fontSize: 11, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
+              <td style={dbTd}>{isPitcher ? `T:${THROWS_MAP[parseInt(card.throws)] || '?'}` : `B:${BATS_MAP[parseInt(card.bats)] || '?'}`}</td>
+              <td style={{...dbTd, color: !isPitcher ? getRatingColor(card.contact_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.contact_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: !isPitcher ? getRatingColor(card.gap_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.gap_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: !isPitcher ? getRatingColor(card.power_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.power_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: !isPitcher ? getRatingColor(card.eye_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.eye_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: isPitcher ? getRatingColor(card.stuff_overall) : theme.textDim}}>{isPitcher ? parseInt(card.stuff_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: isPitcher ? getRatingColor(card.movement_overall) : theme.textDim}}>{isPitcher ? parseInt(card.movement_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: isPitcher ? getRatingColor(card.control_overall) : theme.textDim}}>{isPitcher ? parseInt(card.control_overall) || 0 : '—'}</td>
+              <td style={{...dbTd, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
             </>
           )}
         </tr>
@@ -9318,7 +9323,7 @@ function DatabasePage() {
             <ThHeader col="p_hr_overall" label="pHR" />
             <ThHeader col="p_babip_overall" label="pBABIP" />
             <ThHeader col="stamina" label="STA" />
-            <th style={{...styles.th, padding: '7px 4px'}}>Velo</th>
+            <th style={dbTh}>Velo</th>
           </>
         ) : showBatters ? (
           <>
@@ -9333,7 +9338,7 @@ function DatabasePage() {
           </>
         ) : (
           <>
-            <th style={{...styles.th, padding: '7px 4px'}}>Hand</th>
+            <th style={dbTh}>Hand</th>
             <ThHeader col="contact_overall" label="CON" />
             <ThHeader col="gap_overall" label="GAP" />
             <ThHeader col="power_overall" label="POW" />
@@ -9350,8 +9355,8 @@ function DatabasePage() {
 
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading card database...</p></div></Layout>;
 
-  const selectStyle = { padding: '7px 10px', background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 12, cursor: 'pointer', outline: 'none' };
-  const paginationBtnStyle = (disabled) => ({ padding: '6px 14px', background: disabled ? theme.inputBg : theme.panelBg, color: disabled ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: disabled ? 'default' : 'pointer', fontSize: 12, fontWeight: 500 });
+  const selectStyle = { padding: '8px 12px', background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14, cursor: 'pointer', outline: 'none' };
+  const paginationBtnStyle = (disabled) => ({ padding: '8px 16px', background: disabled ? theme.inputBg : theme.panelBg, color: disabled ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: disabled ? 'default' : 'pointer', fontSize: 14, fontWeight: 500 });
 
   return (
     <Layout notification={notification}>
@@ -9363,7 +9368,7 @@ function DatabasePage() {
             placeholder="Search by name..."
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
-            style={{...styles.searchInput, borderRadius: 4, width: 180}}
+            style={{...styles.searchInput, borderRadius: 4, width: 200, fontSize: 14, padding: '8px 12px'}}
           />
           <select value={posFilter} onChange={(e) => handlePosFilter(e.target.value)} style={selectStyle}>
             {positions.map(p => <option key={p} value={p}>{p === 'All' ? 'All Positions' : p}</option>)}
@@ -9379,9 +9384,9 @@ function DatabasePage() {
             <option value="R">Throws R</option>
             <option value="L">Throws L</option>
           </select>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderLeft: `1px solid ${theme.border}`, paddingLeft: 8 }}>
-            <span style={{ color: theme.textDim, fontSize: 11 }}>Min</span>
-            <select value={minStat.key} onChange={(e) => { setMinStat(s => ({ ...s, key: e.target.value })); setCurrentPage(1); setSelectedCard(null); }} style={{...selectStyle, width: 90}}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: `1px solid ${theme.border}`, paddingLeft: 10 }}>
+            <span style={{ color: theme.textMuted, fontSize: 13, fontWeight: 600 }}>Min</span>
+            <select value={minStat.key} onChange={(e) => { setMinStat(s => ({ ...s, key: e.target.value })); setCurrentPage(1); setSelectedCard(null); }} style={{...selectStyle, width: 100}}>
               {statFilterOptions.map(o => <option key={o.k} value={o.k}>{o.l}</option>)}
             </select>
             {minStat.key && (
@@ -9390,13 +9395,13 @@ function DatabasePage() {
                 value={minStat.value}
                 onChange={(e) => { setMinStat(s => ({ ...s, value: e.target.value })); setCurrentPage(1); setSelectedCard(null); }}
                 placeholder="0"
-                style={{ padding: '7px 6px', background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 12, width: 50, outline: 'none' }}
+                style={{ padding: '8px 8px', background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14, width: 55, outline: 'none' }}
               />
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: `1px solid ${theme.border}`, paddingLeft: 8 }}>
-            <span style={{ color: theme.textDim, fontSize: 11 }}>Sort</span>
-            <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }} style={{...selectStyle, width: 100}}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: `1px solid ${theme.border}`, paddingLeft: 10 }}>
+            <span style={{ color: theme.textMuted, fontSize: 13, fontWeight: 600 }}>Sort</span>
+            <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }} style={{...selectStyle, width: 110}}>
               <option value="card_title">Name</option>
               <option value="displayPos">Position</option>
               <option value="contact_overall">Contact</option>
@@ -9411,10 +9416,10 @@ function DatabasePage() {
               <option value="control_overall">Control</option>
               <option value="stamina">Stamina</option>
             </select>
-            <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{...selectStyle, padding: '7px 8px', fontWeight: 600, fontSize: 11, minWidth: 24}}>{sortDir === 'asc' ? '▲' : '▼'}</button>
+            <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{...selectStyle, padding: '8px 10px', fontWeight: 700, fontSize: 13, minWidth: 28}}>{sortDir === 'asc' ? '▲' : '▼'}</button>
           </div>
-          {hasActiveFilters && <button onClick={resetFilters} style={styles.resetBtn}>Reset</button>}
-          <div style={styles.resultsCount}>{sorted.length} cards</div>
+          {hasActiveFilters && <button onClick={resetFilters} style={{...styles.resetBtn, fontSize: 13, padding: '8px 14px'}}>Reset</button>}
+          <div style={{...styles.resultsCount, fontSize: 14, fontWeight: 600}}>{sorted.length} cards</div>
         </div>
 
         {/* Two-column table layout */}
@@ -9453,7 +9458,7 @@ function DatabasePage() {
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
             <button onClick={() => { setCurrentPage(1); setSelectedCard(null); }} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>First</button>
             <button onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setSelectedCard(null); }} disabled={currentPage === 1} style={paginationBtnStyle(currentPage === 1)}>Prev</button>
-            <span style={{ color: theme.textSecondary, fontSize: 12, fontFamily: 'ui-monospace, monospace' }}>
+            <span style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'ui-monospace, monospace', fontWeight: 500 }}>
               Page {currentPage} / {totalPages}
             </span>
             <button onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setSelectedCard(null); }} disabled={currentPage === totalPages} style={paginationBtnStyle(currentPage === totalPages)}>Next</button>
