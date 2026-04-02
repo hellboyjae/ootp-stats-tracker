@@ -1269,7 +1269,7 @@ function StatsPage() {
     const lgHr9 = mean(qPit, p => parseFloat(p.hrPer9) || 0);
 
     // Step 2: Neutral baselines
-    const baselines = { ops: 0.720, avg: 0.250, slg: 0.400, babip: 0.300, hrPa: 0.030, bbPct: 8.5, era: 4.00, whip: 1.25, k9: 8.5, hr9: 1.10 };
+    const baselines = { ops: 0.728, avg: 0.257, slg: 0.403, babip: 0.297, hrPa: 0.025, bbPct: 8.5, era: 4.07, whip: 1.347, k9: 7.1, hr9: 1.0 };
 
     // Step 3: Percent deviations (positive = hitter-friendly)
     const dev = (val, base) => ((val - base) / base) * 100;
@@ -9206,7 +9206,7 @@ function getStyles(t) {
     handednessContainer: { display: 'flex', gap: 16 },
     handednessGroup: { color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
     friendlinessIndicator: { padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, border: '1px solid', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em', cursor: 'default' },
-    friendlinessHint: { fontSize: 10, color: t.textDim, opacity: 0.7 },
+    friendlinessHint: { fontSize: 10, color: t.textDim, opacity: 0.7, position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' },
     friendlinessTooltip: { position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 6, padding: '10px 14px', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 20, whiteSpace: 'nowrap', fontSize: 12, color: t.textSecondary, fontFamily: 'ui-monospace, monospace', minWidth: 160 },
     uploadBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12, transition: 'all 0.15s ease' },
     tabRow: { marginBottom: 12 },
