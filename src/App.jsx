@@ -1251,7 +1251,7 @@ function StatsPage() {
     let totalRC = 0, totalOuts = 0;
     batting.forEach(p => {
       const ab = parseFloat(p.ab) || 0, pa = parseFloat(p.pa) || 0;
-      if (ab <= 0 || pa <= 0) return;
+      if (ab < 400) return;
       const avg = parseFloat(p.avg) || 0, slg = parseFloat(p.slg) || 0;
       const bbPct = parseFloat(p.bbPct) || 0;
       const h = avg * ab, tb = slg * ab, bb = (bbPct / 100) * pa;
@@ -1271,7 +1271,7 @@ function StatsPage() {
     let spEraSum = 0, spIPSum = 0, rpEraSum = 0, rpIPSum = 0;
     pitching.forEach(p => {
       const era = parseFloat(p.era) || 0, ip = parseIP(p.ip);
-      if (ip <= 0) return;
+      if (ip < 200) return;
       const pos = (p.pos || '').toUpperCase();
       if (pos === 'SP') { spEraSum += era * ip; spIPSum += ip; }
       else { rpEraSum += era * ip; rpIPSum += ip; }
