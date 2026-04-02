@@ -1460,8 +1460,8 @@ function StatsPage() {
               <div style={styles.tournamentMeta}>
                 <h2 style={styles.tournamentTitleMain}>{selectedTournament.name}</h2>
                 {((selectedTournament.pitching?.length || 0) > 0 || (selectedTournament.batting?.length || 0) > 0) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={styles.handednessContainer}>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <div style={{...styles.handednessContainer, alignSelf: 'center'}}>
                       {(selectedTournament.pitching?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.pitching, 'throws'); return <span style={{...styles.handednessGroup, color: theme.textPrimary}}>T: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
                       {(selectedTournament.batting?.length || 0) > 0 && (() => { const s = getHandednessStats(selectedTournament.batting, 'bats'); return <span style={{...styles.handednessGroup, color: theme.textPrimary}}>B: L{s.L}% S{s.S}% R{s.R}%</span>; })()}
                     </div>
@@ -1477,7 +1477,7 @@ function StatsPage() {
                           : theme.textDim;
                       return (
                         <span
-                          style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}
+                          style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', alignSelf: 'center' }}
                           onMouseEnter={() => setShowFriendlinessTooltip(true)}
                           onMouseLeave={() => setShowFriendlinessTooltip(false)}
                         >
