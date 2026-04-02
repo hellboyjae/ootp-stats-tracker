@@ -505,6 +505,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/leaderboards" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Leaderboards</NavLink>
             <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
+            <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
@@ -9126,6 +9127,255 @@ function WelcomePage() {
   );
 }
 
+// ============ DatabasePage Component ============
+
+function DatabasePage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const [notification, setNotification] = useState(null);
+  const [cardData, setCardData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [posFilter, setPosFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('card_title');
+  const [sortDir, setSortDir] = useState('asc');
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 100;
+
+  useEffect(() => {
+    const loadCards = async () => {
+      try {
+        let allCards = [];
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase.from('pt_cards').select('*').range(from, from + pageSize - 1);
+          if (error) { console.error('Card load error:', error); break; }
+          if (!data || data.length === 0) break;
+          allCards = allCards.concat(data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+        setCardData(allCards);
+      } catch (e) { console.error('Failed to load card data:', e); }
+      setIsLoading(false);
+    };
+    loadCards();
+  }, []);
+
+  const getDisplayPos = (card) => {
+    const pos = parseInt(card.position);
+    if (pos === 1) {
+      const role = (card.pitcher_role || '').toLowerCase();
+      return (role === 'sp' || role === 'starter') ? 'SP' : 'RP/CL';
+    }
+    return POSITION_NAMES[pos] || '?';
+  };
+
+  const isPitcherCard = (card) => parseInt(card.position) === 1;
+
+  const filtered = cardData.filter(card => {
+    const displayPos = getDisplayPos(card);
+    if (posFilter !== 'All' && displayPos !== posFilter) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      const title = (card.card_title || '').toLowerCase();
+      const last = (card.last_name || '').toLowerCase();
+      const first = (card.first_name || '').toLowerCase();
+      if (!title.includes(s) && !last.includes(s) && !first.includes(s)) return false;
+    }
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    let av = a[sortBy], bv = b[sortBy];
+    if (sortBy === 'displayPos') { av = getDisplayPos(a); bv = getDisplayPos(b); }
+    if (sortBy === 'card_title') { av = av || ''; bv = bv || ''; }
+    if (typeof av === 'string' && typeof bv === 'string') {
+      const cmp = av.localeCompare(bv);
+      return sortDir === 'asc' ? cmp : -cmp;
+    }
+    av = parseInt(av) || 0; bv = parseInt(bv) || 0;
+    return sortDir === 'asc' ? av - bv : bv - av;
+  });
+
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+  const pageData = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const handleSort = (col) => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir('asc'); }
+  };
+
+  const handleSearch = (val) => { setSearch(val); setCurrentPage(1); setSelectedCard(null); };
+  const handlePosFilter = (val) => { setPosFilter(val); setCurrentPage(1); setSelectedCard(null); };
+
+  const ThHeader = ({ col, label }) => (
+    <th style={{...styles.th, ...(sortBy === col ? styles.thSorted : {})}} onClick={() => handleSort(col)}>
+      {label}{sortBy === col && <span style={styles.sortIndicator}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
+    </th>
+  );
+
+  // Determine if current filter shows pitchers or batters (or mixed)
+  const showPitchers = posFilter === 'SP' || posFilter === 'RP/CL';
+  const showBatters = posFilter !== 'All' && !showPitchers;
+  // For "All" position, show mixed table — use a combined layout
+
+  const positions = ['All', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'SP', 'RP/CL'];
+
+  if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading card database...</p></div></Layout>;
+
+  return (
+    <Layout notification={notification}>
+      <div style={{ padding: '20px 20px', background: theme.mainBg, minHeight: 'calc(100vh - 100px)' }}>
+        {/* Control bar */}
+        <div style={styles.controlBar}>
+          <input
+            type="text"
+            placeholder="Search by name..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            style={styles.searchInput}
+          />
+          <select value={posFilter} onChange={(e) => handlePosFilter(e.target.value)} style={styles.filterSelect}>
+            {positions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <div style={styles.resultsCount}>{sorted.length} cards</div>
+        </div>
+
+        {/* Table */}
+        <div style={styles.tableContainer}>
+          <div style={styles.tableWrapper}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <ThHeader col="card_title" label="Card Title" />
+                  <ThHeader col="displayPos" label="Pos" />
+                  {showPitchers ? (
+                    <>
+                      <ThHeader col="throws" label="Throws" />
+                      <ThHeader col="stuff_overall" label="Stuff" />
+                      <ThHeader col="movement_overall" label="Movement" />
+                      <ThHeader col="control_overall" label="Control" />
+                      <ThHeader col="p_hr_overall" label="pHR" />
+                      <ThHeader col="p_babip_overall" label="pBABIP" />
+                      <ThHeader col="stamina" label="Stamina" />
+                      <th style={styles.th}>Velo</th>
+                    </>
+                  ) : showBatters ? (
+                    <>
+                      <ThHeader col="bats" label="Bats" />
+                      <ThHeader col="contact_overall" label="Contact" />
+                      <ThHeader col="gap_overall" label="Gap" />
+                      <ThHeader col="power_overall" label="Power" />
+                      <ThHeader col="eye_overall" label="Eye" />
+                      <ThHeader col="avoid_ks_overall" label="Avoid K" />
+                      <ThHeader col="babip_bat_overall" label="BABIP" />
+                      <ThHeader col="speed" label="Speed" />
+                    </>
+                  ) : (
+                    <>
+                      <th style={styles.th}>Hand</th>
+                      <ThHeader col="contact_overall" label="CON" />
+                      <ThHeader col="gap_overall" label="GAP" />
+                      <ThHeader col="power_overall" label="POW" />
+                      <ThHeader col="eye_overall" label="EYE" />
+                      <ThHeader col="stuff_overall" label="STF" />
+                      <ThHeader col="movement_overall" label="MOV" />
+                      <ThHeader col="control_overall" label="CTL" />
+                      <ThHeader col="speed" label="SPD" />
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {pageData.length === 0 ? (
+                  <tr><td colSpan={showPitchers || showBatters ? 10 : 11} style={styles.emptyTable}>No cards found</td></tr>
+                ) : pageData.map((card, i) => {
+                  const isPitcher = isPitcherCard(card);
+                  const displayPos = getDisplayPos(card);
+                  const isSelected = selectedCard?.id === card.id;
+                  return (
+                    <React.Fragment key={card.id || i}>
+                      <tr
+                        style={{...styles.tr, ...(i % 2 === 1 ? styles.trAlt : {}), cursor: 'pointer', ...(isSelected ? { background: withAlpha(theme.teamPrimary, 0.15) } : {})}}
+                        onClick={() => setSelectedCard(isSelected ? null : card)}
+                      >
+                        <td style={styles.tdName}>{card.card_title || `${card.first_name} ${card.last_name}`}</td>
+                        <td style={styles.td}>{displayPos}</td>
+                        {showPitchers ? (
+                          <>
+                            <td style={styles.td}>{THROWS_MAP[parseInt(card.throws)] || '?'}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.stuff_overall)}}>{parseInt(card.stuff_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.movement_overall)}}>{parseInt(card.movement_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.control_overall)}}>{parseInt(card.control_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.p_hr_overall)}}>{parseInt(card.p_hr_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.p_babip_overall)}}>{parseInt(card.p_babip_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.stamina)}}>{parseInt(card.stamina) || 0}</td>
+                            <td style={styles.td}>{card.velocity || '—'}</td>
+                          </>
+                        ) : showBatters ? (
+                          <>
+                            <td style={styles.td}>{BATS_MAP[parseInt(card.bats)] || '?'}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.contact_overall)}}>{parseInt(card.contact_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.gap_overall)}}>{parseInt(card.gap_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.power_overall)}}>{parseInt(card.power_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.eye_overall)}}>{parseInt(card.eye_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.avoid_ks_overall)}}>{parseInt(card.avoid_ks_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.babip_bat_overall)}}>{parseInt(card.babip_bat_overall) || 0}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={styles.td}>{isPitcher ? `T:${THROWS_MAP[parseInt(card.throws)] || '?'}` : `B:${BATS_MAP[parseInt(card.bats)] || '?'}`}</td>
+                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.contact_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.contact_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.gap_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.gap_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.power_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.power_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: !isPitcher ? getRatingColor(card.eye_overall) : theme.textDim}}>{!isPitcher ? parseInt(card.eye_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: isPitcher ? getRatingColor(card.stuff_overall) : theme.textDim}}>{isPitcher ? parseInt(card.stuff_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: isPitcher ? getRatingColor(card.movement_overall) : theme.textDim}}>{isPitcher ? parseInt(card.movement_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: isPitcher ? getRatingColor(card.control_overall) : theme.textDim}}>{isPitcher ? parseInt(card.control_overall) || 0 : '—'}</td>
+                            <td style={{...styles.td, color: getRatingColor(card.speed)}}>{parseInt(card.speed) || 0}</td>
+                          </>
+                        )}
+                      </tr>
+                      {isSelected && (
+                        <tr><td colSpan={showPitchers || showBatters ? 10 : 11} style={{ padding: 0, background: theme.panelBg, borderBottom: `2px solid ${theme.teamPrimary}` }}>
+                          <PlayerRatingCard card={card} position={{}} theme={theme} isPitcher={isPitcher} embedded={true} />
+                        </td></tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <button
+              onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); setSelectedCard(null); }}
+              disabled={currentPage === 1}
+              style={{ padding: '6px 12px', background: currentPage === 1 ? theme.inputBg : theme.panelBg, color: currentPage === 1 ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: currentPage === 1 ? 'default' : 'pointer', fontSize: 12 }}
+            >Prev</button>
+            <span style={{ color: theme.textSecondary, fontSize: 12, fontFamily: 'ui-monospace, monospace' }}>
+              Page {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); setSelectedCard(null); }}
+              disabled={currentPage === totalPages}
+              style={{ padding: '6px 12px', background: currentPage === totalPages ? theme.inputBg : theme.panelBg, color: currentPage === totalPages ? theme.textDim : theme.textPrimary, border: `1px solid ${theme.border}`, borderRadius: 4, cursor: currentPage === totalPages ? 'default' : 'pointer', fontSize: 12 }}
+            >Next</button>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><BannerProvider><Routes>
     <Route path="/" element={<WelcomePage />} />
@@ -9137,6 +9387,7 @@ export default function App() {
     <Route path="/review" element={<ReviewQueuePage />} />
     <Route path="/leaderboards" element={<LeaderboardsPage />} />
     <Route path="/draft-assistant" element={<DraftAssistantPage />} />
+    <Route path="/database" element={<DatabasePage />} />
   </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
