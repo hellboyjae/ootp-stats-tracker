@@ -1247,49 +1247,57 @@ function StatsPage() {
 
   const getEventFriendliness = (batting, pitching) => {
     if (!batting?.length || !pitching?.length) return null;
-    // RS/G via Runs Created
-    let totalRC = 0, totalOuts = 0;
-    batting.forEach(p => {
-      const ab = parseFloat(p.ab) || 0, pa = parseFloat(p.pa) || 0;
-      if (ab < 400) return;
-      const avg = parseFloat(p.avg) || 0, slg = parseFloat(p.slg) || 0;
-      const bbPct = parseFloat(p.bbPct) || 0;
-      const h = avg * ab, tb = slg * ab, bb = (bbPct / 100) * pa;
-      const abBb = ab + bb;
-      if (abBb <= 0) return;
-      const rc = (h + bb) * tb / abBb;
-      const outs = ab - h;
-      if (outs <= 0) return;
-      const rc27 = rc * 27 / outs;
-      totalRC += rc27 * pa;
-      totalOuts += pa;
-    });
-    if (totalOuts <= 0) return null;
-    const rsG = totalRC / totalOuts;
+    // Qualified batters: 200+ PA
+    const qBat = batting.filter(p => (parseFloat(p.pa) || 0) >= 200);
+    // Qualified pitchers: 80+ IP
+    const qPit = pitching.filter(p => parseIP(p.ip) >= 80);
+    if (!qBat.length || !qPit.length) return null;
 
-    // RA/G via weighted pitcher ERA (SP vs RP split)
-    let spEraSum = 0, spIPSum = 0, rpEraSum = 0, rpIPSum = 0;
-    pitching.forEach(p => {
-      const era = parseFloat(p.era) || 0, ip = parseIP(p.ip);
-      if (ip < 200) return;
-      const pos = (p.pos || '').toUpperCase();
-      if (pos === 'SP') { spEraSum += era * ip; spIPSum += ip; }
-      else { rpEraSum += era * ip; rpIPSum += ip; }
-    });
-    if (spIPSum + rpIPSum <= 0) return null;
-    const spAvgEra = spIPSum > 0 ? spEraSum / spIPSum : 0;
-    const rpAvgEra = rpIPSum > 0 ? rpEraSum / rpIPSum : 0;
-    const raG = spIPSum > 0 && rpIPSum > 0
-      ? spAvgEra * 0.67 + rpAvgEra * 0.33
-      : spIPSum > 0 ? spAvgEra : rpAvgEra;
+    // Step 1: League averages
+    const mean = (arr, fn) => arr.reduce((s, p) => s + fn(p), 0) / arr.length;
+    const lgAvg = mean(qBat, p => parseFloat(p.avg) || 0);
+    const lgOps = mean(qBat, p => parseFloat(p.ops) || 0);
+    const lgSlg = mean(qBat, p => parseFloat(p.slg) || 0);
+    const lgBabip = mean(qBat, p => parseFloat(p.babip) || 0);
+    const lgBbPct = mean(qBat, p => parseFloat(p.bbPct) || 0);
+    const totalHR = qBat.reduce((s, p) => s + (parseFloat(p.hr) || 0), 0);
+    const totalPA = qBat.reduce((s, p) => s + (parseFloat(p.pa) || 0), 0);
+    const lgHrPa = totalPA > 0 ? totalHR / totalPA : 0;
+    const lgEra = mean(qPit, p => parseFloat(p.era) || 0);
+    const lgWhip = mean(qPit, p => parseFloat(p.whip) || 0);
+    const lgK9 = mean(qPit, p => parseFloat(p.kPer9) || 0);
+    const lgHr9 = mean(qPit, p => parseFloat(p.hrPer9) || 0);
 
-    // Classification
-    const winPct = (rsG * rsG) / (rsG * rsG + raG * raG);
+    // Step 2: Neutral baselines
+    const baselines = { ops: 0.720, avg: 0.250, slg: 0.400, babip: 0.300, hrPa: 0.030, bbPct: 8.5, era: 4.00, whip: 1.25, k9: 8.5, hr9: 1.10 };
+
+    // Step 3: Percent deviations (positive = hitter-friendly)
+    const dev = (val, base) => ((val - base) / base) * 100;
+    const metrics = [
+      { key: 'OPS', lg: lgOps, base: baselines.ops, weight: 2.0, dev: dev(lgOps, baselines.ops) },
+      { key: 'AVG', lg: lgAvg, base: baselines.avg, weight: 1.0, dev: dev(lgAvg, baselines.avg) },
+      { key: 'SLG', lg: lgSlg, base: baselines.slg, weight: 1.5, dev: dev(lgSlg, baselines.slg) },
+      { key: 'BABIP', lg: lgBabip, base: baselines.babip, weight: 1.0, dev: dev(lgBabip, baselines.babip) },
+      { key: 'HR/PA', lg: lgHrPa, base: baselines.hrPa, weight: 1.5, dev: dev(lgHrPa, baselines.hrPa) },
+      { key: 'BB%', lg: lgBbPct, base: baselines.bbPct, weight: 0.5, dev: dev(lgBbPct, baselines.bbPct) },
+      { key: 'ERA', lg: lgEra, base: baselines.era, weight: 2.0, dev: dev(lgEra, baselines.era) },
+      { key: 'WHIP', lg: lgWhip, base: baselines.whip, weight: 1.0, dev: dev(lgWhip, baselines.whip) },
+      { key: 'K/9', lg: lgK9, base: baselines.k9, weight: 1.0, dev: -dev(lgK9, baselines.k9) },
+      { key: 'HR/9', lg: lgHr9, base: baselines.hr9, weight: 1.5, dev: dev(lgHr9, baselines.hr9) },
+    ];
+
+    // Step 4: Weighted composite
+    const envScore = metrics.reduce((s, m) => s + m.dev * m.weight, 0) / 12.0;
+
+    // Step 5: Verdict
     let label;
-    if (rsG > raG * 1.10) label = 'Hitter Friendly';
-    else if (raG > rsG * 1.10) label = 'Pitcher Friendly';
-    else label = 'Neutral';
-    return { label, rsG, raG, winPct };
+    if (envScore > 5) label = 'Hitter-Friendly';
+    else if (envScore > 2) label = 'Slightly Hitter-Friendly';
+    else if (envScore >= -2) label = 'Neutral';
+    else if (envScore >= -5) label = 'Slightly Pitcher-Friendly';
+    else label = 'Pitcher-Friendly';
+
+    return { label, envScore, metrics };
   };
 
   const getCsvCount = (t) => (t.uploadedDates?.length || 0);
@@ -1458,27 +1466,40 @@ function StatsPage() {
                     {(() => {
                       const f = getEventFriendliness(selectedTournament.batting, selectedTournament.pitching);
                       if (!f) return null;
-                      const badgeColor = f.label === 'Hitter Friendly'
+                      const isHitter = f.label.includes('Hitter');
+                      const isPitcher = f.label.includes('Pitcher');
+                      const badgeColor = isHitter
                         ? (isColorblind ? '#2563eb' : '#22C55E')
-                        : f.label === 'Pitcher Friendly'
+                        : isPitcher
                           ? (isColorblind ? '#ea580c' : '#3B82F6')
                           : theme.textDim;
                       return (
                         <span
-                          style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}
+                          style={{ position: 'relative', display: 'inline-flex', alignItems: 'baseline', gap: 4 }}
                           onMouseEnter={() => setShowFriendlinessTooltip(true)}
                           onMouseLeave={() => setShowFriendlinessTooltip(false)}
                         >
-                          <span style={{...styles.friendlinessIndicator, background: `${badgeColor}20`, color: badgeColor, borderColor: `${badgeColor}40`}}>{f.label}</span>
+                          <span style={{...styles.friendlinessIndicator, background: `${badgeColor}20`, color: badgeColor, borderColor: `${badgeColor}40`}}>{f.label} ({f.envScore >= 0 ? '+' : ''}{f.envScore.toFixed(1)})</span>
                           <span style={styles.friendlinessHint}>hover for info</span>
                           {showFriendlinessTooltip && (
                             <div style={styles.friendlinessTooltip}>
-                              <div style={{ marginBottom: 6, fontWeight: 600, color: theme.textPrimary }}>Event Environment</div>
-                              <div>RS/G: {f.rsG.toFixed(2)}</div>
-                              <div>RA/G: {f.raG.toFixed(2)}</div>
-                              <div>Pythag W%: {f.winPct.toFixed(3)}</div>
-                              <div style={{ marginTop: 6, fontSize: 10, color: theme.textDim }}>
-                                {f.label === 'Hitter Friendly' ? 'RS/G exceeds RA/G by >10%' : f.label === 'Pitcher Friendly' ? 'RA/G exceeds RS/G by >10%' : 'RS/G and RA/G within 10%'}
+                              <div style={{ marginBottom: 8, fontWeight: 600, color: theme.textPrimary }}>Environment Index: {f.envScore >= 0 ? '+' : ''}{f.envScore.toFixed(1)}</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: '2px 10px', fontSize: 11 }}>
+                                <span style={{ fontWeight: 600, color: theme.textMuted }}>Metric</span>
+                                <span style={{ fontWeight: 600, color: theme.textMuted }}>League</span>
+                                <span style={{ fontWeight: 600, color: theme.textMuted }}>Base</span>
+                                <span style={{ fontWeight: 600, color: theme.textMuted }}>Dev</span>
+                                {f.metrics.map(m => {
+                                  const devColor = m.dev > 2 ? (isColorblind ? '#2563eb' : '#22C55E') : m.dev < -2 ? (isColorblind ? '#ea580c' : '#3B82F6') : theme.textDim;
+                                  return (
+                                    <React.Fragment key={m.key}>
+                                      <span>{m.key}</span>
+                                      <span>{m.key === 'HR/PA' ? m.lg.toFixed(3) : m.key === 'BB%' ? m.lg.toFixed(1) : m.lg.toFixed(m.lg < 2 ? 3 : 2)}</span>
+                                      <span style={{ color: theme.textDim }}>{m.key === 'BB%' ? m.base.toFixed(1) : m.base < 2 ? m.base.toFixed(3) : m.base.toFixed(2)}</span>
+                                      <span style={{ color: devColor }}>{m.dev >= 0 ? '+' : ''}{m.dev.toFixed(1)}%</span>
+                                    </React.Fragment>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -9183,7 +9204,7 @@ function getStyles(t) {
     handednessContainer: { display: 'flex', gap: 16 },
     handednessGroup: { color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
     friendlinessIndicator: { padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, border: '1px solid', fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em', cursor: 'default' },
-    friendlinessHint: { fontSize: 10, color: t.textDim, marginTop: 2, opacity: 0.7 },
+    friendlinessHint: { fontSize: 10, color: t.textDim, opacity: 0.7 },
     friendlinessTooltip: { position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 6, padding: '10px 14px', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 20, whiteSpace: 'nowrap', fontSize: 12, color: t.textSecondary, fontFamily: 'ui-monospace, monospace', minWidth: 160 },
     uploadBtn: { padding: '8px 14px', background: 'transparent', color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 4, cursor: 'pointer', fontWeight: 500, fontSize: 12, transition: 'all 0.15s ease' },
     tabRow: { marginBottom: 12 },
