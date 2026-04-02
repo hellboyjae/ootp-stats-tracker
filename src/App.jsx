@@ -9201,7 +9201,7 @@ function getStyles(t) {
     welcomeTitle: { fontSize: 26, color: t.textSecondary, marginBottom: 10, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.03em' },
     welcomeText: { color: t.textDim, fontSize: 14 },
     tournamentHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    tournamentMeta: { display: 'flex', alignItems: 'baseline', gap: 20 },
+    tournamentMeta: { display: 'flex', alignItems: 'center', gap: 20 },
     tournamentTitleMain: { fontSize: 22, color: t.textSecondary, margin: 0, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' },
     handednessContainer: { display: 'flex', gap: 16 },
     handednessGroup: { color: t.textDim, fontSize: 12, fontFamily: 'ui-monospace, monospace' },
