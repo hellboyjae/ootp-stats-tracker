@@ -469,7 +469,12 @@ function NewsBanner() {
       ) : (
         <div style={styles.newsBannerScroll}>
           <div style={styles.newsBannerText}>
-            {bannerText}
+            {bannerText.split('|').map((segment, i, arr) => (
+              <React.Fragment key={i}>
+                <span style={{ color: i % 2 === 0 ? theme.teamPrimary : theme.teamSecondary }}>{segment.trim()}</span>
+                {i < arr.length - 1 && <span style={{ margin: '0 18px', color: theme.textDim }}>|</span>}
+              </React.Fragment>
+            ))}
           </div>
           {hasAccess('master') && (
             <button onClick={startEditing} style={styles.newsBannerEditBtn}>✎</button>
