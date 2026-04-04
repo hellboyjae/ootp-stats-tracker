@@ -1255,8 +1255,8 @@ function StatsPage() {
     if (!batting?.length || !pitching?.length) return null;
     // Qualified batters: 200+ PA
     const qBat = batting.filter(p => (parseFloat(p.pa) || 0) >= 200);
-    // Qualified pitchers: 80+ IP
-    const qPit = pitching.filter(p => parseIP(p.ip) >= 80);
+    // Qualified pitchers: 100+ IP
+    const qPit = pitching.filter(p => parseIP(p.ip) >= 100);
     if (!qBat.length || !qPit.length) return null;
 
     // Step 1: League averages
@@ -1266,34 +1266,41 @@ function StatsPage() {
     const lgSlg = mean(qBat, p => parseFloat(p.slg) || 0);
     const lgBabip = mean(qBat, p => parseFloat(p.babip) || 0);
     const lgBbPct = mean(qBat, p => parseFloat(p.bbPct) || 0);
+    const lgWrcPlus = mean(qBat, p => parseFloat(p.wrcPlus) || 0);
     const totalHR = qBat.reduce((s, p) => s + (parseFloat(p.hr) || 0), 0);
     const totalPA = qBat.reduce((s, p) => s + (parseFloat(p.pa) || 0), 0);
     const lgHrPa = totalPA > 0 ? totalHR / totalPA : 0;
     const lgEra = mean(qPit, p => parseFloat(p.era) || 0);
+    const lgFip = mean(qPit, p => parseFloat(p.fip) || 0);
+    const lgSiera = mean(qPit, p => parseFloat(p.siera) || 0);
     const lgWhip = mean(qPit, p => parseFloat(p.whip) || 0);
     const lgK9 = mean(qPit, p => parseFloat(p.kPer9) || 0);
     const lgHr9 = mean(qPit, p => parseFloat(p.hrPer9) || 0);
 
-    // Step 2: Neutral baselines
-    const baselines = { ops: 0.728, avg: 0.257, slg: 0.403, babip: 0.297, hrPa: 0.025, bbPct: 8.5, era: 4.07, whip: 1.347, k9: 7.1, hr9: 1.0 };
+    // Step 2: Game-neutral baselines (from 6 neutral tournament formats)
+    const baselines = { ops: 0.707, wrcPlus: 94.3, avg: 0.246, slg: 0.396, babip: 0.282, hrPa: 0.0068, bbPct: 8.1, era: 3.77, fip: 4.06, siera: 3.80, whip: 1.216, k9: 7.6, hr9: 1.054 };
 
     // Step 3: Percent deviations (positive = hitter-friendly)
     const dev = (val, base) => ((val - base) / base) * 100;
     const metrics = [
       { key: 'OPS', lg: lgOps, base: baselines.ops, weight: 2.0, dev: dev(lgOps, baselines.ops) },
-      { key: 'AVG', lg: lgAvg, base: baselines.avg, weight: 1.0, dev: dev(lgAvg, baselines.avg) },
+      { key: 'wRC+', lg: lgWrcPlus, base: baselines.wrcPlus, weight: 2.0, dev: dev(lgWrcPlus, baselines.wrcPlus) },
+      { key: 'AVG', lg: lgAvg, base: baselines.avg, weight: 0.5, dev: dev(lgAvg, baselines.avg) },
       { key: 'SLG', lg: lgSlg, base: baselines.slg, weight: 1.5, dev: dev(lgSlg, baselines.slg) },
-      { key: 'BABIP', lg: lgBabip, base: baselines.babip, weight: 1.0, dev: dev(lgBabip, baselines.babip) },
-      { key: 'HR/PA', lg: lgHrPa, base: baselines.hrPa, weight: 1.5, dev: dev(lgHrPa, baselines.hrPa) },
+      { key: 'BABIP', lg: lgBabip, base: baselines.babip, weight: 0.5, dev: dev(lgBabip, baselines.babip) },
+      { key: 'HR/PA', lg: lgHrPa, base: baselines.hrPa, weight: 2.0, dev: dev(lgHrPa, baselines.hrPa) },
       { key: 'BB%', lg: lgBbPct, base: baselines.bbPct, weight: 0.5, dev: dev(lgBbPct, baselines.bbPct) },
-      { key: 'ERA', lg: lgEra, base: baselines.era, weight: 2.0, dev: dev(lgEra, baselines.era) },
+      { key: 'ERA', lg: lgEra, base: baselines.era, weight: 1.5, dev: dev(lgEra, baselines.era) },
+      { key: 'FIP', lg: lgFip, base: baselines.fip, weight: 1.5, dev: dev(lgFip, baselines.fip) },
+      { key: 'SIERA', lg: lgSiera, base: baselines.siera, weight: 2.0, dev: dev(lgSiera, baselines.siera) },
       { key: 'WHIP', lg: lgWhip, base: baselines.whip, weight: 1.0, dev: dev(lgWhip, baselines.whip) },
-      { key: 'K/9', lg: lgK9, base: baselines.k9, weight: 1.0, dev: -dev(lgK9, baselines.k9) },
-      { key: 'HR/9', lg: lgHr9, base: baselines.hr9, weight: 1.5, dev: dev(lgHr9, baselines.hr9) },
+      { key: 'K/9', lg: lgK9, base: baselines.k9, weight: 1.5, dev: -dev(lgK9, baselines.k9) },
+      { key: 'HR/9', lg: lgHr9, base: baselines.hr9, weight: 2.0, dev: dev(lgHr9, baselines.hr9) },
     ];
 
     // Step 4: Weighted composite
-    const envScore = metrics.reduce((s, m) => s + m.dev * m.weight, 0) / 12.0;
+    const totalWeight = metrics.reduce((s, m) => s + m.weight, 0); // 18.5
+    const envScore = metrics.reduce((s, m) => s + m.dev * m.weight, 0) / totalWeight;
 
     // Step 5: Verdict
     let label;
