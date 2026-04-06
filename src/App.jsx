@@ -1278,7 +1278,7 @@ function StatsPage() {
     const lgHr9 = mean(qPit, p => parseFloat(p.hrPer9) || 0);
 
     // Step 2: Game-neutral baselines (from 6 neutral tournament formats)
-    const baselines = { ops: 0.707, wrcPlus: 94.3, avg: 0.246, slg: 0.396, babip: 0.282, hrPa: 0.025, bbPct: 8.1, era: 3.77, fip: 4.06, siera: 3.80, whip: 1.216, k9: 7.6, hr9: 1.054 };
+    const baselines = { ops: 0.689, wrcPlus: 97.2, avg: 0.242, slg: 0.383, babip: 0.284, hrPa: 0.040, bbPct: 8.1, era: 3.19, fip: 3.69, siera: 3.32, whip: 1.106, k9: 8.49, hr9: 0.954 };
 
     // Step 3: Percent deviations (positive = hitter-friendly)
     const dev = (val, base) => ((val - base) / base) * 100;
