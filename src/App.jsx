@@ -1294,7 +1294,7 @@ function StatsPage() {
       { key: 'FIP', lg: lgFip, base: baselines.fip, weight: 1.0, dev: dev(lgFip, baselines.fip) },
       { key: 'SIERA', lg: lgSiera, base: baselines.siera, weight: 1.0, dev: dev(lgSiera, baselines.siera) },
       { key: 'WHIP', lg: lgWhip, base: baselines.whip, weight: 1.0, dev: dev(lgWhip, baselines.whip) },
-      { key: 'K/9', lg: lgK9, base: baselines.k9, weight: 1.5, dev: -dev(lgK9, baselines.k9) },
+      { key: 'K/9', lg: lgK9, base: baselines.k9, weight: 1.5, dev: -dev(lgK9, baselines.k9), displayDev: dev(lgK9, baselines.k9) },
       { key: 'HR/9', lg: lgHr9, base: baselines.hr9, weight: 2.0, dev: dev(lgHr9, baselines.hr9) },
     ];
 
@@ -1511,7 +1511,7 @@ function StatsPage() {
                                       <span>{m.key}</span>
                                       <span>{m.key === 'HR/PA' ? m.lg.toFixed(3) : m.key === 'BB%' ? m.lg.toFixed(1) : m.lg.toFixed(m.lg < 2 ? 3 : 2)}</span>
                                       <span style={{ color: theme.textDim }}>{m.key === 'BB%' ? m.base.toFixed(1) : m.base < 2 ? m.base.toFixed(3) : m.base.toFixed(2)}</span>
-                                      <span style={{ color: devColor }}>{m.dev >= 0 ? '+' : ''}{m.dev.toFixed(1)}%</span>
+                                      <span style={{ color: devColor }}>{(m.displayDev !== undefined ? m.displayDev : m.dev) >= 0 ? '+' : ''}{(m.displayDev !== undefined ? m.displayDev : m.dev).toFixed(1)}%</span>
                                     </React.Fragment>
                                   );
                                 })}
