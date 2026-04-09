@@ -5427,6 +5427,7 @@ function ReviewQueuePage() {
   const [previewId, setPreviewId] = useState(null);
   const [selectedUploads, setSelectedUploads] = useState(new Set()); // Batch selection
   const [isBatchApproving, setIsBatchApproving] = useState(false);
+  const [isBatchRejecting, setIsBatchRejecting] = useState(false);
   
   // New event creation state
   const [creatingNewFor, setCreatingNewFor] = useState(null);
@@ -5815,6 +5816,35 @@ function ReviewQueuePage() {
     }
   };
 
+  const handleBatchReject = async () => {
+    if (selectedUploads.size === 0) {
+      showNotif('No uploads selected', 'error');
+      return;
+    }
+    const ids = [...selectedUploads];
+    if (!confirm(`Reject ${ids.length} uploads?`)) return;
+    setIsBatchRejecting(true);
+    let successCount = 0;
+    let errorCount = 0;
+    for (const id of ids) {
+      try {
+        await supabase.from('pending_uploads').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', id);
+        successCount++;
+      } catch (e) {
+        console.error('Batch reject error:', e);
+        errorCount++;
+      }
+    }
+    setIsBatchRejecting(false);
+    setSelectedUploads(new Set());
+    loadData();
+    if (errorCount > 0) {
+      showNotif(`Rejected ${successCount}, failed ${errorCount}`, 'error');
+    } else {
+      showNotif(`Batch rejected ${successCount} uploads`);
+    }
+  };
+
   const handleReject = async (uploadId) => {
     if (!confirm('Reject this submission?')) return;
     try {
@@ -5998,6 +6028,19 @@ function ReviewQueuePage() {
                               }}
                             >
                               {isBatchApproving ? 'Approving...' : `✓ Batch Approve (${selectedUploads.size})`}
+                            </button>
+                            <button
+                              onClick={handleBatchReject}
+                              disabled={selectedUploads.size === 0 || isBatchRejecting}
+                              style={{
+                                padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                background: selectedUploads.size > 0 ? theme.error : theme.inputBg,
+                                color: selectedUploads.size > 0 ? '#fff' : theme.textMuted,
+                                border: 'none', cursor: 'pointer',
+                                opacity: selectedUploads.size === 0 || isBatchRejecting ? 0.5 : 1
+                              }}
+                            >
+                              {isBatchRejecting ? 'Rejecting...' : `✕ Batch Reject (${selectedUploads.size})`}
                             </button>
                           </div>
                         </div>
