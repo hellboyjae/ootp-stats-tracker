@@ -5396,7 +5396,7 @@ function ReviewQueuePage() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const { data: history } = await supabase
         .from('upload_history')
-        .select('*')
+        .select('id,tournament_id,tournament_name,file_type,upload_date,player_count,undone,undone_at,created_at')
         .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false });
       setUploadHistory(history || []);
@@ -5784,16 +5784,20 @@ function ReviewQueuePage() {
 
   const handleUndo = async (historyItem) => {
     if (!confirm(`Undo this upload? This will remove ${historyItem.player_count} ${historyItem.file_type} from ${historyItem.tournament_name}.`)) return;
-    
+
     try {
+      // Fetch full history record with player_data (not loaded in list query)
+      const { data: fullHistoryItem, error: histError } = await supabase.from('upload_history').select('*').eq('id', historyItem.id).single();
+      if (histError || !fullHistoryItem) throw new Error('Could not load upload details');
+
       // Get tournament
-      const { data: tournament } = await supabase.from('tournaments').select('*').eq('id', historyItem.tournament_id).single();
+      const { data: tournament } = await supabase.from('tournaments').select('*').eq('id', fullHistoryItem.tournament_id).single();
       if (!tournament) throw new Error('Tournament not found');
 
       // Remove the players that were added
       // player_data has raw CSV format (Name, OVR, VAR) with capital letters
-      const existingData = historyItem.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
-      const addedPlayerKeys = new Set((historyItem.player_data || []).map(p => {
+      const existingData = fullHistoryItem.file_type === 'batting' ? (tournament.batting || []) : (tournament.pitching || []);
+      const addedPlayerKeys = new Set((fullHistoryItem.player_data || []).map(p => {
         const name = p.Name || p.name || '';
         const ovr = p.OVR || p.ovr || '';
         const vari = parseVariant(p.VAR || p.vari);
