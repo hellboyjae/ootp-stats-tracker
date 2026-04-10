@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP } from './tutorialImages.js';
+import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP, IMG_COMBINED_COLS_TOP, IMG_COMBINED_COLS_BOTTOM, IMG_ALL_PLAYERS_FILTER } from './tutorialImages.js';
 
 const ThemeContext = createContext();
 const BannerContext = createContext();
@@ -3936,7 +3936,7 @@ const TUTORIAL_STEPS = [
   {
     title: 'Go to Sortable Stats',
     icon: '📋',
-    text: 'Click "Player Statistics" at the top, then select the "Sortable Stats" tab on the far right. This is where you\'ll set up the custom views used in Steps 4 and 5.',
+    text: 'Click "Player Statistics" at the top, then select the "Sortable Stats" tab on the far right. This is where you\'ll set up the custom export view.',
     image: IMG_STATISTICS_PAGE,
   },
   {
@@ -3944,41 +3944,34 @@ const TUTORIAL_STEPS = [
     icon: '🔧',
     text: 'Click the VIEW dropdown on the left side of the filter bar, then select "Customize..." to set up your column order.',
     image: IMG_VIEW_DROPDOWN,
-    note: 'You need to create two views and save them to "Global" — one for batting and one for pitching.',
+    note: 'You only need one view — it includes both batting and pitching columns. Save it to "Global" so it persists.',
   },
   {
-    title: 'Batting Column Order',
-    icon: '🏏',
-    text: 'In the Customize View screen, check the columns you need and drag them into this exact order on the right side. Save this view as "CSV Export BATTING" under Global.',
-    images: [IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM],
+    title: 'Combined Column Order',
+    icon: '📊',
+    text: 'In the Customize View screen, check all the columns below and drag them into this exact order on the right side. This single view covers both batting and pitching stats. Save it as "Export All P+B" under Global.',
+    images: [IMG_COMBINED_COLS_TOP, IMG_COMBINED_COLS_BOTTOM],
     warning: 'The column order matters — it must match exactly or the upload will fail.',
-  },
-  {
-    title: 'Pitching Column Order',
-    icon: '⚾',
-    text: 'Same process for pitching — check the right columns and drag them into this exact order. Save this view as "CSV Export PITCH" under Global.',
-    images: [IMG_PITCHING_POSITION_TOP, IMG_CUSTOMIZE_VIEW],
-    warning: 'Position goes above Name in the table column. NOT SHOWN IN THE SECOND PICTURE — but make sure it\'s checked and at the top of your column order!',
   },
   {
     title: 'Set Your Filters',
     icon: '🎯',
-    text: 'Before exporting, make sure your filter bar is set correctly. For pitching: Qualify → "Pitching Qualifiers", Position → "All Pitchers". For batting: Qualify → "Batting Qualifiers", Position → "All Batters".',
-    image: IMG_PITCHING_FILTERS,
+    text: 'Before exporting, set your filter bar: Qualify → "All Players", Position → "All Players". This ensures every player in the pool is included in one export.',
+    image: IMG_ALL_PLAYERS_FILTER,
     warning: 'Wrong filters = rejected upload. Double-check every time!',
   },
   {
     title: 'Export to CSV',
     icon: '💾',
-    text: 'Click the REPORT dropdown on the right side of the filter bar and choose "Write report to csv". Do this once for batting and once for pitching — you\'ll end up with two CSV files.',
+    text: 'Click the REPORT dropdown on the right side of the filter bar and choose "Write report to csv". This gives you one combined CSV with all players.',
     image: IMG_EXPORT_CSV,
-    note: 'You need TWO separate files: one batting CSV and one pitching CSV.',
+    note: 'One file is all you need — it contains both batting and pitching data.',
   },
   {
     title: 'Upload Here!',
     icon: '📤',
-    text: 'Use the form on the left to upload both CSVs. Select the correct tournament or draft, choose the right date, attach both files, and hit Submit for Review.',
-    checks: ['Correct tournament/draft selected', 'Right date chosen for the data', 'Both batting AND pitching CSVs attached', 'Filters were double-checked before export'],
+    text: 'Use the form on the left to upload your CSV. Select the correct tournament or draft, choose the right date, attach the file, and hit Submit for Review.',
+    checks: ['Correct tournament/draft selected', 'Right date chosen for the data', 'Combined CSV file attached', 'Filters were set to "All Players" before export'],
   },
 ];
 
@@ -4095,6 +4088,7 @@ function SubmitDataPage() {
   const [selectedDate, setSelectedDate] = useState('');
   const [userNotes, setUserNotes] = useState('');
   const [uploadFile, setUploadFile] = useState(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -4684,6 +4678,7 @@ function SubmitDataPage() {
 
       // Reset form
       setUploadFile(null);
+      setFileInputKey(k => k + 1);
       setSelectedDate('');
       setUserNotes('');
       setSelectedTournamentId('');
@@ -4900,12 +4895,13 @@ function SubmitDataPage() {
       // Reset form
       setAdminConfirmData(null);
       setUploadFile(null);
+      setFileInputKey(k => k + 1);
       setSelectedDate('');
       setUserNotes('');
       setSelectedTournamentId('');
       setSuggestNewEvent(false);
       setNewEventName('');
-      
+
     } catch (e) {
       console.error('Admin direct upload error:', e);
       showNotif('Failed to upload: ' + e.message, 'error');
@@ -4954,7 +4950,7 @@ function SubmitDataPage() {
           <p style={styles.submitSubtitle}>
             {bulkMode 
               ? 'Upload multiple files at once for the same tournament. Each row = one date.'
-              : 'Submit one event at a time — include both Pitching and Batting CSVs for that event.'}
+              : 'Submit one event at a time — upload your combined CSV for that event.'}
           </p>
 
           {submitResult ? (
@@ -5141,12 +5137,12 @@ function SubmitDataPage() {
               <div style={styles.formSection}>
                 <label style={styles.formLabel}>Combined CSV</label>
                 <label style={styles.fileDropzone}>
-                  <input type="file" accept=".csv" onChange={handleFileChange} style={{display:'none'}} />
+                  <input key={fileInputKey} type="file" accept=".csv" onChange={handleFileChange} style={{display:'none'}} />
                   {uploadFile ? (
                     <div style={styles.fileSelected}>
                       <span style={styles.fileTypeTag}>CSV</span>
                       📄 {uploadFile.name} <span style={styles.fileSize}>({(uploadFile.size/1024).toFixed(1)} KB)</span>
-                      <button style={styles.fileClearBtn} onClick={(e) => { e.preventDefault(); setUploadFile(null); }}>✕</button>
+                      <button style={styles.fileClearBtn} onClick={(e) => { e.preventDefault(); setUploadFile(null); setFileInputKey(k => k + 1); }}>✕</button>
                     </div>
                   ) : (
                     <div style={styles.filePrompt}><span style={styles.fileIcon}>📄</span>Click to upload Combined CSV (batting + pitching)</div>
