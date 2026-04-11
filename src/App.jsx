@@ -497,6 +497,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/leaderboards" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Leaderboards</NavLink>
             <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
+            <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
             <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
@@ -9085,6 +9086,488 @@ function WelcomePage() {
   );
 }
 
+// ============ RE Viewer Component ============
+
+const MLB_LEAGUE_AVERAGES = {
+  1910:{AVG:.243,OBP:.310,SLG:.318,OPS:.628,BABIP:.275,ERA:2.80,WHIP:1.28,K9:3.6,BB9:3.2,HR9:0.10,BBpct:8.2,HRPA:0.003},
+  1911:{AVG:.260,OBP:.330,SLG:.350,OPS:.680,BABIP:.290,ERA:3.34,WHIP:1.35,K9:3.8,BB9:3.4,HR9:0.15,BBpct:8.5,HRPA:0.005},
+  1912:{AVG:.265,OBP:.335,SLG:.355,OPS:.690,BABIP:.295,ERA:3.42,WHIP:1.38,K9:3.9,BB9:3.5,HR9:0.17,BBpct:8.7,HRPA:0.005},
+  1913:{AVG:.252,OBP:.322,SLG:.334,OPS:.656,BABIP:.282,ERA:2.93,WHIP:1.29,K9:4.0,BB9:3.3,HR9:0.15,BBpct:8.3,HRPA:0.005},
+  1914:{AVG:.248,OBP:.322,SLG:.327,OPS:.649,BABIP:.279,ERA:2.78,WHIP:1.28,K9:4.1,BB9:3.3,HR9:0.13,BBpct:8.5,HRPA:0.004},
+  1915:{AVG:.248,OBP:.318,SLG:.325,OPS:.643,BABIP:.278,ERA:2.73,WHIP:1.26,K9:3.9,BB9:3.1,HR9:0.15,BBpct:8.1,HRPA:0.005},
+  1916:{AVG:.248,OBP:.316,SLG:.323,OPS:.639,BABIP:.277,ERA:2.66,WHIP:1.25,K9:3.8,BB9:3.0,HR9:0.13,BBpct:7.8,HRPA:0.004},
+  1917:{AVG:.247,OBP:.312,SLG:.318,OPS:.630,BABIP:.276,ERA:2.66,WHIP:1.25,K9:3.5,BB9:2.9,HR9:0.10,BBpct:7.6,HRPA:0.003},
+  1918:{AVG:.254,OBP:.319,SLG:.325,OPS:.644,BABIP:.281,ERA:2.77,WHIP:1.27,K9:3.1,BB9:2.7,HR9:0.10,BBpct:7.2,HRPA:0.003},
+  1919:{AVG:.263,OBP:.327,SLG:.349,OPS:.676,BABIP:.289,ERA:3.10,WHIP:1.30,K9:2.9,BB9:2.8,HR9:0.15,BBpct:7.3,HRPA:0.005},
+  1920:{AVG:.276,OBP:.339,SLG:.377,OPS:.716,BABIP:.299,ERA:3.56,WHIP:1.38,K9:2.8,BB9:3.0,HR9:0.22,BBpct:7.5,HRPA:0.007},
+  1921:{AVG:.291,OBP:.349,SLG:.411,OPS:.760,BABIP:.311,ERA:4.12,WHIP:1.44,K9:2.7,BB9:3.0,HR9:0.32,BBpct:7.4,HRPA:0.009},
+  1922:{AVG:.285,OBP:.347,SLG:.401,OPS:.748,BABIP:.307,ERA:4.03,WHIP:1.43,K9:2.8,BB9:3.1,HR9:0.32,BBpct:7.6,HRPA:0.009},
+  1923:{AVG:.282,OBP:.346,SLG:.397,OPS:.743,BABIP:.303,ERA:3.98,WHIP:1.41,K9:2.8,BB9:3.1,HR9:0.30,BBpct:7.7,HRPA:0.009},
+  1924:{AVG:.283,OBP:.345,SLG:.393,OPS:.738,BABIP:.304,ERA:3.87,WHIP:1.40,K9:2.8,BB9:3.0,HR9:0.27,BBpct:7.5,HRPA:0.008},
+  1925:{AVG:.290,OBP:.352,SLG:.413,OPS:.765,BABIP:.310,ERA:4.28,WHIP:1.45,K9:2.8,BB9:3.1,HR9:0.34,BBpct:7.6,HRPA:0.010},
+  1926:{AVG:.281,OBP:.345,SLG:.393,OPS:.738,BABIP:.302,ERA:3.92,WHIP:1.41,K9:3.0,BB9:3.1,HR9:0.26,BBpct:7.7,HRPA:0.008},
+  1927:{AVG:.282,OBP:.345,SLG:.394,OPS:.739,BABIP:.302,ERA:3.91,WHIP:1.40,K9:3.0,BB9:3.0,HR9:0.28,BBpct:7.5,HRPA:0.008},
+  1928:{AVG:.281,OBP:.343,SLG:.397,OPS:.740,BABIP:.301,ERA:3.98,WHIP:1.40,K9:3.0,BB9:3.0,HR9:0.32,BBpct:7.5,HRPA:0.009},
+  1929:{AVG:.289,OBP:.351,SLG:.416,OPS:.767,BABIP:.309,ERA:4.37,WHIP:1.46,K9:2.9,BB9:3.1,HR9:0.37,BBpct:7.6,HRPA:0.011},
+  1930:{AVG:.296,OBP:.356,SLG:.432,OPS:.788,BABIP:.315,ERA:4.65,WHIP:1.49,K9:3.0,BB9:3.1,HR9:0.42,BBpct:7.5,HRPA:0.012},
+  1931:{AVG:.278,OBP:.340,SLG:.391,OPS:.731,BABIP:.299,ERA:4.03,WHIP:1.40,K9:3.2,BB9:3.0,HR9:0.30,BBpct:7.5,HRPA:0.009},
+  1932:{AVG:.271,OBP:.333,SLG:.380,OPS:.713,BABIP:.292,ERA:3.96,WHIP:1.38,K9:3.4,BB9:3.1,HR9:0.30,BBpct:7.7,HRPA:0.009},
+  1933:{AVG:.266,OBP:.328,SLG:.370,OPS:.698,BABIP:.287,ERA:3.73,WHIP:1.35,K9:3.4,BB9:3.0,HR9:0.28,BBpct:7.5,HRPA:0.008},
+  1934:{AVG:.279,OBP:.340,SLG:.397,OPS:.737,BABIP:.300,ERA:4.16,WHIP:1.41,K9:3.3,BB9:3.0,HR9:0.32,BBpct:7.4,HRPA:0.009},
+  1935:{AVG:.280,OBP:.342,SLG:.399,OPS:.741,BABIP:.301,ERA:4.24,WHIP:1.42,K9:3.3,BB9:3.1,HR9:0.36,BBpct:7.5,HRPA:0.010},
+  1936:{AVG:.281,OBP:.345,SLG:.402,OPS:.747,BABIP:.302,ERA:4.35,WHIP:1.43,K9:3.4,BB9:3.2,HR9:0.38,BBpct:7.7,HRPA:0.011},
+  1937:{AVG:.276,OBP:.340,SLG:.392,OPS:.732,BABIP:.297,ERA:4.05,WHIP:1.40,K9:3.5,BB9:3.1,HR9:0.35,BBpct:7.6,HRPA:0.010},
+  1938:{AVG:.271,OBP:.337,SLG:.385,OPS:.722,BABIP:.293,ERA:3.98,WHIP:1.39,K9:3.6,BB9:3.2,HR9:0.35,BBpct:7.9,HRPA:0.010},
+  1939:{AVG:.272,OBP:.337,SLG:.385,OPS:.722,BABIP:.293,ERA:3.93,WHIP:1.38,K9:3.6,BB9:3.1,HR9:0.34,BBpct:7.7,HRPA:0.010},
+  1940:{AVG:.264,OBP:.331,SLG:.373,OPS:.704,BABIP:.286,ERA:3.89,WHIP:1.38,K9:3.8,BB9:3.3,HR9:0.33,BBpct:8.1,HRPA:0.010},
+  1941:{AVG:.262,OBP:.329,SLG:.365,OPS:.694,BABIP:.284,ERA:3.70,WHIP:1.35,K9:3.7,BB9:3.2,HR9:0.30,BBpct:8.0,HRPA:0.009},
+  1942:{AVG:.253,OBP:.320,SLG:.343,OPS:.663,BABIP:.277,ERA:3.31,WHIP:1.31,K9:3.8,BB9:3.2,HR9:0.23,BBpct:8.2,HRPA:0.007},
+  1943:{AVG:.253,OBP:.323,SLG:.345,OPS:.668,BABIP:.276,ERA:3.32,WHIP:1.32,K9:3.6,BB9:3.3,HR9:0.22,BBpct:8.4,HRPA:0.007},
+  1944:{AVG:.257,OBP:.327,SLG:.352,OPS:.679,BABIP:.279,ERA:3.40,WHIP:1.33,K9:3.4,BB9:3.3,HR9:0.22,BBpct:8.3,HRPA:0.007},
+  1945:{AVG:.255,OBP:.327,SLG:.345,OPS:.672,BABIP:.276,ERA:3.36,WHIP:1.33,K9:3.2,BB9:3.3,HR9:0.22,BBpct:8.5,HRPA:0.006},
+  1946:{AVG:.256,OBP:.331,SLG:.352,OPS:.683,BABIP:.275,ERA:3.41,WHIP:1.34,K9:3.5,BB9:3.5,HR9:0.25,BBpct:8.8,HRPA:0.007},
+  1947:{AVG:.259,OBP:.336,SLG:.369,OPS:.705,BABIP:.278,ERA:3.71,WHIP:1.37,K9:3.5,BB9:3.5,HR9:0.32,BBpct:8.8,HRPA:0.009},
+  1948:{AVG:.261,OBP:.338,SLG:.374,OPS:.712,BABIP:.280,ERA:3.77,WHIP:1.39,K9:3.5,BB9:3.6,HR9:0.32,BBpct:9.0,HRPA:0.009},
+  1949:{AVG:.263,OBP:.342,SLG:.379,OPS:.721,BABIP:.281,ERA:3.94,WHIP:1.42,K9:3.5,BB9:3.7,HR9:0.34,BBpct:9.2,HRPA:0.010},
+  1950:{AVG:.261,OBP:.343,SLG:.390,OPS:.733,BABIP:.278,ERA:4.14,WHIP:1.44,K9:3.7,BB9:3.8,HR9:0.42,BBpct:9.4,HRPA:0.012},
+  1951:{AVG:.260,OBP:.337,SLG:.382,OPS:.719,BABIP:.277,ERA:3.96,WHIP:1.41,K9:3.9,BB9:3.6,HR9:0.40,BBpct:9.0,HRPA:0.012},
+  1952:{AVG:.253,OBP:.331,SLG:.368,OPS:.699,BABIP:.271,ERA:3.77,WHIP:1.38,K9:4.2,BB9:3.6,HR9:0.38,BBpct:9.1,HRPA:0.011},
+  1953:{AVG:.262,OBP:.338,SLG:.396,OPS:.734,BABIP:.278,ERA:4.14,WHIP:1.42,K9:4.2,BB9:3.6,HR9:0.48,BBpct:8.9,HRPA:0.014},
+  1954:{AVG:.257,OBP:.334,SLG:.382,OPS:.716,BABIP:.274,ERA:3.91,WHIP:1.39,K9:4.4,BB9:3.6,HR9:0.43,BBpct:9.1,HRPA:0.013},
+  1955:{AVG:.258,OBP:.334,SLG:.393,OPS:.727,BABIP:.273,ERA:3.96,WHIP:1.38,K9:4.6,BB9:3.5,HR9:0.47,BBpct:8.8,HRPA:0.014},
+  1956:{AVG:.256,OBP:.332,SLG:.391,OPS:.723,BABIP:.272,ERA:3.89,WHIP:1.37,K9:4.7,BB9:3.5,HR9:0.47,BBpct:8.8,HRPA:0.014},
+  1957:{AVG:.255,OBP:.327,SLG:.387,OPS:.714,BABIP:.271,ERA:3.78,WHIP:1.34,K9:4.9,BB9:3.3,HR9:0.46,BBpct:8.4,HRPA:0.014},
+  1958:{AVG:.255,OBP:.326,SLG:.389,OPS:.715,BABIP:.271,ERA:3.85,WHIP:1.35,K9:5.0,BB9:3.3,HR9:0.48,BBpct:8.4,HRPA:0.014},
+  1959:{AVG:.255,OBP:.327,SLG:.389,OPS:.716,BABIP:.271,ERA:3.95,WHIP:1.36,K9:5.2,BB9:3.4,HR9:0.49,BBpct:8.5,HRPA:0.014},
+  1960:{AVG:.255,OBP:.326,SLG:.382,OPS:.708,BABIP:.272,ERA:3.78,WHIP:1.34,K9:5.3,BB9:3.3,HR9:0.45,BBpct:8.4,HRPA:0.013},
+  1961:{AVG:.256,OBP:.329,SLG:.395,OPS:.724,BABIP:.271,ERA:4.02,WHIP:1.36,K9:5.5,BB9:3.4,HR9:0.52,BBpct:8.5,HRPA:0.015},
+  1962:{AVG:.258,OBP:.328,SLG:.394,OPS:.722,BABIP:.274,ERA:3.94,WHIP:1.35,K9:5.7,BB9:3.3,HR9:0.48,BBpct:8.3,HRPA:0.014},
+  1963:{AVG:.246,OBP:.314,SLG:.369,OPS:.683,BABIP:.264,ERA:3.52,WHIP:1.28,K9:5.9,BB9:3.1,HR9:0.44,BBpct:8.0,HRPA:0.013},
+  1964:{AVG:.250,OBP:.316,SLG:.374,OPS:.690,BABIP:.267,ERA:3.56,WHIP:1.28,K9:5.9,BB9:3.0,HR9:0.44,BBpct:7.8,HRPA:0.013},
+  1965:{AVG:.249,OBP:.316,SLG:.369,OPS:.685,BABIP:.267,ERA:3.54,WHIP:1.27,K9:5.9,BB9:3.0,HR9:0.43,BBpct:7.8,HRPA:0.013},
+  1966:{AVG:.249,OBP:.314,SLG:.369,OPS:.683,BABIP:.266,ERA:3.46,WHIP:1.26,K9:5.8,BB9:3.0,HR9:0.45,BBpct:7.7,HRPA:0.013},
+  1967:{AVG:.242,OBP:.307,SLG:.351,OPS:.658,BABIP:.261,ERA:3.30,WHIP:1.23,K9:5.8,BB9:3.0,HR9:0.40,BBpct:7.9,HRPA:0.012},
+  1968:{AVG:.237,OBP:.300,SLG:.340,OPS:.640,BABIP:.258,ERA:2.98,WHIP:1.19,K9:5.8,BB9:2.9,HR9:0.37,BBpct:7.7,HRPA:0.011},
+  1969:{AVG:.248,OBP:.320,SLG:.369,OPS:.689,BABIP:.267,ERA:3.60,WHIP:1.30,K9:5.6,BB9:3.3,HR9:0.44,BBpct:8.5,HRPA:0.013},
+  1970:{AVG:.254,OBP:.326,SLG:.387,OPS:.713,BABIP:.272,ERA:3.85,WHIP:1.33,K9:5.5,BB9:3.4,HR9:0.48,BBpct:8.6,HRPA:0.014},
+  1971:{AVG:.249,OBP:.318,SLG:.365,OPS:.683,BABIP:.268,ERA:3.47,WHIP:1.28,K9:5.3,BB9:3.2,HR9:0.40,BBpct:8.2,HRPA:0.012},
+  1972:{AVG:.244,OBP:.311,SLG:.347,OPS:.658,BABIP:.264,ERA:3.28,WHIP:1.25,K9:5.1,BB9:3.1,HR9:0.34,BBpct:8.1,HRPA:0.010},
+  1973:{AVG:.257,OBP:.326,SLG:.379,OPS:.705,BABIP:.275,ERA:3.68,WHIP:1.32,K9:5.0,BB9:3.2,HR9:0.41,BBpct:8.2,HRPA:0.012},
+  1974:{AVG:.256,OBP:.323,SLG:.365,OPS:.688,BABIP:.275,ERA:3.62,WHIP:1.31,K9:4.9,BB9:3.1,HR9:0.35,BBpct:8.0,HRPA:0.010},
+  1975:{AVG:.257,OBP:.326,SLG:.371,OPS:.697,BABIP:.275,ERA:3.63,WHIP:1.32,K9:4.8,BB9:3.2,HR9:0.36,BBpct:8.2,HRPA:0.011},
+  1976:{AVG:.256,OBP:.322,SLG:.361,OPS:.683,BABIP:.274,ERA:3.50,WHIP:1.30,K9:4.8,BB9:3.1,HR9:0.30,BBpct:8.0,HRPA:0.009},
+  1977:{AVG:.264,OBP:.330,SLG:.397,OPS:.727,BABIP:.280,ERA:3.91,WHIP:1.34,K9:4.9,BB9:3.1,HR9:0.47,BBpct:7.9,HRPA:0.013},
+  1978:{AVG:.254,OBP:.319,SLG:.367,OPS:.686,BABIP:.273,ERA:3.56,WHIP:1.30,K9:4.7,BB9:3.0,HR9:0.36,BBpct:7.9,HRPA:0.010},
+  1979:{AVG:.264,OBP:.332,SLG:.396,OPS:.728,BABIP:.282,ERA:3.86,WHIP:1.36,K9:4.7,BB9:3.1,HR9:0.42,BBpct:7.9,HRPA:0.012},
+  1980:{AVG:.261,OBP:.325,SLG:.378,OPS:.703,BABIP:.279,ERA:3.76,WHIP:1.34,K9:4.6,BB9:3.0,HR9:0.35,BBpct:7.8,HRPA:0.010},
+  1981:{AVG:.256,OBP:.321,SLG:.365,OPS:.686,BABIP:.275,ERA:3.56,WHIP:1.32,K9:4.7,BB9:3.1,HR9:0.31,BBpct:8.0,HRPA:0.009},
+  1982:{AVG:.261,OBP:.325,SLG:.379,OPS:.704,BABIP:.280,ERA:3.78,WHIP:1.33,K9:5.0,BB9:3.0,HR9:0.38,BBpct:7.8,HRPA:0.011},
+  1983:{AVG:.261,OBP:.327,SLG:.384,OPS:.711,BABIP:.278,ERA:3.81,WHIP:1.33,K9:5.1,BB9:3.1,HR9:0.40,BBpct:7.9,HRPA:0.012},
+  1984:{AVG:.259,OBP:.323,SLG:.379,OPS:.702,BABIP:.277,ERA:3.72,WHIP:1.31,K9:5.2,BB9:3.0,HR9:0.40,BBpct:7.7,HRPA:0.012},
+  1985:{AVG:.257,OBP:.324,SLG:.382,OPS:.706,BABIP:.275,ERA:3.82,WHIP:1.33,K9:5.3,BB9:3.2,HR9:0.42,BBpct:8.1,HRPA:0.012},
+  1986:{AVG:.258,OBP:.327,SLG:.389,OPS:.716,BABIP:.275,ERA:3.84,WHIP:1.34,K9:5.6,BB9:3.3,HR9:0.46,BBpct:8.3,HRPA:0.013},
+  1987:{AVG:.263,OBP:.332,SLG:.404,OPS:.736,BABIP:.278,ERA:4.12,WHIP:1.37,K9:5.6,BB9:3.3,HR9:0.55,BBpct:8.2,HRPA:0.016},
+  1988:{AVG:.254,OBP:.318,SLG:.367,OPS:.685,BABIP:.274,ERA:3.55,WHIP:1.29,K9:5.3,BB9:3.1,HR9:0.37,BBpct:8.0,HRPA:0.011},
+  1989:{AVG:.254,OBP:.319,SLG:.367,OPS:.686,BABIP:.274,ERA:3.55,WHIP:1.29,K9:5.3,BB9:3.0,HR9:0.37,BBpct:7.8,HRPA:0.011},
+  1990:{AVG:.256,OBP:.322,SLG:.374,OPS:.696,BABIP:.277,ERA:3.73,WHIP:1.32,K9:5.5,BB9:3.2,HR9:0.38,BBpct:8.2,HRPA:0.011},
+  1991:{AVG:.256,OBP:.323,SLG:.373,OPS:.696,BABIP:.277,ERA:3.68,WHIP:1.32,K9:5.6,BB9:3.2,HR9:0.38,BBpct:8.2,HRPA:0.011},
+  1992:{AVG:.256,OBP:.324,SLG:.370,OPS:.694,BABIP:.279,ERA:3.75,WHIP:1.33,K9:5.7,BB9:3.2,HR9:0.35,BBpct:8.2,HRPA:0.010},
+  1993:{AVG:.267,OBP:.335,SLG:.400,OPS:.735,BABIP:.290,ERA:4.17,WHIP:1.39,K9:5.7,BB9:3.3,HR9:0.42,BBpct:8.4,HRPA:0.012},
+  1994:{AVG:.270,OBP:.340,SLG:.417,OPS:.757,BABIP:.291,ERA:4.32,WHIP:1.40,K9:5.9,BB9:3.3,HR9:0.50,BBpct:8.4,HRPA:0.015},
+  1995:{AVG:.267,OBP:.338,SLG:.408,OPS:.746,BABIP:.289,ERA:4.44,WHIP:1.40,K9:6.1,BB9:3.5,HR9:0.50,BBpct:8.8,HRPA:0.015},
+  1996:{AVG:.270,OBP:.340,SLG:.417,OPS:.757,BABIP:.291,ERA:4.60,WHIP:1.42,K9:6.3,BB9:3.5,HR9:0.56,BBpct:8.7,HRPA:0.016},
+  1997:{AVG:.267,OBP:.337,SLG:.410,OPS:.747,BABIP:.290,ERA:4.38,WHIP:1.41,K9:6.4,BB9:3.5,HR9:0.50,BBpct:8.8,HRPA:0.015},
+  1998:{AVG:.266,OBP:.334,SLG:.410,OPS:.744,BABIP:.289,ERA:4.32,WHIP:1.39,K9:6.4,BB9:3.4,HR9:0.52,BBpct:8.5,HRPA:0.015},
+  1999:{AVG:.271,OBP:.342,SLG:.429,OPS:.771,BABIP:.292,ERA:4.71,WHIP:1.45,K9:6.3,BB9:3.5,HR9:0.58,BBpct:8.8,HRPA:0.017},
+  2000:{AVG:.270,OBP:.345,SLG:.437,OPS:.782,BABIP:.290,ERA:4.77,WHIP:1.46,K9:6.5,BB9:3.7,HR9:0.60,BBpct:9.1,HRPA:0.018},
+  2001:{AVG:.264,OBP:.332,SLG:.417,OPS:.749,BABIP:.284,ERA:4.42,WHIP:1.39,K9:6.4,BB9:3.3,HR9:0.55,BBpct:8.4,HRPA:0.016},
+  2002:{AVG:.261,OBP:.331,SLG:.410,OPS:.741,BABIP:.283,ERA:4.28,WHIP:1.38,K9:6.4,BB9:3.3,HR9:0.52,BBpct:8.4,HRPA:0.015},
+  2003:{AVG:.264,OBP:.333,SLG:.417,OPS:.750,BABIP:.285,ERA:4.35,WHIP:1.38,K9:6.3,BB9:3.3,HR9:0.54,BBpct:8.4,HRPA:0.016},
+  2004:{AVG:.266,OBP:.335,SLG:.428,OPS:.763,BABIP:.288,ERA:4.46,WHIP:1.40,K9:6.4,BB9:3.3,HR9:0.57,BBpct:8.4,HRPA:0.017},
+  2005:{AVG:.264,OBP:.330,SLG:.419,OPS:.749,BABIP:.287,ERA:4.29,WHIP:1.37,K9:6.2,BB9:3.2,HR9:0.53,BBpct:8.1,HRPA:0.016},
+  2006:{AVG:.269,OBP:.337,SLG:.432,OPS:.769,BABIP:.293,ERA:4.53,WHIP:1.40,K9:6.5,BB9:3.3,HR9:0.58,BBpct:8.3,HRPA:0.017},
+  2007:{AVG:.268,OBP:.336,SLG:.423,OPS:.759,BABIP:.293,ERA:4.47,WHIP:1.39,K9:6.4,BB9:3.3,HR9:0.53,BBpct:8.3,HRPA:0.016},
+  2008:{AVG:.264,OBP:.333,SLG:.416,OPS:.749,BABIP:.291,ERA:4.32,WHIP:1.37,K9:6.8,BB9:3.3,HR9:0.50,BBpct:8.4,HRPA:0.015},
+  2009:{AVG:.262,OBP:.333,SLG:.418,OPS:.751,BABIP:.289,ERA:4.32,WHIP:1.38,K9:6.9,BB9:3.4,HR9:0.53,BBpct:8.5,HRPA:0.016},
+  2010:{AVG:.261,OBP:.325,SLG:.403,OPS:.728,BABIP:.290,ERA:4.08,WHIP:1.34,K9:6.9,BB9:3.3,HR9:0.47,BBpct:8.3,HRPA:0.014},
+  2011:{AVG:.255,OBP:.321,SLG:.390,OPS:.711,BABIP:.283,ERA:3.94,WHIP:1.31,K9:7.1,BB9:3.1,HR9:0.43,BBpct:7.9,HRPA:0.013},
+  2012:{AVG:.255,OBP:.320,SLG:.395,OPS:.715,BABIP:.282,ERA:4.01,WHIP:1.31,K9:7.5,BB9:3.1,HR9:0.46,BBpct:7.8,HRPA:0.013},
+  2013:{AVG:.253,OBP:.318,SLG:.396,OPS:.714,BABIP:.282,ERA:3.87,WHIP:1.30,K9:7.6,BB9:3.1,HR9:0.48,BBpct:7.9,HRPA:0.014},
+  2014:{AVG:.251,OBP:.314,SLG:.386,OPS:.700,BABIP:.281,ERA:3.74,WHIP:1.28,K9:7.7,BB9:3.0,HR9:0.42,BBpct:7.6,HRPA:0.013},
+  2015:{AVG:.254,OBP:.317,SLG:.405,OPS:.722,BABIP:.281,ERA:3.96,WHIP:1.29,K9:7.7,BB9:3.0,HR9:0.53,BBpct:7.7,HRPA:0.016},
+  2016:{AVG:.255,OBP:.322,SLG:.417,OPS:.739,BABIP:.282,ERA:4.19,WHIP:1.32,K9:8.0,BB9:3.1,HR9:0.59,BBpct:7.9,HRPA:0.017},
+  2017:{AVG:.255,OBP:.324,SLG:.426,OPS:.750,BABIP:.282,ERA:4.36,WHIP:1.33,K9:8.3,BB9:3.3,HR9:0.63,BBpct:8.2,HRPA:0.018},
+  2018:{AVG:.248,OBP:.318,SLG:.409,OPS:.727,BABIP:.278,ERA:4.15,WHIP:1.30,K9:8.5,BB9:3.3,HR9:0.57,BBpct:8.3,HRPA:0.017},
+  2019:{AVG:.252,OBP:.323,SLG:.435,OPS:.758,BABIP:.278,ERA:4.51,WHIP:1.33,K9:8.8,BB9:3.4,HR9:0.70,BBpct:8.5,HRPA:0.021},
+  2020:{AVG:.245,OBP:.322,SLG:.418,OPS:.740,BABIP:.275,ERA:4.44,WHIP:1.34,K9:9.1,BB9:3.6,HR9:0.63,BBpct:9.0,HRPA:0.019},
+  2021:{AVG:.244,OBP:.317,SLG:.411,OPS:.728,BABIP:.275,ERA:4.26,WHIP:1.31,K9:8.7,BB9:3.3,HR9:0.59,BBpct:8.4,HRPA:0.018},
+  2022:{AVG:.243,OBP:.312,SLG:.395,OPS:.707,BABIP:.275,ERA:3.97,WHIP:1.27,K9:8.6,BB9:3.2,HR9:0.53,BBpct:8.2,HRPA:0.016},
+  2023:{AVG:.248,OBP:.320,SLG:.414,OPS:.734,BABIP:.280,ERA:4.33,WHIP:1.30,K9:8.6,BB9:3.3,HR9:0.58,BBpct:8.3,HRPA:0.017},
+  2024:{AVG:.247,OBP:.314,SLG:.400,OPS:.714,BABIP:.280,ERA:4.09,WHIP:1.27,K9:8.5,BB9:3.1,HR9:0.55,BBpct:7.9,HRPA:0.016},
+  2025:{AVG:.243,OBP:.310,SLG:.390,OPS:.700,BABIP:.278,ERA:3.95,WHIP:1.26,K9:8.7,BB9:3.1,HR9:0.52,BBpct:7.8,HRPA:0.015},
+};
+
+const RE_METRICS = [
+  { key: 'AVG', label: 'AVG', group: 'batting', fmt: v => v.toFixed(3), desc: 'Batting Average' },
+  { key: 'OBP', label: 'OBP', group: 'batting', fmt: v => v.toFixed(3), desc: 'On-Base Percentage' },
+  { key: 'SLG', label: 'SLG', group: 'batting', fmt: v => v.toFixed(3), desc: 'Slugging Percentage' },
+  { key: 'OPS', label: 'OPS', group: 'batting', fmt: v => v.toFixed(3), desc: 'OPS' },
+  { key: 'BABIP', label: 'BABIP', group: 'batting', fmt: v => v.toFixed(3), desc: 'Batting Average on Balls in Play' },
+  { key: 'BBpct', label: 'BB%', group: 'batting', fmt: v => v.toFixed(1), desc: 'Walk Percentage' },
+  { key: 'HRPA', label: 'HR/PA', group: 'batting', fmt: v => v.toFixed(3), desc: 'Home Runs per Plate Appearance' },
+  { key: 'ERA', label: 'ERA', group: 'pitching', fmt: v => v.toFixed(2), desc: 'Earned Run Average' },
+  { key: 'WHIP', label: 'WHIP', group: 'pitching', fmt: v => v.toFixed(3), desc: 'Walks + Hits per IP' },
+  { key: 'K9', label: 'K/9', group: 'pitching', fmt: v => v.toFixed(1), desc: 'Strikeouts per 9 Innings' },
+  { key: 'BB9', label: 'BB/9', group: 'pitching', fmt: v => v.toFixed(1), desc: 'Walks per 9 Innings' },
+  { key: 'HR9', label: 'HR/9', group: 'pitching', fmt: v => v.toFixed(2), desc: 'Home Runs per 9 Innings' },
+];
+
+const RE_ERAS = [
+  { name: 'Dead Ball', start: 1910, end: 1919, color: '#6b7280' },
+  { name: 'Live Ball', start: 1920, end: 1941, color: '#f59e0b' },
+  { name: 'WWII', start: 1942, end: 1945, color: '#78716c' },
+  { name: 'Post-War', start: 1946, end: 1960, color: '#3b82f6' },
+  { name: 'Expansion', start: 1961, end: 1968, color: '#8b5cf6' },
+  { name: 'Post-Mound', start: 1969, end: 1976, color: '#06b6d4' },
+  { name: 'Free Agency', start: 1977, end: 1992, color: '#22c55e' },
+  { name: 'Steroid', start: 1993, end: 2004, color: '#ef4444' },
+  { name: 'Post-Testing', start: 2005, end: 2013, color: '#f97316' },
+  { name: 'Modern', start: 2014, end: 2025, color: '#ec4899' },
+];
+
+function REViewerPage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const [baselineYear, setBaselineYear] = useState(2010);
+  const [selectedMetrics, setSelectedMetrics] = useState(['AVG', 'OPS', 'ERA', 'K9']);
+  const [viewMode, setViewMode] = useState('chart');
+  const [yearRange, setYearRange] = useState([1910, 2025]);
+  const [hoveredYear, setHoveredYear] = useState(null);
+  const [highlightedEra, setHighlightedEra] = useState(null);
+
+  const allYears = Object.keys(MLB_LEAGUE_AVERAGES).map(Number).sort((a, b) => a - b);
+  const filteredYears = allYears.filter(y => y >= yearRange[0] && y <= yearRange[1]);
+  const baseline = MLB_LEAGUE_AVERAGES[baselineYear];
+
+  const getDeviation = (year, metricKey) => {
+    const val = MLB_LEAGUE_AVERAGES[year][metricKey];
+    const base = baseline[metricKey];
+    if (!base) return 0;
+    return ((val - base) / base) * 100;
+  };
+
+  const getDeviationColor = (pct, metricKey) => {
+    const pitcherNegativeIsGood = ['ERA', 'WHIP', 'BB9', 'HR9', 'BBpct', 'HRPA'];
+    const isInverse = pitcherNegativeIsGood.includes(metricKey);
+    const effective = isInverse ? -pct : pct;
+    if (Math.abs(pct) < 1) return theme.textMuted;
+    if (effective > 0) return '#22c55e';
+    return '#ef4444';
+  };
+
+  const toggleMetric = (key) => {
+    setSelectedMetrics(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const getEraForYear = (year) => RE_ERAS.find(e => year >= e.start && year <= e.end);
+
+  // Chart rendering with pure CSS bars
+  const renderChart = () => {
+    if (selectedMetrics.length === 0) return <p style={{ color: theme.textMuted, textAlign: 'center', padding: 40 }}>Select at least one metric above.</p>;
+
+    const chartMetric = selectedMetrics[0]; // Primary metric for chart
+    const metric = RE_METRICS.find(m => m.key === chartMetric);
+    const deviations = filteredYears.map(y => getDeviation(y, chartMetric));
+    const maxAbs = Math.max(...deviations.map(d => Math.abs(d)), 5);
+
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ color: theme.textSecondary, fontSize: 13 }}>Showing: <strong style={{ color: theme.textPrimary }}>{metric?.label}</strong> — % deviation from {baselineYear}</span>
+        </div>
+        <div style={{ position: 'relative', minWidth: filteredYears.length * 12 }}>
+          {/* Zero line */}
+          <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: theme.textMuted, opacity: 0.3 }} />
+          <div style={{ display: 'flex', alignItems: 'center', height: 300, gap: 1, padding: '0 4px' }}>
+            {filteredYears.map(year => {
+              const dev = getDeviation(year, chartMetric);
+              const barHeight = (Math.abs(dev) / maxAbs) * 140;
+              const era = getEraForYear(year);
+              const isHighlighted = highlightedEra ? (year >= highlightedEra.start && year <= highlightedEra.end) : true;
+              const isHovered = hoveredYear === year;
+              return (
+                <div key={year} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 8, height: '100%', justifyContent: 'center', opacity: isHighlighted ? 1 : 0.2, transition: 'opacity 0.15s' }}
+                  onMouseEnter={() => setHoveredYear(year)} onMouseLeave={() => setHoveredYear(null)}>
+                  {/* Tooltip */}
+                  {isHovered && (
+                    <div style={{ position: 'absolute', top: dev >= 0 ? 'auto' : 8, bottom: dev >= 0 ? 8 : 'auto', background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '6px 10px', zIndex: 10, whiteSpace: 'nowrap', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+                      <div style={{ fontWeight: 700, color: theme.textPrimary }}>{year} {era ? `(${era.name})` : ''}</div>
+                      {selectedMetrics.map(mk => {
+                        const m = RE_METRICS.find(mm => mm.key === mk);
+                        const d = getDeviation(year, mk);
+                        return <div key={mk} style={{ color: getDeviationColor(d, mk) }}>{m?.label}: {m?.fmt(MLB_LEAGUE_AVERAGES[year][mk])} ({d > 0 ? '+' : ''}{d.toFixed(1)}%)</div>;
+                      })}
+                    </div>
+                  )}
+                  {/* Positive bar (above center) */}
+                  <div style={{ width: '100%', height: 140, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                    {dev > 0 && <div style={{ width: '100%', height: barHeight, background: era?.color || '#3b82f6', borderRadius: '2px 2px 0 0', opacity: isHovered ? 1 : 0.7, transition: 'opacity 0.1s' }} />}
+                  </div>
+                  {/* Negative bar (below center) */}
+                  <div style={{ width: '100%', height: 140, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                    {dev < 0 && <div style={{ width: '100%', height: barHeight, background: era?.color || '#3b82f6', borderRadius: '0 0 2px 2px', opacity: isHovered ? 1 : 0.7, transition: 'opacity 0.1s' }} />}
+                  </div>
+                  {/* Year label */}
+                  {(year % 10 === 0 || isHovered) && (
+                    <div style={{ fontSize: 9, color: isHovered ? theme.textPrimary : theme.textMuted, marginTop: 2, transform: 'rotate(-45deg)', transformOrigin: 'top left', whiteSpace: 'nowrap' }}>{year}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Multi-metric sparkline comparison
+  const renderSparklines = () => {
+    if (selectedMetrics.length === 0) return <p style={{ color: theme.textMuted, textAlign: 'center', padding: 40 }}>Select at least one metric above.</p>;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {selectedMetrics.map(mk => {
+          const metric = RE_METRICS.find(m => m.key === mk);
+          const vals = filteredYears.map(y => MLB_LEAGUE_AVERAGES[y][mk]);
+          const min = Math.min(...vals);
+          const max = Math.max(...vals);
+          const range = max - min || 1;
+          const baseVal = baseline[mk];
+
+          return (
+            <div key={mk} style={{ background: theme.cardBg, borderRadius: 8, padding: '12px 16px', border: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontWeight: 700, color: theme.textPrimary, fontSize: 14, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{metric?.label}</span>
+                <span style={{ color: theme.textMuted, fontSize: 11 }}>{metric?.desc}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', height: 60, gap: 1, position: 'relative' }}>
+                {/* Baseline reference line */}
+                <div style={{ position: 'absolute', bottom: `${((baseVal - min) / range) * 100}%`, left: 0, right: 0, height: 1, borderTop: `1px dashed ${theme.accent}`, opacity: 0.4 }} />
+                {filteredYears.map(y => {
+                  const v = MLB_LEAGUE_AVERAGES[y][mk];
+                  const h = ((v - min) / range) * 100;
+                  const era = getEraForYear(y);
+                  const isHov = hoveredYear === y;
+                  const isHighlighted = highlightedEra ? (y >= highlightedEra.start && y <= highlightedEra.end) : true;
+                  return (
+                    <div key={y} title={`${y}: ${metric?.fmt(v)}`}
+                      onMouseEnter={() => setHoveredYear(y)} onMouseLeave={() => setHoveredYear(null)}
+                      style={{ flex: 1, minWidth: 3, height: `${Math.max(h, 2)}%`, background: era?.color || theme.accent, borderRadius: '1px 1px 0 0', opacity: isHighlighted ? (isHov ? 1 : 0.6) : 0.15, transition: 'opacity 0.1s', cursor: 'pointer' }} />
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: theme.textMuted }}>
+                <span>{yearRange[0]}</span>
+                <span style={{ color: theme.accent }}>{baselineYear}: {metric?.fmt(baseVal)}</span>
+                <span>{yearRange[1]}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Table view
+  const renderTable = () => {
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: theme.tableHeaderBg }}>
+              <th style={{ padding: '8px 10px', textAlign: 'left', color: theme.textSecondary, fontWeight: 600, position: 'sticky', left: 0, background: theme.tableHeaderBg, zIndex: 2, borderBottom: `2px solid ${theme.border}`, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Year</th>
+              <th style={{ padding: '8px 6px', textAlign: 'left', color: theme.textSecondary, fontWeight: 600, borderBottom: `2px solid ${theme.border}`, fontSize: 11 }}>Era</th>
+              {RE_METRICS.map(m => (
+                <th key={m.key} style={{ padding: '8px 6px', textAlign: 'right', color: selectedMetrics.includes(m.key) ? theme.accent : theme.textSecondary, fontWeight: 600, borderBottom: `2px solid ${theme.border}`, cursor: 'pointer', fontSize: 11, whiteSpace: 'nowrap' }}
+                  onClick={() => toggleMetric(m.key)} title={`${m.desc} — click to ${selectedMetrics.includes(m.key) ? 'deselect' : 'select'}`}>
+                  {m.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredYears.map((year, i) => {
+              const era = getEraForYear(year);
+              const isHov = hoveredYear === year;
+              const isHighlighted = highlightedEra ? (year >= highlightedEra.start && year <= highlightedEra.end) : true;
+              return (
+                <tr key={year} onMouseEnter={() => setHoveredYear(year)} onMouseLeave={() => setHoveredYear(null)}
+                  style={{ background: isHov ? theme.tableRowHover : (i % 2 === 0 ? theme.tableRowBg : 'transparent'), opacity: isHighlighted ? 1 : 0.3, transition: 'opacity 0.15s' }}>
+                  <td style={{ padding: '5px 10px', fontWeight: year === baselineYear ? 700 : 500, color: year === baselineYear ? theme.accent : theme.textPrimary, position: 'sticky', left: 0, background: isHov ? theme.tableRowHover : (i % 2 === 0 ? theme.tableRowBg : theme.tableBg), zIndex: 1, borderBottom: `1px solid ${theme.tableBorder}` }}>{year}</td>
+                  <td style={{ padding: '5px 6px', borderBottom: `1px solid ${theme.tableBorder}`, fontSize: 10 }}>
+                    <span style={{ background: era?.color || '#666', color: '#fff', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600 }}>{era?.name || ''}</span>
+                  </td>
+                  {RE_METRICS.map(m => {
+                    const val = MLB_LEAGUE_AVERAGES[year][m.key];
+                    const dev = getDeviation(year, m.key);
+                    return (
+                      <td key={m.key} style={{ padding: '5px 6px', textAlign: 'right', borderBottom: `1px solid ${theme.tableBorder}`, color: year === baselineYear ? theme.accent : theme.textPrimary, fontFamily: 'monospace', fontSize: 11 }}>
+                        <span>{m.fmt(val)}</span>
+                        {year !== baselineYear && (
+                          <span style={{ color: getDeviationColor(dev, m.key), fontSize: 9, marginLeft: 4 }}>
+                            {dev > 0 ? '+' : ''}{dev.toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <Layout>
+      <div style={{ ...styles.pageContent, maxWidth: 1200 }}>
+        <div style={styles.pageHeader}>
+          <div>
+            <h2 style={styles.pageTitle}>Run Environment Viewer</h2>
+            <p style={{ color: theme.textMuted, fontSize: 13, margin: '4px 0 0' }}>MLB league averages 1910-2025 — how the run environment shapes stats across eras</p>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 20, alignItems: 'center' }}>
+          {/* Baseline year */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: theme.cardBg, padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}` }}>
+            <label style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600 }}>Baseline:</label>
+            <select value={baselineYear} onChange={e => setBaselineYear(Number(e.target.value))}
+              style={{ background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.inputBorder}`, borderRadius: 4, padding: '4px 8px', fontSize: 12 }}>
+              {allYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
+          {/* Year range */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: theme.cardBg, padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}` }}>
+            <label style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600 }}>Range:</label>
+            <select value={yearRange[0]} onChange={e => setYearRange([Number(e.target.value), yearRange[1]])}
+              style={{ background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.inputBorder}`, borderRadius: 4, padding: '4px 8px', fontSize: 12 }}>
+              {allYears.filter(y => y < yearRange[1]).map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <span style={{ color: theme.textMuted }}>-</span>
+            <select value={yearRange[1]} onChange={e => setYearRange([yearRange[0], Number(e.target.value)])}
+              style={{ background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.inputBorder}`, borderRadius: 4, padding: '4px 8px', fontSize: 12 }}>
+              {allYears.filter(y => y > yearRange[0]).map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
+          {/* View mode */}
+          <div style={{ display: 'flex', gap: 2, background: theme.cardBg, borderRadius: 6, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+            {[{ key: 'chart', label: 'Chart' }, { key: 'sparklines', label: 'Sparklines' }, { key: 'table', label: 'Table' }].map(v => (
+              <button key={v.key} onClick={() => setViewMode(v.key)}
+                style={{ padding: '6px 14px', background: viewMode === v.key ? theme.accent : 'transparent', color: viewMode === v.key ? '#fff' : theme.textMuted, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Metric toggles */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            <span style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', alignSelf: 'center', marginRight: 4 }}>Batting:</span>
+            {RE_METRICS.filter(m => m.group === 'batting').map(m => (
+              <button key={m.key} onClick={() => toggleMetric(m.key)}
+                style={{ padding: '3px 10px', borderRadius: 4, border: `1px solid ${selectedMetrics.includes(m.key) ? theme.accent : theme.border}`, background: selectedMetrics.includes(m.key) ? theme.accent + '22' : 'transparent', color: selectedMetrics.includes(m.key) ? theme.accent : theme.textMuted, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                {m.label}
+              </button>
+            ))}
+            <span style={{ color: theme.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', alignSelf: 'center', margin: '0 4px 0 12px' }}>Pitching:</span>
+            {RE_METRICS.filter(m => m.group === 'pitching').map(m => (
+              <button key={m.key} onClick={() => toggleMetric(m.key)}
+                style={{ padding: '3px 10px', borderRadius: 4, border: `1px solid ${selectedMetrics.includes(m.key) ? theme.accent : theme.border}`, background: selectedMetrics.includes(m.key) ? theme.accent + '22' : 'transparent', color: selectedMetrics.includes(m.key) ? theme.accent : theme.textMuted, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Era legend */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+          {RE_ERAS.map(era => (
+            <button key={era.name} onClick={() => setHighlightedEra(highlightedEra?.name === era.name ? null : era)}
+              onMouseEnter={() => setHighlightedEra(era)} onMouseLeave={() => { if (highlightedEra?.name === era.name) setHighlightedEra(null); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 4, border: `1px solid ${highlightedEra?.name === era.name ? era.color : theme.border}`, background: highlightedEra?.name === era.name ? era.color + '22' : 'transparent', cursor: 'pointer', fontSize: 10, color: highlightedEra?.name === era.name ? era.color : theme.textMuted, fontWeight: 600 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: era.color, display: 'inline-block' }} />
+              {era.name} ({era.start}-{era.end})
+            </button>
+          ))}
+        </div>
+
+        {/* Hovered year detail strip */}
+        {hoveredYear && (
+          <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', sans-serif" }}>{hoveredYear}</span>
+            <span style={{ fontSize: 11, color: getEraForYear(hoveredYear)?.color, fontWeight: 600 }}>{getEraForYear(hoveredYear)?.name} Era</span>
+            {RE_METRICS.map(m => {
+              const val = MLB_LEAGUE_AVERAGES[hoveredYear][m.key];
+              const dev = getDeviation(hoveredYear, m.key);
+              return (
+                <div key={m.key} style={{ fontSize: 12, lineHeight: '16px' }}>
+                  <span style={{ color: theme.textMuted }}>{m.label}: </span>
+                  <span style={{ color: theme.textPrimary, fontWeight: 600, fontFamily: 'monospace' }}>{m.fmt(val)}</span>
+                  {hoveredYear !== baselineYear && <span style={{ color: getDeviationColor(dev, m.key), fontSize: 10, marginLeft: 3 }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}%</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Main content */}
+        <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: 20 }}>
+          {viewMode === 'chart' && renderChart()}
+          {viewMode === 'sparklines' && renderSparklines()}
+          {viewMode === 'table' && renderTable()}
+        </div>
+
+        {/* Historical notes */}
+        <div style={{ marginTop: 24, background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '16px 20px' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 14, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.textSecondary }}>Historical Context</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8, fontSize: 12, color: theme.textMuted }}>
+            {[
+              { year: '1920', text: 'Live-ball era begins — ban on spitball, new ball specs' },
+              { year: '1947', text: 'Integration begins (Jackie Robinson)' },
+              { year: '1961-62', text: 'AL & NL expansion — diluted pitching' },
+              { year: '1968', text: "Year of the Pitcher — historic low offense" },
+              { year: '1969', text: 'Mound lowered from 15in to 10in' },
+              { year: '1973', text: 'DH introduced in American League' },
+              { year: '1993', text: 'Expansion (Marlins, Rockies) — offense boom' },
+              { year: '1994', text: 'Strike-shortened season (no World Series)' },
+              { year: '2006', text: 'Enhanced PED testing takes effect' },
+              { year: '2020', text: 'COVID shortened 60-game season' },
+              { year: '2023', text: 'Pitch clock, larger bases, shift ban' },
+              { year: '2025', text: 'Continued K rate increase, offense dip' },
+            ].map(n => (
+              <div key={n.year} style={{ display: 'flex', gap: 8 }}>
+                <span style={{ color: theme.accent, fontWeight: 700, minWidth: 52 }}>{n.year}</span>
+                <span>{n.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p style={{ color: theme.textDim, fontSize: 10, marginTop: 16, textAlign: 'center' }}>Source: Baseball Reference (baseball-reference.com)</p>
+      </div>
+    </Layout>
+  );
+}
+
 // ============ DatabasePage Component ============
 
 function DatabasePage() {
@@ -9439,6 +9922,7 @@ export default function App() {
     <Route path="/review" element={<ReviewQueuePage />} />
     <Route path="/leaderboards" element={<LeaderboardsPage />} />
     <Route path="/draft-assistant" element={<DraftAssistantPage />} />
+    <Route path="/re-viewer" element={<REViewerPage />} />
     <Route path="/database" element={<DatabasePage />} />
   </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
 }
