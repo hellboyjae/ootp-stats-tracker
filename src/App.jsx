@@ -9510,9 +9510,9 @@ function REViewerPage() {
           ))}
         </div>
 
-        {/* Hovered year detail strip */}
-        {hoveredYear && (
-          <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+        {/* Year detail strip — always rendered to prevent layout shift */}
+        <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 16px', marginBottom: 16, minHeight: 40, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+          {hoveredYear ? (<>
             <span style={{ fontWeight: 700, color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', sans-serif" }}>{hoveredYear}</span>
             <span style={{ fontSize: 11, color: getEraForYear(hoveredYear)?.color, fontWeight: 600 }}>{getEraForYear(hoveredYear)?.name} Era</span>
             {RE_METRICS.map(m => {
@@ -9526,8 +9526,10 @@ function REViewerPage() {
                 </div>
               );
             })}
-          </div>
-        )}
+          </>) : (
+            <span style={{ color: theme.textDim, fontSize: 12, fontStyle: 'italic' }}>Hover over a year to see details</span>
+          )}
+        </div>
 
         {/* Main content */}
         <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: 20 }}>
