@@ -9239,7 +9239,7 @@ function REViewerPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const [baselineYear, setBaselineYear] = useState(2010);
-  const [selectedMetrics, setSelectedMetrics] = useState(['AVG', 'OPS', 'ERA', 'K9']);
+  const [selectedMetrics, setSelectedMetrics] = useState(['AVG']);
   const [viewMode, setViewMode] = useState('chart');
   const [yearRange, setYearRange] = useState([1910, 2025]);
   const [hoveredYear, setHoveredYear] = useState(null);
@@ -9256,12 +9256,9 @@ function REViewerPage() {
     return ((val - base) / base) * 100;
   };
 
-  const getDeviationColor = (pct, metricKey) => {
-    const pitcherNegativeIsGood = ['ERA', 'WHIP', 'BB9', 'HR9', 'BBpct', 'HRPA'];
-    const isInverse = pitcherNegativeIsGood.includes(metricKey);
-    const effective = isInverse ? -pct : pct;
+  const getDeviationColor = (pct) => {
     if (Math.abs(pct) < 1) return theme.textMuted;
-    if (effective > 0) return '#22c55e';
+    if (pct > 0) return '#22c55e';
     return '#ef4444';
   };
 
@@ -9311,7 +9308,7 @@ function REViewerPage() {
                       {selectedMetrics.map(mk => {
                         const m = RE_METRICS.find(mm => mm.key === mk);
                         const d = getDeviation(year, mk);
-                        return <div key={mk} style={{ color: getDeviationColor(d, mk) }}>{m?.label}: {m?.fmt(MLB_LEAGUE_AVERAGES[year][mk])} ({d > 0 ? '+' : ''}{d.toFixed(1)}%)</div>;
+                        return <div key={mk} style={{ color: getDeviationColor(d) }}>{m?.label}: {m?.fmt(MLB_LEAGUE_AVERAGES[year][mk])} ({d > 0 ? '+' : ''}{d.toFixed(1)}%)</div>;
                       })}
                     </div>
                   )}
@@ -9420,7 +9417,7 @@ function REViewerPage() {
                       <td key={m.key} style={{ padding: '8px 6px', textAlign: 'right', borderBottom: `1px solid ${theme.tableBorder}`, color: year === baselineYear ? theme.accent : theme.textPrimary, fontFamily: 'monospace', fontSize: 11 }}>
                         <span>{m.fmt(val)}</span>
                         {year !== baselineYear && (
-                          <span style={{ color: getDeviationColor(dev, m.key), fontSize: 9, marginLeft: 4 }}>
+                          <span style={{ color: getDeviationColor(dev), fontSize: 9, marginLeft: 4 }}>
                             {dev > 0 ? '+' : ''}{dev.toFixed(1)}%
                           </span>
                         )}
@@ -9529,7 +9526,7 @@ function REViewerPage() {
                   <div key={m.key} style={{ fontSize: 12, lineHeight: '16px' }}>
                     <span style={{ color: theme.textMuted }}>{m.label}: </span>
                     <span style={{ color: theme.textPrimary, fontWeight: 600, fontFamily: 'monospace' }}>{m.fmt(val)}</span>
-                    {displayYear !== baselineYear && <span style={{ color: getDeviationColor(dev, m.key), fontSize: 10, marginLeft: 3 }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}%</span>}
+                    {displayYear !== baselineYear && <span style={{ color: getDeviationColor(dev), fontSize: 10, marginLeft: 3 }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}%</span>}
                   </div>
                 );
               })}
