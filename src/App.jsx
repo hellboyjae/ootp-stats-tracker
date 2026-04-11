@@ -9266,9 +9266,13 @@ function REViewerPage() {
   };
 
   const toggleMetric = (key) => {
-    setSelectedMetrics(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
+    if (viewMode === 'chart') {
+      setSelectedMetrics([key]);
+    } else {
+      setSelectedMetrics(prev =>
+        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+      );
+    }
   };
 
   const getEraForYear = (year) => RE_ERAS.find(e => year >= e.start && year <= e.end);
@@ -9387,10 +9391,10 @@ function REViewerPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: theme.tableHeaderBg }}>
-              <th style={{ padding: '8px 10px', textAlign: 'left', color: theme.textSecondary, fontWeight: 600, position: 'sticky', left: 0, background: theme.tableHeaderBg, zIndex: 2, borderBottom: `2px solid ${theme.border}`, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Year</th>
-              <th style={{ padding: '8px 6px', textAlign: 'left', color: theme.textSecondary, fontWeight: 600, borderBottom: `2px solid ${theme.border}`, fontSize: 11 }}>Era</th>
+              <th style={{ padding: '12px 10px', textAlign: 'left', color: theme.textSecondary, fontWeight: 600, position: 'sticky', left: 0, background: theme.tableHeaderBg, zIndex: 2, borderBottom: `2px solid ${theme.border}`, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Year</th>
+              <th style={{ padding: '12px 6px', textAlign: 'left', color: theme.textSecondary, fontWeight: 600, borderBottom: `2px solid ${theme.border}`, fontSize: 11 }}>Era</th>
               {RE_METRICS.map(m => (
-                <th key={m.key} style={{ padding: '8px 6px', textAlign: 'right', color: selectedMetrics.includes(m.key) ? theme.accent : theme.textSecondary, fontWeight: 600, borderBottom: `2px solid ${theme.border}`, cursor: 'pointer', fontSize: 11, whiteSpace: 'nowrap' }}
+                <th key={m.key} style={{ padding: '12px 6px', textAlign: 'right', color: selectedMetrics.includes(m.key) ? theme.accent : theme.textSecondary, fontWeight: 600, borderBottom: `2px solid ${theme.border}`, cursor: 'pointer', fontSize: 11, whiteSpace: 'nowrap' }}
                   onClick={() => toggleMetric(m.key)} title={`${m.desc} — click to ${selectedMetrics.includes(m.key) ? 'deselect' : 'select'}`}>
                   {m.label}
                 </th>
@@ -9404,16 +9408,16 @@ function REViewerPage() {
               const isHighlighted = highlightedEra ? (year >= highlightedEra.start && year <= highlightedEra.end) : true;
               return (
                 <tr key={year} onMouseEnter={() => setHoveredYear(year)} onMouseLeave={() => setHoveredYear(null)}
-                  style={{ background: isHov ? theme.tableRowHover : (i % 2 === 0 ? theme.tableRowBg : 'transparent'), opacity: isHighlighted ? 1 : 0.3, transition: 'opacity 0.15s' }}>
-                  <td style={{ padding: '5px 10px', fontWeight: year === baselineYear ? 700 : 500, color: year === baselineYear ? theme.accent : theme.textPrimary, position: 'sticky', left: 0, background: isHov ? theme.tableRowHover : (i % 2 === 0 ? theme.tableRowBg : theme.tableBg), zIndex: 1, borderBottom: `1px solid ${theme.tableBorder}` }}>{year}</td>
-                  <td style={{ padding: '5px 6px', borderBottom: `1px solid ${theme.tableBorder}`, fontSize: 10 }}>
+                  style={{ background: isHov ? theme.tableRowHover : (i % 2 === 0 ? theme.tableRowBg : theme.panelBg), opacity: isHighlighted ? 1 : 0.3, transition: 'opacity 0.15s' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: year === baselineYear ? 700 : 500, color: year === baselineYear ? theme.accent : theme.textPrimary, position: 'sticky', left: 0, background: isHov ? theme.tableRowHover : (i % 2 === 0 ? theme.tableRowBg : theme.panelBg), zIndex: 1, borderBottom: `1px solid ${theme.tableBorder}` }}>{year}</td>
+                  <td style={{ padding: '8px 6px', borderBottom: `1px solid ${theme.tableBorder}`, fontSize: 10 }}>
                     <span style={{ background: era?.color || '#666', color: '#fff', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600 }}>{era?.name || ''}</span>
                   </td>
                   {RE_METRICS.map(m => {
                     const val = MLB_LEAGUE_AVERAGES[year][m.key];
                     const dev = getDeviation(year, m.key);
                     return (
-                      <td key={m.key} style={{ padding: '5px 6px', textAlign: 'right', borderBottom: `1px solid ${theme.tableBorder}`, color: year === baselineYear ? theme.accent : theme.textPrimary, fontFamily: 'monospace', fontSize: 11 }}>
+                      <td key={m.key} style={{ padding: '8px 6px', textAlign: 'right', borderBottom: `1px solid ${theme.tableBorder}`, color: year === baselineYear ? theme.accent : theme.textPrimary, fontFamily: 'monospace', fontSize: 11 }}>
                         <span>{m.fmt(val)}</span>
                         {year !== baselineYear && (
                           <span style={{ color: getDeviationColor(dev, m.key), fontSize: 9, marginLeft: 4 }}>
@@ -9510,26 +9514,28 @@ function REViewerPage() {
           ))}
         </div>
 
-        {/* Year detail strip — always rendered to prevent layout shift */}
-        <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 16px', marginBottom: 16, minHeight: 40, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-          {hoveredYear ? (<>
-            <span style={{ fontWeight: 700, color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', sans-serif" }}>{hoveredYear}</span>
-            <span style={{ fontSize: 11, color: getEraForYear(hoveredYear)?.color, fontWeight: 600 }}>{getEraForYear(hoveredYear)?.name} Era</span>
-            {RE_METRICS.map(m => {
-              const val = MLB_LEAGUE_AVERAGES[hoveredYear][m.key];
-              const dev = getDeviation(hoveredYear, m.key);
-              return (
-                <div key={m.key} style={{ fontSize: 12, lineHeight: '16px' }}>
-                  <span style={{ color: theme.textMuted }}>{m.label}: </span>
-                  <span style={{ color: theme.textPrimary, fontWeight: 600, fontFamily: 'monospace' }}>{m.fmt(val)}</span>
-                  {hoveredYear !== baselineYear && <span style={{ color: getDeviationColor(dev, m.key), fontSize: 10, marginLeft: 3 }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}%</span>}
-                </div>
-              );
-            })}
-          </>) : (
-            <span style={{ color: theme.textDim, fontSize: 12, fontStyle: 'italic' }}>Hover over a year to see details</span>
-          )}
-        </div>
+        {/* Year detail strip — always shows displayYear (baseline or hovered) */}
+        {(() => {
+          const displayYear = hoveredYear || baselineYear;
+          const era = getEraForYear(displayYear);
+          return (
+            <div style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', sans-serif" }}>{displayYear}{hoveredYear ? '' : ` (Baseline)`}</span>
+              <span style={{ fontSize: 11, color: era?.color, fontWeight: 600 }}>{era?.name} Era</span>
+              {RE_METRICS.map(m => {
+                const val = MLB_LEAGUE_AVERAGES[displayYear][m.key];
+                const dev = getDeviation(displayYear, m.key);
+                return (
+                  <div key={m.key} style={{ fontSize: 12, lineHeight: '16px' }}>
+                    <span style={{ color: theme.textMuted }}>{m.label}: </span>
+                    <span style={{ color: theme.textPrimary, fontWeight: 600, fontFamily: 'monospace' }}>{m.fmt(val)}</span>
+                    {displayYear !== baselineYear && <span style={{ color: getDeviationColor(dev, m.key), fontSize: 10, marginLeft: 3 }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}%</span>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Main content */}
         <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: 20 }}>
