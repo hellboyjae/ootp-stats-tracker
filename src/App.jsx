@@ -1870,9 +1870,11 @@ function StatsPage() {
           <PlayerRatingCard card={hoveredCard} theme={theme} isPitcher={hoverType === 'pitching'} embedded />
           {hoveredCard.card_id && (
             <img
+              key={hoveredCard.card_id}
               src={`https://iscjwwaaukxfoiqgaqmw.supabase.co/storage/v1/object/public/card-images/${hoveredCard.card_id}.webp`}
               alt=""
-              style={{ height: 450, borderRadius: 8, objectFit: 'contain' }}
+              style={{ height: 450, borderRadius: 8, objectFit: 'contain', opacity: 0, transition: 'opacity 0.15s ease-in' }}
+              onLoad={(e) => { e.target.style.opacity = 1; }}
               onError={(e) => { e.target.style.display = 'none'; }}
             />
           )}
