@@ -616,11 +616,10 @@ function StatsPage() {
       const match = findCardMatch(player.name, playerType, cardData);
       if (match) {
         const rect = e.target.getBoundingClientRect();
-        const cardW = 590, cardH = 450;
+        const cardW = 590;
         let left = rect.right + 10;
         let top = rect.top;
         if (left + cardW > window.innerWidth) left = rect.left - cardW - 10;
-        if (top + cardH > window.innerHeight) top = Math.max(10, window.innerHeight - cardH - 10);
         if (top < 10) top = 10;
         setHoverPosition({ top, left });
         setHoveredCard(match);
@@ -3531,7 +3530,7 @@ function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
   const cardTitle = card.card_title || `${card.first_name} ${card.last_name}`;
 
   const containerStyle = embedded
-    ? { width: 320, background: '#0f172a', fontFamily: "'Inter', sans-serif", overflow: 'hidden', borderRadius: 8, border: '1px solid #334155', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }
+    ? { width: 340, background: '#0f172a', fontFamily: "'Inter', sans-serif", overflow: 'hidden', borderRadius: 8, border: '1px solid #334155', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }
     : { position: 'fixed', top: position.top, left: position.left, width: 320, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 99999, pointerEvents: 'none', fontFamily: "'Inter', sans-serif", overflow: 'hidden' };
 
   return (
@@ -3547,7 +3546,7 @@ function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
         </div>
       </div>
 
-      <div style={{ padding: '8px 12px', maxHeight: 420, overflowY: 'auto' }}>
+      <div style={{ padding: '8px 12px' }}>
         {/* Batting / Pitching section */}
         {hasPitches ? (
           <>
