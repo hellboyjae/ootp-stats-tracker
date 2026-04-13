@@ -616,7 +616,7 @@ function StatsPage() {
       const match = findCardMatch(player.name, playerType, cardData);
       if (match) {
         const rect = e.target.getBoundingClientRect();
-        const cardW = 330, cardH = 450;
+        const cardW = 590, cardH = 450;
         let left = rect.right + 10;
         let top = rect.top;
         if (left + cardW > window.innerWidth) left = rect.left - cardW - 10;
@@ -1867,12 +1867,17 @@ function StatsPage() {
         />
       )}
       {hoveredCard && ReactDOM.createPortal(
-        <PlayerRatingCard
-          card={hoveredCard}
-          position={hoverPosition}
-          theme={theme}
-          isPitcher={hoverType === 'pitching'}
-        />,
+        <div style={{ position: 'fixed', top: hoverPosition.top, left: hoverPosition.left, display: 'flex', gap: 8, pointerEvents: 'none', zIndex: 99999 }}>
+          <PlayerRatingCard card={hoveredCard} theme={theme} isPitcher={hoverType === 'pitching'} embedded />
+          {hoveredCard.card_id && (
+            <img
+              src={`https://iscjwwaaukxfoiqgaqmw.supabase.co/storage/v1/object/public/card-images/${hoveredCard.card_id}.webp`}
+              alt=""
+              style={{ height: 450, borderRadius: 8, objectFit: 'contain' }}
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          )}
+        </div>,
         document.body
       )}
     </Layout>
@@ -1951,6 +1956,7 @@ function InfoPage() {
           'Pos Rating P': 'pos_p', 'Pos Rating C': 'pos_c', 'Pos Rating 1B': 'pos_1b',
           'Pos Rating 2B': 'pos_2b', 'Pos Rating 3B': 'pos_3b', 'Pos Rating SS': 'pos_ss',
           'Pos Rating LF': 'pos_lf', 'Pos Rating CF': 'pos_cf', 'Pos Rating RF': 'pos_rf',
+          'Card ID': 'card_id',
         };
 
         console.log('PapaParse headers:', parsed.meta?.fields?.slice(0, 15));
@@ -3525,7 +3531,7 @@ function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
   const cardTitle = card.card_title || `${card.first_name} ${card.last_name}`;
 
   const containerStyle = embedded
-    ? { width: '100%', background: '#0f172a', fontFamily: "'Inter', sans-serif", overflow: 'hidden' }
+    ? { width: 320, background: '#0f172a', fontFamily: "'Inter', sans-serif", overflow: 'hidden', borderRadius: 8, border: '1px solid #334155', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }
     : { position: 'fixed', top: position.top, left: position.left, width: 320, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 99999, pointerEvents: 'none', fontFamily: "'Inter', sans-serif", overflow: 'hidden' };
 
   return (
