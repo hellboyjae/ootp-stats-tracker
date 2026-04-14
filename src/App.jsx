@@ -9276,7 +9276,7 @@ function REViewerPage() {
 
   const allYears = Object.keys(MLB_LEAGUE_AVERAGES).map(Number).sort((a, b) => a - b);
   const filteredYears = allYears.filter(y => y >= yearRange[0] && y <= yearRange[1]);
-  const baseline = getAdjustedData(baselineYear);
+  const baseline = MLB_LEAGUE_AVERAGES[baselineYear];
 
   const getDeviation = (year, metricKey) => {
     const val = getAdjustedData(year)[metricKey];
