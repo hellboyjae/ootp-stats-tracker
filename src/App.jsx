@@ -8967,6 +8967,249 @@ const MLB_LEAGUE_AVERAGES = {
   2025:{AVG:.243,OBP:.310,SLG:.390,OPS:.700,BABIP:.278,ERA:3.95,WHIP:1.26,K9:8.7,BB9:3.1,HR9:0.52,BBpct:7.8,HRPA:0.015},
 };
 
+const BALLPARK_DATA = [
+  {name:'Heinsohn Ballpark',team:'None',year:2026,avgL:1.000,avgR:1.000,hrL:1.000,hrR:1.000,xbh2:1.000,xbh3:1.000},
+  {name:'Chase Field',team:'Arizona Diamondbacks',year:2026,avgL:1.016,avgR:1.033,hrL:0.885,hrR:0.923,xbh2:1.054,xbh3:1.205},
+  {name:'Sutter Health Park',team:'Athletics',year:2026,avgL:1.004,avgR:1.034,hrL:1.037,hrR:1.017,xbh2:1.065,xbh3:0.955},
+  {name:'Truist Park',team:'Atlanta Braves',year:2026,avgL:1.018,avgR:0.995,hrL:0.994,hrR:0.973,xbh2:0.986,xbh3:1.001},
+  {name:'Oriole Park at Camden Yards',team:'Baltimore Orioles',year:2026,avgL:1.030,avgR:1.034,hrL:1.060,hrR:0.945,xbh2:0.963,xbh3:1.013},
+  {name:'Fenway Park',team:'Boston Red Sox',year:2026,avgL:1.038,avgR:1.047,hrL:0.950,hrR:1.010,xbh2:1.090,xbh3:1.151},
+  {name:'Wrigley Field',team:'Chicago Cubs',year:2026,avgL:1.019,avgR:0.995,hrL:0.973,hrR:1.006,xbh2:0.944,xbh3:1.089},
+  {name:'Rate Field',team:'Chicago White Sox',year:2026,avgL:1.000,avgR:1.004,hrL:1.082,hrR:1.032,xbh2:0.957,xbh3:0.866},
+  {name:'Great American Ball Park',team:'Cincinnati Reds',year:2026,avgL:1.005,avgR:1.024,hrL:1.170,hrR:1.136,xbh2:1.007,xbh3:0.844},
+  {name:'Progressive Field',team:'Cleveland Guardians',year:2026,avgL:0.999,avgR:1.014,hrL:1.032,hrR:0.957,xbh2:0.999,xbh3:0.867},
+  {name:'Coors Field',team:'Colorado Rockies',year:2026,avgL:1.075,avgR:1.085,hrL:1.050,hrR:1.080,xbh2:1.112,xbh3:1.347},
+  {name:'Comerica Park',team:'Detroit Tigers',year:2026,avgL:1.010,avgR:1.013,hrL:0.952,hrR:0.984,xbh2:1.003,xbh3:1.183},
+  {name:'Daikin Park',team:'Houston Astros',year:2026,avgL:1.014,avgR:0.972,hrL:1.020,hrR:1.016,xbh2:0.995,xbh3:1.098},
+  {name:'Kauffman Stadium',team:'Kansas City Royals',year:2026,avgL:1.032,avgR:1.030,hrL:0.921,hrR:0.964,xbh2:1.076,xbh3:1.228},
+  {name:'Angel Stadium of Anaheim',team:'Los Angeles Angels of Anaheim',year:2026,avgL:0.986,avgR:1.006,hrL:1.068,hrR:1.036,xbh2:0.965,xbh3:1.008},
+  {name:'Dodger Stadium',team:'Los Angeles Dodgers',year:2026,avgL:0.980,avgR:0.951,hrL:1.072,hrR:1.123,xbh2:0.981,xbh3:0.843},
+  {name:'LoanDepot Park',team:'Miami Marlins',year:2026,avgL:1.021,avgR:1.003,hrL:1.008,hrR:0.941,xbh2:1.015,xbh3:1.091},
+  {name:'American Family Field',team:'Milwaukee Brewers',year:2026,avgL:0.944,avgR:0.966,hrL:1.050,hrR:1.019,xbh2:0.968,xbh3:1.050},
+  {name:'Target Field',team:'Minnesota Twins',year:2026,avgL:1.011,avgR:0.989,hrL:1.021,hrR:0.955,xbh2:1.054,xbh3:0.927},
+  {name:'Citi Field',team:'New York Mets',year:2026,avgL:0.978,avgR:0.981,hrL:0.974,hrR:1.013,xbh2:0.943,xbh3:0.871},
+  {name:'Yankee Stadium',team:'New York Yankees',year:2026,avgL:0.967,avgR:0.975,hrL:1.068,hrR:1.035,xbh2:0.955,xbh3:0.854},
+  {name:'Citizens Bank Park',team:'Philadelphia Phillies',year:2026,avgL:0.999,avgR:0.987,hrL:1.081,hrR:1.038,xbh2:0.973,xbh3:1.017},
+  {name:'PNC Park',team:'Pittsburgh Pirates',year:2026,avgL:1.019,avgR:1.025,hrL:0.955,hrR:0.905,xbh2:1.055,xbh3:0.983},
+  {name:'Petco Park',team:'San Diego Padres',year:2026,avgL:0.966,avgR:0.968,hrL:1.014,hrR:1.004,xbh2:0.954,xbh3:0.857},
+  {name:'Oracle Park',team:'San Francisco Giants',year:2026,avgL:1.002,avgR:1.024,hrL:0.914,hrR:0.903,xbh2:1.020,xbh3:1.100},
+  {name:'T-Mobile Park',team:'Seattle Mariners',year:2026,avgL:0.952,avgR:0.949,hrL:0.929,hrR:0.977,xbh2:0.933,xbh3:0.795},
+  {name:'Busch Stadium',team:'St. Louis Cardinals',year:2026,avgL:1.003,avgR:1.012,hrL:0.937,hrR:0.938,xbh2:0.986,xbh3:0.886},
+  {name:'Tropicana Field',team:'Tampa Bay Rays',year:2026,avgL:0.999,avgR:1.065,hrL:0.997,hrR:1.082,xbh2:0.965,xbh3:0.879},
+  {name:'Globe Life Field',team:'Texas Rangers',year:2026,avgL:0.990,avgR:0.963,hrL:1.048,hrR:0.994,xbh2:1.003,xbh3:0.933},
+  {name:'Rogers Centre',team:'Toronto Blue Jays',year:2026,avgL:0.966,avgR:0.976,hrL:0.966,hrR:1.053,xbh2:1.020,xbh3:0.896},
+  {name:'Nationals Park',team:'Washington Nationals',year:2026,avgL:1.035,avgR:0.988,hrL:0.994,hrR:1.028,xbh2:0.994,xbh3:0.958},
+  {name:'Dell Diamond',team:'Round Rock Express',year:2026,avgL:0.990,avgR:0.910,hrL:0.960,hrR:0.860,xbh2:0.952,xbh3:0.775},
+  {name:'Cheney Stadium',team:'Tacoma Rainiers',year:2026,avgL:0.870,avgR:0.930,hrL:1.130,hrR:0.930,xbh2:0.774,xbh3:0.504},
+  {name:'Sutter Health Park',team:'Sacramento River Cats',year:2026,avgL:1.004,avgR:1.034,hrL:1.037,hrR:1.017,xbh2:1.065,xbh3:0.955},
+  {name:'Daybreak Field',team:'Salt Lake Bees',year:2026,avgL:1.010,avgR:1.100,hrL:0.750,hrR:1.000,xbh2:1.064,xbh3:1.383},
+  {name:'Chickasaw Bricktown Ballpark',team:'Oklahoma City Comets',year:2026,avgL:1.030,avgR:0.920,hrL:0.790,hrR:0.890,xbh2:0.963,xbh3:1.219},
+  {name:'Southwest University park',team:'El Paso Chihuahuas',year:2026,avgL:1.100,avgR:1.100,hrL:1.500,hrR:1.100,xbh2:1.120,xbh3:1.209},
+  {name:'Rio Grande Credit Union Field at Isotopes Park',team:'Albuquerque Isotopes',year:2026,avgL:1.080,avgR:1.140,hrL:1.170,hrR:1.390,xbh2:1.134,xbh3:1.534},
+  {name:'Greater Nevada Field',team:'Reno Aces',year:2026,avgL:1.120,avgR:1.070,hrL:0.970,hrR:0.940,xbh2:1.264,xbh3:1.601},
+  {name:'Las Vegas Ballpark',team:'Las Vegas Aviators',year:2026,avgL:1.060,avgR:1.110,hrL:1.390,hrR:1.440,xbh2:1.104,xbh3:1.023},
+  {name:'Constellation Field',team:'Sugar Land Space Cowboys',year:2026,avgL:0.830,avgR:0.870,hrL:0.630,hrR:0.770,xbh2:0.839,xbh3:0.684},
+  {name:'Innovative Field',team:'Rochester Red Wings',year:2026,avgL:1.000,avgR:1.000,hrL:1.060,hrR:1.110,xbh2:0.964,xbh3:1.285},
+  {name:'Huntington Park',team:'Columbus Clippers',year:2026,avgL:0.950,avgR:0.990,hrL:0.960,hrR:1.100,xbh2:0.972,xbh3:0.500},
+  {name:'Coca-Cola Park',team:'Lehigh Valley IronPigs',year:2026,avgL:0.970,avgR:0.980,hrL:0.820,hrR:0.940,xbh2:1.008,xbh3:0.730},
+  {name:'Principal Park',team:'Iowa Cubs',year:2026,avgL:0.990,avgR:1.000,hrL:1.270,hrR:0.960,xbh2:1.140,xbh3:1.010},
+  {name:'Durham Bulls Athletic Park',team:'Durham Bulls',year:2026,avgL:1.090,avgR:1.030,hrL:1.190,hrR:1.390,xbh2:1.082,xbh3:1.068},
+  {name:'Sahlen Field',team:'Buffalo Bisons',year:2026,avgL:0.900,avgR:1.000,hrL:0.880,hrR:0.930,xbh2:0.952,xbh3:1.281},
+  {name:'Fifth Third Ballpark',team:'Toledo Mud Hens',year:2026,avgL:0.940,avgR:1.020,hrL:0.680,hrR:0.870,xbh2:1.032,xbh3:1.625},
+  {name:'Polar Park',team:'Worcester Red Sox',year:2026,avgL:1.090,avgR:1.020,hrL:1.050,hrR:0.980,xbh2:1.240,xbh3:0.700},
+  {name:'PNC Field',team:'Scranton WB RailRiders',year:2026,avgL:1.020,avgR:0.930,hrL:1.150,hrR:0.810,xbh2:0.955,xbh3:0.816},
+  {name:'Harbor Park',team:'Norfolk Tides',year:2026,avgL:0.920,avgR:1.000,hrL:0.890,hrR:1.020,xbh2:1.062,xbh3:0.925},
+  {name:'First Horizon Park',team:'Nashville Sounds',year:2026,avgL:1.000,avgR:1.000,hrL:0.700,hrR:0.870,xbh2:0.894,xbh3:1.763},
+  {name:'AutoZone Park',team:'Memphis Redbirds',year:2026,avgL:1.030,avgR:1.020,hrL:0.860,hrR:0.960,xbh2:1.041,xbh3:1.215},
+  {name:'121 Financial Park',team:'Jacksonville Jumbo Shrimp',year:2026,avgL:0.960,avgR:0.920,hrL:0.940,hrR:0.830,xbh2:0.867,xbh3:1.005},
+  {name:'Louisville Slugger Field',team:'Louisville Bats',year:2026,avgL:1.060,avgR:0.950,hrL:1.150,hrR:0.890,xbh2:1.027,xbh3:1.024},
+  {name:'NBT Bank Stadium',team:'Syracuse Mets',year:2026,avgL:1.020,avgR:1.010,hrL:1.090,hrR:1.100,xbh2:0.970,xbh3:1.038},
+  {name:'Victory Field',team:'Indianapolis Indians',year:2026,avgL:0.960,avgR:1.000,hrL:0.820,hrR:0.880,xbh2:0.869,xbh3:1.198},
+  {name:'Werner Park',team:'Omaha Storm Chasers',year:2026,avgL:1.070,avgR:1.050,hrL:1.070,hrR:1.250,xbh2:1.018,xbh3:0.967},
+  {name:'Truist Field',team:'Charlotte Knights',year:2026,avgL:1.050,avgR:1.070,hrL:1.500,hrR:1.460,xbh2:0.925,xbh3:0.500},
+  {name:'CHS Field',team:'St. Paul Saints',year:2026,avgL:1.030,avgR:1.040,hrL:1.170,hrR:1.080,xbh2:1.030,xbh3:1.170},
+  {name:'Coolray Field',team:'Gwinnett Stripers',year:2026,avgL:0.950,avgR:0.980,hrL:0.690,hrR:0.760,xbh2:0.995,xbh3:0.937},
+  {name:'Masan Baseball Stadium',team:'NC Dinos',year:2026,avgL:1.039,avgR:0.964,hrL:0.973,hrR:0.894,xbh2:1.119,xbh3:1.161},
+  {name:'Sajik Baseball Stadium',team:'Lotte Giants',year:2026,avgL:1.067,avgR:1.068,hrL:0.951,hrR:0.955,xbh2:1.094,xbh3:0.878},
+  {name:'Suwon KT Wiz Park',team:'kt wiz',year:2026,avgL:1.002,avgR:1.001,hrL:1.108,hrR:1.107,xbh2:1.008,xbh3:1.104},
+  {name:'Gocheok Sky Dome',team:'Kiwoom Heroes',year:2026,avgL:0.992,avgR:0.986,hrL:1.113,hrR:1.112,xbh2:1.109,xbh3:0.966},
+  {name:'Daegu Samsung Lions Park',team:'Samsung Lions',year:2026,avgL:0.987,avgR:0.992,hrL:1.111,hrR:1.112,xbh2:1.008,xbh3:0.886},
+  {name:'Hanbat Baseball Stadium',team:'Hanwha Eagles',year:2026,avgL:0.971,avgR:0.970,hrL:1.121,hrR:1.123,xbh2:0.947,xbh3:0.866},
+  {name:'Munhak Baseball Stadium',team:'SSG Landers',year:2026,avgL:0.980,avgR:0.976,hrL:1.130,hrR:1.131,xbh2:0.896,xbh3:0.862},
+  {name:'Jamsil Baseball Stadium (DS)',team:'Doosan Bears',year:2026,avgL:0.988,avgR:0.987,hrL:0.828,hrR:0.827,xbh2:0.925,xbh3:1.247},
+  {name:'Gwangju KIA Champions Field',team:'KIA Tigers',year:2026,avgL:0.899,avgR:0.896,hrL:1.023,hrR:1.030,xbh2:0.863,xbh3:0.855},
+  {name:'RingCentral Coliseum',team:'Oakland Athletics',year:2024,avgL:0.980,avgR:1.000,hrL:0.900,hrR:0.900,xbh2:0.990,xbh3:1.020},
+  {name:'Tropicana Field',team:'Tampa Bay Rays',year:2024,avgL:0.940,avgR:0.970,hrL:0.920,hrR:0.990,xbh2:0.970,xbh3:1.010},
+  {name:'Marlins Park',team:'Miami Marlins',year:2019,avgL:0.800,avgR:1.114,hrL:0.943,hrR:0.922,xbh2:0.967,xbh3:1.080},
+  {name:'Marlins Park',team:'Miami Marlins',year:2017,avgL:0.956,avgR:0.975,hrL:0.919,hrR:0.855,xbh2:0.957,xbh3:0.948},
+  {name:'SunTrust Park',team:'Atlanta Braves',year:2017,avgL:1.009,avgR:1.006,hrL:0.959,hrR:0.911,xbh2:0.992,xbh3:0.860},
+  {name:'Turner Field',team:'Atlanta Braves',year:2016,avgL:1.016,avgR:0.972,hrL:0.941,hrR:0.935,xbh2:0.975,xbh3:0.914},
+  {name:'Coors Field',team:'Colorado Rockies',year:2015,avgL:1.125,avgR:1.182,hrL:1.019,hrR:1.050,xbh2:1.000,xbh3:1.171},
+  {name:'Angel Stadium of Anaheim',team:'Los Angeles Angels of Anaheim',year:2015,avgL:1.004,avgR:0.950,hrL:0.973,hrR:0.998,xbh2:0.968,xbh3:0.827},
+  {name:'Citi Field',team:'New York Mets',year:2013,avgL:0.950,avgR:0.972,hrL:1.009,hrR:1.067,xbh2:0.992,xbh3:0.870},
+  {name:'Fenway Park',team:'Boston Red Sox',year:2013,avgL:1.056,avgR:1.026,hrL:0.861,hrR:1.010,xbh2:1.126,xbh3:1.017},
+  {name:'Citi Field',team:'New York Mets',year:2009,avgL:0.975,avgR:0.991,hrL:0.977,hrR:0.919,xbh2:0.980,xbh3:1.156},
+  {name:'McAfee Coliseum',team:'Oakland Athletics',year:2008,avgL:0.924,avgR:0.931,hrL:1.015,hrR:0.939,xbh2:0.972,xbh3:1.007},
+  {name:'Yankee Stadium',team:'New York Yankees',year:2008,avgL:0.978,avgR:1.025,hrL:1.059,hrR:0.978,xbh2:0.979,xbh3:0.884},
+  {name:'Shea Stadium',team:'New York Mets',year:2008,avgL:0.982,avgR:0.961,hrL:0.993,hrR:1.017,xbh2:1.003,xbh3:0.903},
+  {name:'RFK Stadium',team:'Washington Nationals',year:2007,avgL:1.006,avgR:0.977,hrL:0.895,hrR:0.897,xbh2:0.985,xbh3:1.045},
+  {name:'Busch Stadium',team:'St. Louis Cardinals',year:2006,avgL:0.996,avgR:0.997,hrL:0.889,hrR:0.896,xbh2:0.951,xbh3:0.925},
+  {name:'Minute Maid Park',team:'Houston Astros',year:2005,avgL:0.976,avgR:1.006,hrL:0.932,hrR:1.120,xbh2:0.963,xbh3:1.106},
+  {name:'U.S. Cellular Field',team:'Chicago White Sox',year:2005,avgL:0.997,avgR:0.989,hrL:1.211,hrR:1.157,xbh2:0.979,xbh3:0.894},
+  {name:'Great American Ball Park',team:'Cincinnati Reds',year:2004,avgL:0.979,avgR:0.982,hrL:1.087,hrR:1.081,xbh2:1.031,xbh3:0.858},
+  {name:'Fenway Park',team:'Boston Red Sox',year:2004,avgL:1.039,avgR:1.013,hrL:0.881,hrR:1.033,xbh2:1.097,xbh3:0.922},
+  {name:'Dodger Stadium',team:'Los Angeles Dodgers',year:2003,avgL:1.037,avgR:0.871,hrL:1.012,hrR:1.037,xbh2:0.929,xbh3:0.768},
+  {name:'Coors Field',team:'Colorado Rockies',year:2000,avgL:1.073,avgR:1.111,hrL:1.247,hrR:1.288,xbh2:0.990,xbh3:1.127},
+  {name:'Jacobs Field',team:'Cleveland Guardians',year:1999,avgL:1.022,avgR:1.026,hrL:1.066,hrR:1.011,xbh2:0.984,xbh3:0.976},
+  {name:'Safeco Field',team:'Seattle Mariners',year:1999,avgL:0.933,avgR:0.972,hrL:0.971,hrR:0.923,xbh2:1.102,xbh3:0.937},
+  {name:'Cinergy Field',team:'Cincinnati Reds',year:1998,avgL:0.823,avgR:0.896,hrL:1.027,hrR:1.013,xbh2:1.072,xbh3:0.970},
+  {name:'Wrigley Field',team:'Chicago Cubs',year:1998,avgL:1.033,avgR:1.005,hrL:1.027,hrR:1.118,xbh2:0.980,xbh3:0.926},
+  {name:'Coors Field',team:'Colorado Rockies',year:1996,avgL:1.136,avgR:1.200,hrL:1.049,hrR:1.147,xbh2:1.005,xbh3:1.156},
+  {name:'Dodger Stadium',team:'Los Angeles Dodgers',year:1996,avgL:0.954,avgR:0.958,hrL:0.850,hrR:0.925,xbh2:0.896,xbh3:0.774},
+  {name:'Coors Field',team:'Colorado Rockies',year:1995,avgL:1.095,avgR:1.200,hrL:1.107,hrR:1.183,xbh2:1.015,xbh3:1.257},
+  {name:'Mile High Stadium',team:'Colorado Rockies',year:1994,avgL:1.050,avgR:1.079,hrL:0.900,hrR:1.107,xbh2:0.959,xbh3:1.254},
+  {name:'Joe Robbie Stadium',team:'Florida Marlins',year:1993,avgL:1.032,avgR:1.028,hrL:1.033,hrR:1.019,xbh2:0.990,xbh3:1.082},
+  {name:'SkyDome',team:'Toronto Blue Jays',year:1992,avgL:1.017,avgR:1.000,hrL:0.898,hrR:1.139,xbh2:1.058,xbh3:1.132},
+  {name:'Oriole Park at Camden Yards',team:'Baltimore Orioles',year:1992,avgL:1.012,avgR:0.975,hrL:1.055,hrR:1.073,xbh2:0.974,xbh3:0.981},
+  {name:'Cleveland Stadium',team:'Cleveland Guardians',year:1991,avgL:1.003,avgR:1.032,hrL:0.893,hrR:0.971,xbh2:0.973,xbh3:0.931},
+  {name:'Metrodome',team:'Minnesota Twins',year:1990,avgL:1.023,avgR:1.042,hrL:1.001,hrR:0.970,xbh2:1.043,xbh3:1.118},
+  {name:'Anaheim Stadium',team:'California Angels',year:1990,avgL:0.953,avgR:0.991,hrL:1.103,hrR:1.104,xbh2:0.958,xbh3:0.905},
+  {name:'Shea Stadium',team:'New York Mets',year:1987,avgL:0.996,avgR:0.974,hrL:0.926,hrR:0.997,xbh2:0.975,xbh3:0.935},
+  {name:'Yankee Stadium',team:'New York Yankees',year:1987,avgL:1.099,avgR:0.953,hrL:1.088,hrR:0.969,xbh2:0.965,xbh3:0.847},
+  {name:'Three Rivers Stadium',team:'Pittsburgh Pirates',year:1986,avgL:1.002,avgR:1.007,hrL:1.115,hrR:0.950,xbh2:1.033,xbh3:1.067},
+  {name:'Veterans Stadium',team:'Philadelphia Phillies',year:1985,avgL:1.007,avgR:1.027,hrL:1.030,hrR:0.982,xbh2:1.073,xbh3:1.119},
+  {name:'Wrigley Field',team:'Chicago Cubs',year:1985,avgL:1.039,avgR:1.018,hrL:1.187,hrR:1.144,xbh2:0.958,xbh3:1.025},
+  {name:'Olympic Stadium',team:'Montreal Expos',year:1984,avgL:0.970,avgR:0.986,hrL:0.961,hrR:0.895,xbh2:1.067,xbh3:0.982},
+  {name:'Jack Murphy Stadium',team:'San Diego Padres',year:1984,avgL:0.989,avgR:0.988,hrL:1.090,hrR:1.128,xbh2:0.924,xbh3:1.035},
+  {name:'Busch Stadium',team:'St. Louis Cardinals',year:1984,avgL:0.996,avgR:0.981,hrL:0.898,hrR:0.886,xbh2:1.035,xbh3:1.191},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1984,avgL:1.132,avgR:1.099,hrL:0.985,hrR:0.997,xbh2:1.086,xbh3:1.036},
+  {name:'Exhibition Stadium',team:'Toronto Blue Jays',year:1983,avgL:1.026,avgR:1.010,hrL:1.097,hrR:1.051,xbh2:1.109,xbh3:1.149},
+  {name:'Comiskey Park',team:'Chicago White Sox',year:1983,avgL:0.995,avgR:1.005,hrL:0.970,hrR:1.022,xbh2:0.990,xbh3:1.171},
+  {name:'Arlington Stadium',team:'Texas Rangers',year:1982,avgL:0.990,avgR:1.012,hrL:0.899,hrR:0.880,xbh2:0.989,xbh3:0.887},
+  {name:'Kingdome',team:'Seattle Mariners',year:1982,avgL:1.021,avgR:0.981,hrL:1.088,hrR:1.143,xbh2:1.033,xbh3:0.880},
+  {name:'Metropolitan Stadium',team:'Minnesota Twins',year:1981,avgL:1.040,avgR:1.025,hrL:1.054,hrR:1.000,xbh2:0.976,xbh3:1.176},
+  {name:'Astrodome',team:'Houston Astros',year:1980,avgL:1.024,avgR:0.910,hrL:0.888,hrR:0.855,xbh2:0.979,xbh3:1.197},
+  {name:'Three Rivers Stadium',team:'Pittsburgh Pirates',year:1979,avgL:1.016,avgR:1.017,hrL:1.074,hrR:1.070,xbh2:1.018,xbh3:0.983},
+  {name:'Candlestick Park',team:'San Francisco Giants',year:1979,avgL:0.908,avgR:0.841,hrL:0.936,hrR:0.914,xbh2:0.969,xbh3:1.000},
+  {name:'Riverfront Stadium',team:'Cincinnati Reds',year:1978,avgL:0.984,avgR:0.992,hrL:1.015,hrR:1.058,xbh2:1.102,xbh3:0.937},
+  {name:'Royals Stadium',team:'Kansas City Royals',year:1978,avgL:1.054,avgR:0.998,hrL:0.881,hrR:0.930,xbh2:1.086,xbh3:1.160},
+  {name:'Oakland Coliseum',team:'Oakland Athletics',year:1977,avgL:1.003,avgR:0.943,hrL:0.966,hrR:1.036,xbh2:0.959,xbh3:0.894},
+  {name:'Atlanta Fulton County Stadium',team:'Atlanta Braves',year:1977,avgL:1.030,avgR:1.033,hrL:1.166,hrR:1.192,xbh2:0.991,xbh3:0.875},
+  {name:'Wrigley Field',team:'Chicago Cubs',year:1977,avgL:1.034,avgR:1.028,hrL:1.276,hrR:1.378,xbh2:1.030,xbh3:0.957},
+  {name:'Olympic Stadium',team:'Montreal Expos',year:1977,avgL:0.987,avgR:0.984,hrL:0.876,hrR:0.916,xbh2:1.021,xbh3:1.219},
+  {name:'Kingdome',team:'Seattle Mariners',year:1977,avgL:0.981,avgR:0.984,hrL:1.192,hrR:1.128,xbh2:1.010,xbh3:0.918},
+  {name:'Jarry Park',team:'Montreal Expos',year:1976,avgL:1.055,avgR:1.037,hrL:1.041,hrR:1.015,xbh2:0.949,xbh3:1.014},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1975,avgL:1.047,avgR:1.026,hrL:0.985,hrR:1.163,xbh2:1.124,xbh3:1.048},
+  {name:'Dodger Stadium',team:'Los Angeles Dodgers',year:1971,avgL:0.862,avgR:1.025,hrL:0.932,hrR:1.009,xbh2:0.928,xbh3:0.789},
+  {name:'Yankee Stadium',team:'New York Yankees',year:1971,avgL:0.983,avgR:0.975,hrL:1.220,hrR:0.725,xbh2:0.985,xbh3:1.180},
+  {name:'County Stadium',team:'Milwaukee Brewers',year:1970,avgL:0.978,avgR:0.993,hrL:0.921,hrR:1.040,xbh2:1.020,xbh3:1.044},
+  {name:'Sicks Stadium 1969',team:'Seattle Pilots',year:1969,avgL:0.995,avgR:0.992,hrL:1.139,hrR:1.126,xbh2:1.046,xbh3:0.771},
+  {name:'Connie Mack Stadium',team:'Philadelphia Phillies',year:1968,avgL:1.004,avgR:0.998,hrL:0.906,hrR:1.093,xbh2:1.038,xbh3:0.956},
+  {name:'Busch Stadium',team:'St. Louis Cardinals',year:1968,avgL:0.959,avgR:0.995,hrL:0.891,hrR:0.953,xbh2:0.944,xbh3:1.056},
+  {name:'Comiskey Park',team:'Chicago White Sox',year:1967,avgL:0.952,avgR:0.969,hrL:0.887,hrR:0.885,xbh2:0.923,xbh3:0.985},
+  {name:'KC Municipal Stadium',team:'Kansas City Athletics',year:1967,avgL:1.061,avgR:1.041,hrL:0.841,hrR:0.853,xbh2:1.068,xbh3:1.223},
+  {name:'Memorial Stadium',team:'Baltimore Orioles',year:1966,avgL:1.018,avgR:1.002,hrL:0.995,hrR:1.088,xbh2:0.994,xbh3:0.917},
+  {name:'Astrodome',team:'Houston Astros',year:1965,avgL:1.004,avgR:0.994,hrL:0.849,hrR:0.874,xbh2:1.022,xbh3:1.120},
+  {name:'Dodger Stadium',team:'California Angels',year:1965,avgL:0.961,avgR:1.011,hrL:0.798,hrR:0.784,xbh2:0.913,xbh3:0.861},
+  {name:'Shea Stadium',team:'New York Mets',year:1964,avgL:1.018,avgR:0.997,hrL:0.961,hrR:1.073,xbh2:0.993,xbh3:1.183},
+  {name:'Candlestick Park',team:'San Francisco Giants',year:1962,avgL:0.933,avgR:0.976,hrL:1.125,hrR:0.973,xbh2:0.958,xbh3:0.894},
+  {name:'Colt Stadium',team:'Houston Colt .45\'s',year:1962,avgL:1.017,avgR:0.972,hrL:0.776,hrR:0.973,xbh2:0.877,xbh3:1.299},
+  {name:'Polo Grounds',team:'New York Mets',year:1962,avgL:0.989,avgR:0.987,hrL:1.278,hrR:1.036,xbh2:0.938,xbh3:1.229},
+  {name:'Sportsmans Park',team:'St. Louis Cardinals',year:1962,avgL:1.181,avgR:1.078,hrL:1.078,hrR:1.009,xbh2:1.093,xbh3:0.948},
+  {name:'LA Wrigley Field 1961',team:'Los Angeles Angels',year:1961,avgL:1.004,avgR:1.032,hrL:1.068,hrR:1.206,xbh2:1.049,xbh3:0.904},
+  {name:'Seals Stadium',team:'San Francisco Giants',year:1959,avgL:0.986,avgR:0.959,hrL:0.960,hrR:0.990,xbh2:0.928,xbh3:0.881},
+  {name:'Milwaukee County Stadium',team:'Milwaukee Braves',year:1959,avgL:0.956,avgR:0.952,hrL:1.012,hrR:0.899,xbh2:0.918,xbh3:0.893},
+  {name:'LA Coliseum',team:'Los Angeles Dodgers',year:1959,avgL:0.988,avgR:1.010,hrL:0.986,hrR:1.163,xbh2:0.927,xbh3:1.048},
+  {name:'Tiger Stadium',team:'Detroit Tigers',year:1958,avgL:0.992,avgR:1.010,hrL:1.199,hrR:1.073,xbh2:1.007,xbh3:0.945},
+  {name:'Crosley Field',team:'Cincinnati Redlegs',year:1958,avgL:1.124,avgR:1.086,hrL:1.134,hrR:1.054,xbh2:1.042,xbh3:0.722},
+  {name:'Ebbets Field',team:'Brooklyn Dodgers',year:1955,avgL:1.019,avgR:0.980,hrL:1.051,hrR:1.125,xbh2:1.088,xbh3:0.967},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1955,avgL:1.050,avgR:1.050,hrL:0.964,hrR:1.199,xbh2:1.132,xbh3:0.850},
+  {name:'Cleveland Stadium',team:'Cleveland Guardians',year:1954,avgL:0.947,avgR:0.980,hrL:1.105,hrR:1.105,xbh2:1.005,xbh3:0.850},
+  {name:'Griffith Stadium',team:'Washington Senators',year:1954,avgL:1.015,avgR:1.005,hrL:0.857,hrR:0.842,xbh2:0.943,xbh3:1.161},
+  {name:'Forbes Field',team:'Pittsburgh Pirates',year:1952,avgL:1.027,avgR:1.021,hrL:0.875,hrR:1.132,xbh2:0.939,xbh3:1.125},
+  {name:'Yankee Stadium',team:'New York Yankees',year:1952,avgL:0.943,avgR:0.961,hrL:1.126,hrR:0.876,xbh2:0.893,xbh3:1.008},
+  {name:'Braves Field',team:'Boston Braves',year:1952,avgL:0.967,avgR:1.011,hrL:1.028,hrR:0.798,xbh2:1.007,xbh3:0.790},
+  {name:'Cleveland Stadium',team:'Cleveland Guardians',year:1952,avgL:0.952,avgR:0.942,hrL:0.985,hrR:1.116,xbh2:0.961,xbh3:0.696},
+  {name:'Crosley Field',team:'Cincinnati Reds',year:1949,avgL:1.081,avgR:1.087,hrL:1.168,hrR:0.974,xbh2:1.023,xbh3:0.828},
+  {name:'Polo Grounds',team:'New York Giants',year:1949,avgL:0.800,avgR:0.816,hrL:1.192,hrR:1.069,xbh2:0.902,xbh3:0.967},
+  {name:'Rickwood Field',team:'Birmingham Black Barons',year:1949,avgL:0.980,avgR:0.980,hrL:0.920,hrR:0.920,xbh2:1.030,xbh3:0.980},
+  {name:'Briggs Stadium',team:'Detroit Tigers',year:1948,avgL:0.921,avgR:1.008,hrL:1.123,hrR:1.099,xbh2:0.979,xbh3:0.962},
+  {name:'Briggs Stadium',team:'Detroit Tigers',year:1946,avgL:1.010,avgR:0.993,hrL:1.188,hrR:1.126,xbh2:1.040,xbh3:0.931},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1946,avgL:0.974,avgR:1.190,hrL:0.911,hrR:1.105,xbh2:1.047,xbh3:0.878},
+  {name:'Ruppert Stadium',team:'Newark Eagles',year:1946,avgL:1.040,avgR:1.040,hrL:1.020,hrR:1.040,xbh2:1.020,xbh3:0.970},
+  {name:'Wrigley Field',team:'Chicago Cubs',year:1945,avgL:0.943,avgR:1.043,hrL:0.877,hrR:1.076,xbh2:0.966,xbh3:0.944},
+  {name:'Comiskey Park',team:'Chicago White Sox',year:1945,avgL:1.125,avgR:0.931,hrL:0.957,hrR:0.987,xbh2:0.975,xbh3:0.997},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1945,avgL:0.997,avgR:1.045,hrL:0.808,hrR:1.385,xbh2:1.089,xbh3:0.835},
+  {name:'Shibe Park',team:'Philadelphia Phillies',year:1942,avgL:0.926,avgR:1.018,hrL:0.851,hrR:1.027,xbh2:1.007,xbh3:1.131},
+  {name:'Penmar Park',team:'Philadelphia Stars',year:1941,avgL:1.050,avgR:1.030,hrL:1.050,hrR:1.010,xbh2:0.990,xbh3:0.960},
+  {name:'Forbes Field',team:'Pittsburgh Pirates',year:1940,avgL:1.045,avgR:1.026,hrL:0.942,hrR:0.847,xbh2:0.971,xbh3:1.229},
+  {name:'Braves Field',team:'Boston Bees',year:1940,avgL:0.995,avgR:0.969,hrL:0.829,hrR:0.906,xbh2:1.014,xbh3:0.905},
+  {name:'Rickwood Field',team:'Birmingham Black Barons',year:1940,avgL:0.920,avgR:0.920,hrL:0.600,hrR:0.500,xbh2:1.140,xbh3:1.100},
+  {name:'Polo Grounds',team:'New York Giants',year:1939,avgL:0.952,avgR:0.972,hrL:1.201,hrR:1.201,xbh2:0.872,xbh3:1.096},
+  {name:'Crosley Field',team:'Cincinnati Reds',year:1939,avgL:0.800,avgR:0.927,hrL:0.999,hrR:0.959,xbh2:1.038,xbh3:1.003},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1937,avgL:0.996,avgR:1.025,hrL:0.833,hrR:1.122,xbh2:1.032,xbh3:1.022},
+  {name:'Crosley Field',team:'Cincinnati Reds',year:1936,avgL:0.974,avgR:1.004,hrL:0.842,hrR:0.856,xbh2:0.967,xbh3:1.107},
+  {name:'Hinchliffe Stadium',team:'New York Black Yankees',year:1936,avgL:1.140,avgR:1.140,hrL:0.880,hrR:0.810,xbh2:1.070,xbh3:1.000},
+  {name:'Baker Bowl',team:'Philadelphia Phillies',year:1934,avgL:1.200,avgR:1.032,hrL:1.126,hrR:1.070,xbh2:1.093,xbh3:0.677},
+  {name:'Yankee Stadium',team:'New York Yankees',year:1934,avgL:0.957,avgR:0.960,hrL:1.337,hrR:0.891,xbh2:0.879,xbh3:1.016},
+  {name:'Baker Bowl',team:'Philadelphia Phillies',year:1933,avgL:1.109,avgR:1.062,hrL:1.432,hrR:1.256,xbh2:1.073,xbh3:0.695},
+  {name:'Wrigley Field',team:'Chicago Cubs',year:1932,avgL:1.004,avgR:0.994,hrL:1.112,hrR:0.916,xbh2:0.998,xbh3:0.916},
+  {name:'Braves Field',team:'Boston Braves',year:1931,avgL:0.859,avgR:0.991,hrL:0.822,hrR:0.985,xbh2:1.001,xbh3:1.028},
+  {name:'Hamtramck Stadium',team:'Detroit Stars',year:1930,avgL:1.030,avgR:1.030,hrL:0.620,hrR:0.600,xbh2:1.040,xbh3:0.940},
+  {name:'Mack Park',team:'Detroit Stars',year:1928,avgL:1.050,avgR:1.050,hrL:1.220,hrR:0.780,xbh2:1.030,xbh3:0.980},
+  {name:'Sportsmans Park',team:'St. Louis Browns',year:1927,avgL:0.996,avgR:0.977,hrL:1.201,hrR:1.162,xbh2:1.030,xbh3:1.022},
+  {name:'Bacharach Park',team:'Atlantic City Bacharach Giants',year:1927,avgL:0.970,avgR:0.970,hrL:1.150,hrR:0.660,xbh2:0.980,xbh3:0.940},
+  {name:'Yankee Stadium',team:'New York Yankees',year:1927,avgL:0.964,avgR:0.972,hrL:1.130,hrR:1.167,xbh2:0.876,xbh3:1.127},
+  {name:'Navin Field',team:'Detroit Tigers',year:1926,avgL:0.994,avgR:0.989,hrL:0.852,hrR:1.201,xbh2:1.057,xbh3:1.099},
+  {name:'Braves Field',team:'Boston Braves',year:1926,avgL:0.982,avgR:0.973,hrL:0.631,hrR:0.642,xbh2:0.961,xbh3:1.016},
+  {name:'Braves Field',team:'Boston Braves',year:1925,avgL:0.970,avgR:0.977,hrL:0.837,hrR:0.837,xbh2:0.997,xbh3:1.019},
+  {name:'League Park',team:'Cleveland Guardians',year:1923,avgL:1.038,avgR:0.999,hrL:0.954,hrR:0.826,xbh2:1.102,xbh3:1.011},
+  {name:'Yankee Stadium',team:'New York Yankees',year:1923,avgL:0.965,avgR:0.985,hrL:1.169,hrR:1.120,xbh2:0.901,xbh3:1.176},
+  {name:'Weeghman Park',team:'Chicago Cubs',year:1922,avgL:1.030,avgR:0.990,hrL:0.928,hrR:1.200,xbh2:1.118,xbh3:0.862},
+  {name:'Baker Bowl',team:'Philadelphia Phillies',year:1921,avgL:1.016,avgR:1.074,hrL:1.293,hrR:1.480,xbh2:1.195,xbh3:0.654},
+  {name:'Shibe Park AL',team:'Philadelphia Athletics',year:1920,avgL:1.003,avgR:0.990,hrL:1.153,hrR:1.200,xbh2:0.975,xbh3:0.895},
+  {name:'Ebbets Field',team:'Brooklyn Robins',year:1920,avgL:1.036,avgR:0.985,hrL:1.228,hrR:0.913,xbh2:0.931,xbh3:1.092},
+  {name:'Sportsmans Park',team:'St. Louis Browns',year:1919,avgL:1.039,avgR:1.001,hrL:1.361,hrR:0.906,xbh2:1.029,xbh3:1.071},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1919,avgL:0.809,avgR:1.059,hrL:0.816,hrR:0.837,xbh2:1.068,xbh3:0.921},
+  {name:'Harrison Park',team:'Newark Pepper',year:1915,avgL:0.960,avgR:0.960,hrL:0.960,hrR:0.960,xbh2:1.000,xbh3:1.000},
+  {name:'Griffith Stadium',team:'Washington Senators',year:1914,avgL:1.052,avgR:0.992,hrL:1.178,hrR:0.902,xbh2:0.928,xbh3:1.132},
+  {name:'South End Grounds',team:'Boston Braves',year:1914,avgL:0.986,avgR:0.955,hrL:1.102,hrR:0.900,xbh2:1.099,xbh3:0.789},
+  {name:'Forbes Field',team:'Pittsburgh Pirates',year:1913,avgL:0.875,avgR:0.975,hrL:0.826,hrR:0.884,xbh2:0.923,xbh3:1.317},
+  {name:'Robison Field',team:'St. Louis Cardinals',year:1912,avgL:0.972,avgR:1.007,hrL:0.837,hrR:0.769,xbh2:0.922,xbh3:1.036},
+  {name:'Fenway Park',team:'Boston Red Sox',year:1912,avgL:0.996,avgR:0.992,hrL:0.693,hrR:0.782,xbh2:1.082,xbh3:1.085},
+  {name:'Washington Park',team:'Brooklyn Dodgers',year:1911,avgL:1.005,avgR:0.953,hrL:0.919,hrR:0.831,xbh2:1.029,xbh3:0.979},
+  {name:'Bennett Park',team:'Detroit Tigers',year:1911,avgL:0.977,avgR:1.037,hrL:1.011,hrR:1.394,xbh2:0.910,xbh3:0.958},
+  {name:'Polo Grounds',team:'New York Giants',year:1911,avgL:0.919,avgR:1.142,hrL:1.106,hrR:1.185,xbh2:1.002,xbh3:0.891},
+  {name:'Huntington Avenue Grounds',team:'Boston Red Sox',year:1910,avgL:0.985,avgR:0.973,hrL:1.216,hrR:1.130,xbh2:1.048,xbh3:0.936},
+  {name:'Shibe Park',team:'Philadelphia Athletics',year:1910,avgL:1.098,avgR:0.993,hrL:1.047,hrR:0.826,xbh2:0.965,xbh3:1.142},
+  {name:'Palace of the Fans',team:'Cincinnati Reds',year:1910,avgL:0.945,avgR:0.899,hrL:0.812,hrR:0.793,xbh2:0.882,xbh3:1.258},
+  {name:'Baker Bowl',team:'Philadelphia Phillies',year:1910,avgL:1.124,avgR:0.939,hrL:1.211,hrR:1.111,xbh2:1.083,xbh3:0.916},
+  {name:'American League Park',team:'Washington Senators',year:1907,avgL:1.083,avgR:0.871,hrL:0.949,hrR:0.850,xbh2:0.944,xbh3:1.159},
+  {name:'Columbia Park',team:'Philadelphia Athletics',year:1906,avgL:1.099,avgR:1.080,hrL:1.374,hrR:1.071,xbh2:1.143,xbh3:0.812},
+  {name:'Polo Grounds',team:'New York Giants',year:1905,avgL:1.138,avgR:0.983,hrL:1.500,hrR:1.456,xbh2:1.002,xbh3:0.957},
+  {name:'Hilltop Park',team:'New York Highlanders',year:1905,avgL:1.078,avgR:1.083,hrL:1.257,hrR:1.128,xbh2:0.901,xbh3:1.322},
+  {name:'League Park',team:'Cleveland Naps',year:1905,avgL:1.200,avgR:1.089,hrL:0.883,hrR:0.929,xbh2:0.913,xbh3:0.884},
+  {name:'Hilltop Park',team:'New York Highlanders',year:1903,avgL:1.001,avgR:1.001,hrL:1.205,hrR:1.205,xbh2:1.011,xbh3:1.116},
+  {name:'South Side Park',team:'Chicago White Sox',year:1903,avgL:0.941,avgR:0.941,hrL:0.766,hrR:0.766,xbh2:1.050,xbh3:0.788},
+  {name:'Lloyd Street Grounds',team:'Milwaukee Brewers',year:1901,avgL:0.883,avgR:0.883,hrL:0.979,hrR:0.979,xbh2:1.008,xbh3:1.043},
+  {name:'Exposition Park III',team:'Pittsburgh Burghers',year:1890,avgL:0.941,avgR:0.941,hrL:0.941,hrR:0.941,xbh2:1.000,xbh3:1.000},
+  {name:'Philadelphia Baseball Grounds',team:'Philadelphia Quakers',year:1889,avgL:1.102,avgR:1.102,hrL:1.025,hrR:1.025,xbh2:1.000,xbh3:1.000},
+  {name:'West Side Park',team:'Chicago White Stockings',year:1887,avgL:1.157,avgR:1.157,hrL:1.038,hrR:1.038,xbh2:1.000,xbh3:1.000},
+  {name:'Swampoodle Grounds',team:'Washington Nationals',year:1886,avgL:0.975,avgR:0.975,hrL:0.975,hrR:0.975,xbh2:1.000,xbh3:1.000},
+  {name:'Messer Street Grounds',team:'Providence Grays',year:1885,avgL:0.945,avgR:0.945,hrL:0.945,hrR:0.945,xbh2:1.000,xbh3:1.000},
+  {name:'Polo Grounds I West Diamond',team:'New York Metropolitans',year:1885,avgL:0.840,avgR:0.840,hrL:0.959,hrR:0.959,xbh2:1.000,xbh3:1.000},
+  {name:'Keystone Park',team:'Philadelphia Keystones',year:1884,avgL:0.974,avgR:0.974,hrL:0.974,hrR:0.974,xbh2:1.000,xbh3:1.000},
+  {name:'Lake Front Park',team:'Chicago White Stockings',year:1881,avgL:1.011,avgR:1.011,hrL:1.011,hrR:1.011,xbh2:1.000,xbh3:1.000},
+  {name:'Agricultural County Fair Grounds',team:'Worcester Ruby Legs',year:1880,avgL:1.062,avgR:1.062,hrL:1.062,hrR:1.062,xbh2:1.000,xbh3:1.000},
+  {name:'South Street Park',team:'Indianapolis Blues',year:1878,avgL:0.800,avgR:0.800,hrL:0.945,hrR:0.945,xbh2:1.000,xbh3:1.000},
+  {name:'Grand Avenue Park',team:'St. Louis Brown Stockings',year:1877,avgL:0.870,avgR:0.870,hrL:0.967,hrR:0.967,xbh2:1.000,xbh3:1.000},
+  {name:'Louisville Baseball Park',team:'Louisville Grays',year:1877,avgL:1.198,avgR:1.198,hrL:1.048,hrR:1.048,xbh2:1.000,xbh3:1.000},
+  {name:'Hartford Ball Club Grounds',team:'Hartford Dark Blues',year:1876,avgL:1.012,avgR:1.012,hrL:1.012,hrR:1.012,xbh2:1.000,xbh3:1.000},
+  {name:'Waverly Fairgrounds',team:'Elizabeth Resolutes',year:1873,avgL:0.997,avgR:0.997,hrL:0.997,hrR:0.997,xbh2:1.000,xbh3:1.000},
+  {name:'Union Grounds (Brooklyn)',team:'New York Mutuals',year:1871,avgL:0.925,avgR:0.925,hrL:0.925,hrR:0.925,xbh2:1.000,xbh3:1.000},
+  {name:'South End Grounds I',team:'Boston Red Stockings',year:1871,avgL:1.016,avgR:1.016,hrL:1.016,hrR:1.016,xbh2:1.000,xbh3:1.000},
+];
+
 const RE_METRICS = [
   { key: 'AVG', label: 'AVG', group: 'batting', fmt: v => v.toFixed(3), desc: 'Batting Average' },
   { key: 'OBP', label: 'OBP', group: 'batting', fmt: v => v.toFixed(3), desc: 'On-Base Percentage' },
@@ -9004,13 +9247,39 @@ function REViewerPage() {
   const [yearRange, setYearRange] = useState([1910, 2025]);
   const [hoveredYear, setHoveredYear] = useState(null);
   const [highlightedEra, setHighlightedEra] = useState(null);
+  const [selectedParkIdx, setSelectedParkIdx] = useState(-1);
+  const [batterHand, setBatterHand] = useState('lhb');
+
+  const activePark = selectedParkIdx >= 0 ? BALLPARK_DATA[selectedParkIdx] : null;
+
+  const applyParkFactor = (yearData, park, hand) => {
+    if (!park || !yearData) return yearData;
+    const avg = hand === 'lhb' ? park.avgL : park.avgR;
+    const hr = hand === 'lhb' ? park.hrL : park.hrR;
+    const { xbh2, xbh3 } = park;
+    const adjusted = {
+      ...yearData,
+      AVG: yearData.AVG * avg,
+      BABIP: yearData.BABIP * avg,
+      OBP: yearData.OBP * avg,
+      HRPA: yearData.HRPA * hr,
+      SLG: yearData.SLG * (avg * 0.4 + hr * 0.3 + xbh2 * 0.2 + xbh3 * 0.1),
+      HR9: yearData.HR9 * hr,
+      WHIP: yearData.WHIP * (1 + (avg - 1) * 0.6),
+      ERA: yearData.ERA * (1 + (avg - 1) * 0.5 + (hr - 1) * 0.3),
+    };
+    adjusted.OPS = adjusted.OBP + adjusted.SLG;
+    return adjusted;
+  };
+
+  const getAdjustedData = (year) => applyParkFactor(MLB_LEAGUE_AVERAGES[year], activePark, batterHand);
 
   const allYears = Object.keys(MLB_LEAGUE_AVERAGES).map(Number).sort((a, b) => a - b);
   const filteredYears = allYears.filter(y => y >= yearRange[0] && y <= yearRange[1]);
-  const baseline = MLB_LEAGUE_AVERAGES[baselineYear];
+  const baseline = getAdjustedData(baselineYear);
 
   const getDeviation = (year, metricKey) => {
-    const val = MLB_LEAGUE_AVERAGES[year][metricKey];
+    const val = getAdjustedData(year)[metricKey];
     const base = baseline[metricKey];
     if (!base) return 0;
     return ((val - base) / base) * 100;
@@ -9068,7 +9337,7 @@ function REViewerPage() {
                       {selectedMetrics.map(mk => {
                         const m = RE_METRICS.find(mm => mm.key === mk);
                         const d = getDeviation(year, mk);
-                        return <div key={mk} style={{ color: getDeviationColor(d) }}>{m?.label}: {m?.fmt(MLB_LEAGUE_AVERAGES[year][mk])} ({d > 0 ? '+' : ''}{d.toFixed(1)}%)</div>;
+                        return <div key={mk} style={{ color: getDeviationColor(d) }}>{m?.label}: {m?.fmt(getAdjustedData(year)[mk])} ({d > 0 ? '+' : ''}{d.toFixed(1)}%)</div>;
                       })}
                     </div>
                   )}
@@ -9101,7 +9370,7 @@ function REViewerPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {selectedMetrics.map(mk => {
           const metric = RE_METRICS.find(m => m.key === mk);
-          const vals = filteredYears.map(y => MLB_LEAGUE_AVERAGES[y][mk]);
+          const vals = filteredYears.map(y => getAdjustedData(y)[mk]);
           const min = Math.min(...vals);
           const max = Math.max(...vals);
           const range = max - min || 1;
@@ -9117,7 +9386,7 @@ function REViewerPage() {
                 {/* Baseline reference line */}
                 <div style={{ position: 'absolute', bottom: `${((baseVal - min) / range) * 100}%`, left: 0, right: 0, height: 1, borderTop: `1px dashed ${theme.accent}`, opacity: 0.4 }} />
                 {filteredYears.map(y => {
-                  const v = MLB_LEAGUE_AVERAGES[y][mk];
+                  const v = getAdjustedData(y)[mk];
                   const h = ((v - min) / range) * 100;
                   const era = getEraForYear(y);
                   const isHov = hoveredYear === y;
@@ -9171,7 +9440,7 @@ function REViewerPage() {
                     <span style={{ background: era?.color || '#666', color: '#fff', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 600 }}>{era?.name || ''}</span>
                   </td>
                   {RE_METRICS.map(m => {
-                    const val = MLB_LEAGUE_AVERAGES[year][m.key];
+                    const val = getAdjustedData(year)[m.key];
                     const dev = getDeviation(year, m.key);
                     return (
                       <td key={m.key} style={{ padding: '8px 6px', textAlign: 'right', borderBottom: `1px solid ${theme.tableBorder}`, color: year === baselineYear ? theme.accent : theme.textPrimary, fontFamily: 'monospace', fontSize: 11 }}>
@@ -9200,6 +9469,12 @@ function REViewerPage() {
           <div>
             <h2 style={styles.pageTitle}>Run Environment Viewer</h2>
             <p style={{ color: theme.textMuted, fontSize: 13, margin: '4px 0 0' }}>MLB league averages 1910-2025 — how the run environment shapes stats across eras</p>
+            {activePark && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: theme.accent + '22', border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '3px 10px', marginTop: 6, fontSize: 12, color: theme.accent, fontWeight: 600 }}>
+                Park: {activePark.name} ({activePark.year}) — {batterHand === 'lhb' ? 'LHB' : 'RHB'}
+                <button onClick={() => setSelectedParkIdx(-1)} style={{ background: 'none', border: 'none', color: theme.accent, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: '0 2px', lineHeight: 1 }} title="Reset to neutral">&times;</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -9213,6 +9488,28 @@ function REViewerPage() {
               {allYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
+
+          {/* Ballpark */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: theme.cardBg, padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}` }}>
+            <label style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600 }}>Ballpark:</label>
+            <select value={selectedParkIdx} onChange={e => setSelectedParkIdx(Number(e.target.value))}
+              style={{ background: theme.inputBg, color: theme.textPrimary, border: `1px solid ${theme.inputBorder}`, borderRadius: 4, padding: '4px 8px', fontSize: 12, maxWidth: 220 }}>
+              <option value={-1}>Neutral (Heinsohn)</option>
+              {BALLPARK_DATA.filter((_, i) => i > 0).map((p, i) => <option key={i + 1} value={i + 1}>{p.name} ({p.team}, {p.year})</option>)}
+            </select>
+          </div>
+
+          {/* Batter hand */}
+          {activePark && (
+            <div style={{ display: 'flex', gap: 2, background: theme.cardBg, borderRadius: 6, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+              {[{ key: 'lhb', label: 'LHB' }, { key: 'rhb', label: 'RHB' }].map(h => (
+                <button key={h.key} onClick={() => setBatterHand(h.key)}
+                  style={{ padding: '6px 12px', background: batterHand === h.key ? theme.accent : 'transparent', color: batterHand === h.key ? '#fff' : theme.textMuted, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {h.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Year range */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: theme.cardBg, padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}` }}>
@@ -9280,7 +9577,7 @@ function REViewerPage() {
               <span style={{ fontWeight: 700, color: theme.textPrimary, fontSize: 16, fontFamily: "'Oswald', sans-serif" }}>{displayYear}{hoveredYear ? '' : ` (Baseline)`}</span>
               <span style={{ fontSize: 11, color: era?.color, fontWeight: 600 }}>{era?.name} Era</span>
               {RE_METRICS.map(m => {
-                const val = MLB_LEAGUE_AVERAGES[displayYear][m.key];
+                const val = getAdjustedData(displayYear)[m.key];
                 const dev = getDeviation(displayYear, m.key);
                 return (
                   <div key={m.key} style={{ fontSize: 12, lineHeight: '16px' }}>
