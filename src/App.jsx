@@ -10107,7 +10107,7 @@ function PackFlipCard({ entry, isFlipped, index }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <div style={{ perspective: '1000px', width: 140, height: 196, flexShrink: 0 }}>
+      <div style={{ perspective: '1000px', width: 220, height: 308, flexShrink: 0 }}>
         <div style={{
           width: '100%', height: '100%', position: 'relative',
           transformStyle: 'preserve-3d',
@@ -10117,29 +10117,29 @@ function PackFlipCard({ entry, isFlipped, index }) {
           {/* Card Back */}
           <div style={{
             position: 'absolute', inset: 0, backfaceVisibility: 'hidden',
-            WebkitBackfaceVisibility: 'hidden', borderRadius: 10, overflow: 'hidden',
+            WebkitBackfaceVisibility: 'hidden', borderRadius: 14, overflow: 'hidden',
             background: PACK_TIER_BG_SIM[tier],
             border: `2px solid ${tierColor}30`,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
-            boxShadow: `0 0 20px ${PACK_TIER_GLOW_SIM[tier]}`,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+            boxShadow: `0 0 28px ${PACK_TIER_GLOW_SIM[tier]}`,
           }}>
             <div style={{
-              width: 56, height: 56, borderRadius: '50%',
+              width: 88, height: 88, borderRadius: '50%',
               border: `2px solid ${tierColor}50`,
               background: `${tierColor}12`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ fontSize: 18, fontWeight: 700, color: tierColor, fontFamily: "'Oswald', sans-serif", letterSpacing: '0.05em' }}>PT</span>
+              <span style={{ fontSize: 28, fontWeight: 700, color: tierColor, fontFamily: "'Oswald', sans-serif", letterSpacing: '0.05em' }}>PT</span>
             </div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: `${tierColor}90`, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.12em' }}>Perfect Team</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: `${tierColor}90`, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.12em' }}>Perfect Team</div>
           </div>
           {/* Card Front */}
           <div style={{
             position: 'absolute', inset: 0, backfaceVisibility: 'hidden',
-            WebkitBackfaceVisibility: 'hidden', borderRadius: 10, overflow: 'hidden',
+            WebkitBackfaceVisibility: 'hidden', borderRadius: 14, overflow: 'hidden',
             transform: 'rotateY(180deg)',
             border: `2px solid ${tierColor}60`,
-            boxShadow: `0 0 20px ${PACK_TIER_GLOW_SIM[tier]}, 0 4px 16px rgba(0,0,0,0.5)`,
+            boxShadow: `0 0 28px ${PACK_TIER_GLOW_SIM[tier]}, 0 6px 24px rgba(0,0,0,0.5)`,
             background: PACK_TIER_BG_SIM[tier],
           }}>
             {imgUrl && !imgError ? (
@@ -10150,8 +10150,8 @@ function PackFlipCard({ entry, isFlipped, index }) {
                 onError={() => setImgError(true)}
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: tierColor, textAlign: 'center', lineHeight: 1.4 }}>{displayName}</div>
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: tierColor, textAlign: 'center', lineHeight: 1.4 }}>{displayName}</div>
               </div>
             )}
           </div>
@@ -10161,20 +10161,20 @@ function PackFlipCard({ entry, isFlipped, index }) {
       <div style={{
         textAlign: 'center', transition: 'opacity 0.3s ease',
         opacity: isFlipped ? 1 : 0, pointerEvents: isFlipped ? 'auto' : 'none',
-        minHeight: 44,
+        minHeight: 68,
       }}>
         <div style={{
-          display: 'inline-block', padding: '2px 8px', borderRadius: 4, marginBottom: 4,
+          display: 'inline-block', padding: '4px 12px', borderRadius: 4, marginBottom: 5,
           background: `${tierColor}20`, border: `1px solid ${tierColor}50`,
-          color: tierColor, fontSize: 10, fontWeight: 700,
+          color: tierColor, fontSize: 13, fontWeight: 700,
           fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em',
         }}>{tier}</div>
         <div style={{
-          color: '#e8edf5', fontSize: 11, fontWeight: 600,
-          maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          color: '#e8edf5', fontSize: 14, fontWeight: 600,
+          maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{displayName}</div>
         {entry?.card?.last_10_price > 0 && (
-          <div style={{ color: '#a4b1c7', fontSize: 10, marginTop: 1 }}>
+          <div style={{ color: '#a4b1c7', fontSize: 13, marginTop: 3 }}>
             {entry.card.last_10_price.toLocaleString()} PP
           </div>
         )}
@@ -10331,9 +10331,9 @@ function PackSimulatorPage() {
   const getPackLblStyle = (pack, isSel) => {
     const c = PACK_COLORS_SIM[pack.key] || '#cd7f32';
     const base = { fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' };
-    if (c === 'rainbow') return { ...base, background: RAINBOW_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' };
-    if (c === 'perfect') return { ...base, color: isSel ? '#ffffff' : theme.textSecondary };
-    return { ...base, color: isSel ? c : theme.textSecondary };
+    if (c === 'rainbow') return { ...base, background: RAINBOW_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', opacity: isSel ? 1 : 0.65 };
+    if (c === 'perfect') return { ...base, color: '#ffffff', opacity: isSel ? 1 : 0.5 };
+    return { ...base, color: c, opacity: isSel ? 1 : 0.6 };
   };
 
   const sidebarGroupLabel = {
@@ -10467,8 +10467,8 @@ function PackSimulatorPage() {
             </div>
           )}
 
-          {/* Card area + button — centered vertically */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22 }}>
+          {/* Card area + button — shifted up 50px from center */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, paddingBottom: 100 }}>
 
             {/* 6-card row — no wrap */}
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%' }}>
@@ -10478,36 +10478,38 @@ function PackSimulatorPage() {
                   ))
                 : Array.from({ length: 6 }, (_, i) => (
                     <div key={i} style={{
-                      width: 140, height: 196, flexShrink: 0, borderRadius: 10,
+                      width: 220, height: 308, flexShrink: 0, borderRadius: 14,
                       background: theme.panelBg,
                       border: `2px dashed ${theme.border}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <span style={{ fontSize: 24, opacity: 0.12, color: theme.textDim }}>?</span>
+                      <span style={{ fontSize: 34, opacity: 0.12, color: theme.textDim }}>?</span>
                     </div>
                   ))
               }
             </div>
 
-            {/* Open Pack button — below cards */}
+            {/* Open Pack button — always rendered, no layout shift */}
             {openBtn}
 
-            {/* Pack value — after opened */}
-            {hasOpened && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: theme.textMuted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Oswald', sans-serif", marginBottom: 4 }}>Pack Value</div>
-                <div style={{ color: theme.gold, fontSize: 26, fontWeight: 700, fontFamily: "'Oswald', sans-serif" }}>
-                  {drawnTotal.toLocaleString()} PP
-                </div>
-                {selectedEV > 0 && (
-                  <div style={{ color: drawnTotal >= selectedEV ? theme.success : theme.error, fontSize: 12, marginTop: 4, fontWeight: 600 }}>
-                    {drawnTotal >= selectedEV
-                      ? `▲ ${(drawnTotal - selectedEV).toLocaleString()} above EV`
-                      : `▼ ${(selectedEV - drawnTotal).toLocaleString()} below EV`}
-                  </div>
-                )}
+            {/* Pack value — always rendered, hidden until opened */}
+            <div style={{ textAlign: 'center', visibility: hasOpened ? 'visible' : 'hidden', minHeight: 62 }}>
+              <div style={{ color: theme.textMuted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Oswald', sans-serif", marginBottom: 4 }}>Pack Value</div>
+              <div style={{ color: theme.gold, fontSize: 26, fontWeight: 700, fontFamily: "'Oswald', sans-serif" }}>
+                {drawnTotal.toLocaleString()} PP
               </div>
-            )}
+              {selectedEV > 0 && (
+                <div style={{ color: drawnTotal >= selectedEV ? theme.success : theme.error, fontSize: 12, marginTop: 4, fontWeight: 600 }}>
+                  {drawnTotal >= selectedEV
+                    ? `▲ ${(drawnTotal - selectedEV).toLocaleString()} above EV`
+                    : `▼ ${(selectedEV - drawnTotal).toLocaleString()} below EV`}
+                </div>
+              )}
+              <div style={{ color: '#ffffff', fontSize: 11, marginTop: 8 }}>
+                Inspired &amp; contributed by Cratevar —{' '}
+                <a href="https://cratervar.com/" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', textDecoration: 'underline' }}>cratervar.com</a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
