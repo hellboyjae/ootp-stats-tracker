@@ -10197,6 +10197,7 @@ function PackSimulatorPage() {
   const [hasOpened, setHasOpened]       = useState(false);
   const [openKey, setOpenKey]           = useState(0); // force remount of flip cards
   const [notification, setNotification] = useState(null);
+  const [lastUpdated, setLastUpdated]   = useState(null);
   const timeoutsRef = useRef([]);
 
   useEffect(() => {
@@ -10234,6 +10235,12 @@ function PackSimulatorPage() {
       );
       setCardPool(pool);
       setAvgByTier(avgs);
+
+      const { data: latestCard } = await supabase.from('pt_cards').select('created_at').order('created_at', { ascending: false }).limit(1);
+      if (latestCard?.[0]?.created_at) {
+        const d = new Date(latestCard[0].created_at);
+        setLastUpdated(`${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
+      }
     } catch (e) { console.error(e); setNeedsSetup(true); }
     setIsLoading(false);
   };
@@ -10414,6 +10421,13 @@ function PackSimulatorPage() {
         {/* ── Main Content ── */}
         <div style={{ flex: 1, padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>
 
+          {/* Last updated date */}
+          {lastUpdated && (
+            <div style={{ textAlign: 'center', marginBottom: 10, fontSize: 20, color: '#6fcf97', fontFamily: "'Oswald', sans-serif", letterSpacing: '0.04em' }}>
+              Last 10 values last updated on {lastUpdated}
+            </div>
+          )}
+
           {/* Top row: title left, Avg L10 right */}
           {selectedPack && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -10467,8 +10481,8 @@ function PackSimulatorPage() {
             </div>
           )}
 
-          {/* Card area + button — shifted up 50px from center */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, paddingBottom: 100 }}>
+          {/* Card area + button — top-anchored to prevent layout shift on last flip */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, paddingTop: 40 }}>
 
             {/* 6-card row — no wrap */}
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%' }}>
