@@ -180,6 +180,7 @@ function ThemeProvider({ children }) {
     const focusColor = (teamColors[team] || teamColors.default).primary;
     const focusGlow = `0 0 0 2px ${focusColor}50, 0 0 8px ${focusColor}30`;
     style.textContent = `
+      html { scrollbar-gutter: stable; }
       * { scrollbar-width: thin; scrollbar-color: ${thumb} ${track}; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }
       *::-webkit-scrollbar-track { background: ${track}; }
