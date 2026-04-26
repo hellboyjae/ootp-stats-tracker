@@ -10707,29 +10707,24 @@ function ptLiveRpPP(s) {
 }
 
 function PTLiveScoringKey({ theme }) {
-  const col = (items) => items.map(([k, v]) => (
-    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: theme.textMuted }}>
-      <span>{k}</span>
-      <span style={{ color: v.startsWith('-') ? '#ef4444' : '#22c55e', fontWeight: 600, marginLeft: 16 }}>{v}</span>
+  const row = ([k, v]) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 6 }}>
+      <span style={{ fontSize: 11, color: theme.textMuted }}>{k}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: v.startsWith('-') ? '#ef4444' : '#22c55e', flexShrink: 0 }}>{v}</span>
     </div>
-  ));
+  );
+  const section = (title, items) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textSecondary, marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${theme.border}` }}>{title}</div>
+      {items.map(row)}
+    </div>
+  );
   return (
-    <div style={{ marginTop: 24, background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '16px 20px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 12 }}>Scoring Reference</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px 40px', fontSize: 12 }}>
-        <div>
-          <div style={{ fontWeight: 600, color: theme.textSecondary, marginBottom: 6 }}>Batters</div>
-          {col([['Single','4 PP'],['Double','6 PP'],['Triple','10 PP'],['Home Run','15 PP'],['3+ HR bonus','+100 PP'],['4+ Hit bonus','25 PP/hit'],['Run','6 PP'],['RBI','6 PP'],['BB / HBP','3 PP'],['SB','10 PP'],['CS','-2 PP']])}
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, color: theme.textSecondary, marginBottom: 6 }}>Starting Pitchers</div>
-          {col([['Win','20 PP'],['Complete Game','50 PP'],['Shutout','100 PP'],['Inning Pitched','4 PP'],['Strikeout','2 PP'],['10+ K bonus','+40 PP'],['Quality Start','5 PP'],['Earned Run','-2 PP'],['BB / HBP','-1 PP']])}
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, color: theme.textSecondary, marginBottom: 6 }}>Relief Pitchers</div>
-          {col([['Win','12 PP'],['Save','35 PP'],['Hold','20 PP'],['Inning Pitched','4 PP'],['Strikeout','3 PP'],['Earned Run','-2 PP'],['Blown Save','-1 PP'],['BB / HBP','-1 PP']])}
-        </div>
-      </div>
+    <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '14px 14px', position: 'sticky', top: 16 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 12 }}>Scoring</div>
+      {section('Batters', [['Single','4 PP'],['Double','6 PP'],['Triple','10 PP'],['HR','15 PP'],['3+ HR','+100 PP'],['4+ Hit','25/hit PP'],['Run','6 PP'],['RBI','6 PP'],['BB/HBP','3 PP'],['SB','10 PP'],['CS','-2 PP']])}
+      {section('Starting P', [['Win','20 PP'],['CG','50 PP'],['Shutout','100 PP'],['IP','4 PP'],['K','2 PP'],['10+ K','+40 PP'],['QS','5 PP'],['ER','-2 PP'],['BB/HBP','-1 PP']])}
+      {section('Relief P', [['Win','12 PP'],['Save','35 PP'],['Hold','20 PP'],['IP','4 PP'],['K','3 PP'],['ER','-2 PP'],['Blown SV','-1 PP'],['BB/HBP','-1 PP']])}
     </div>
   );
 }
@@ -10743,6 +10738,7 @@ function PTLivePage() {
   const [mlbStats, setMlbStats]       = useState({});
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [statsError, setStatsError]   = useState(null);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
   const [team, setTeam]               = useState(() => {
     try { return JSON.parse(localStorage.getItem('ptlive_team_v1') || '{}'); } catch { return {}; }
   });
@@ -10766,7 +10762,12 @@ function PTLivePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [activePicker]);
 
-  useEffect(() => { loadPTLiveCards(); fetchMLBToday(); }, []);
+  useEffect(() => {
+    loadPTLiveCards();
+    fetchMLBToday();
+    const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
@@ -10827,6 +10828,8 @@ function PTLivePage() {
         });
       });
       setMlbStats(map);
+      const now = new Date();
+      setLastRefreshed(`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`);
     } catch (e) {
       console.error('MLB stats error:', e);
       setStatsError('Could not load MLB stats.');
@@ -11016,7 +11019,13 @@ function PTLivePage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
             <div style={{ textAlign: 'right', fontSize: 12, color: theme.textMuted }}>
-              {isLoadingStats ? 'Loading MLB stats…' : statsError ? <span style={{ color: theme.error }}>{statsError}</span> : 'Refresh page to update'}
+              {isLoadingStats
+              ? 'Updating…'
+              : statsError
+                ? <span style={{ color: theme.error }}>{statsError}</span>
+                : lastRefreshed
+                  ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
+                  : 'Updates every 2 min'}
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
@@ -11026,41 +11035,49 @@ function PTLivePage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 24px' }}>
-        {/* Edit button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-          <button
-            onClick={() => { setIsEditing(e => !e); setActivePicker(null); setPickerSearch(''); }}
-            style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
-          >
-            {isEditing ? 'Done Editing' : 'Edit Team'}
-          </button>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+
+        {/* Left sidebar: scoring reference */}
+        <div style={{ width: 190, flexShrink: 0 }}>
+          <PTLiveScoringKey theme={theme} />
         </div>
 
-        {/* Roster */}
-        <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
-          {/* Batters header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>BATTERS</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+        {/* Right: edit button + roster */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Edit button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+            <button
+              onClick={() => { setIsEditing(e => !e); setActivePicker(null); setPickerSearch(''); }}
+              style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
+            >
+              {isEditing ? 'Done Editing' : 'Edit Team'}
+            </button>
           </div>
-          {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
 
-          {/* Pitchers header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>PITCHERS</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+          {/* Roster */}
+          <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
+            {/* Batters header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>BATTERS</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+            </div>
+            {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
+
+            {/* Pitchers header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>PITCHERS</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+            </div>
+            {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
           </div>
-          {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
         </div>
 
-        <PTLiveScoringKey theme={theme} />
       </div>
     </Layout>
   );
