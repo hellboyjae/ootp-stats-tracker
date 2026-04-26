@@ -2006,6 +2006,7 @@ function InfoPage() {
           }
           inserted += (insertedData?.length || batch.length);
         }
+        await supabase.from('site_content').upsert({ id: 'pt_cards_upload', content: { uploaded_at: new Date().toISOString() }, updated_at: new Date().toISOString() });
         setCardUploadStatus(`Done! Uploaded ${inserted} cards.`);
         setCardCount(inserted);
       } catch (err) {
@@ -10236,9 +10237,9 @@ function PackSimulatorPage() {
       setCardPool(pool);
       setAvgByTier(avgs);
 
-      const { data: latestCard } = await supabase.from('pt_cards').select('created_at').order('created_at', { ascending: false }).limit(1);
-      if (latestCard?.[0]?.created_at) {
-        const d = new Date(latestCard[0].created_at);
+      const { data: uploadMeta } = await supabase.from('site_content').select('content').eq('id', 'pt_cards_upload').single();
+      if (uploadMeta?.content?.uploaded_at) {
+        const d = new Date(uploadMeta.content.uploaded_at);
         setLastUpdated(`${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
       }
     } catch (e) { console.error(e); setNeedsSetup(true); }
@@ -10377,7 +10378,7 @@ function PackSimulatorPage() {
 
   return (
     <Layout notification={notification}>
-      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
+      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)', overflowX: 'hidden' }}>
 
         {/* ── Sidebar ── */}
         <div style={{
@@ -10485,19 +10486,22 @@ function PackSimulatorPage() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, paddingTop: 40 }}>
 
             {/* 6-card row — no wrap */}
-            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%' }}>
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'nowrap', overflow: 'visible', maxWidth: '100%' }}>
               {drawnCards.length > 0
                 ? drawnCards.map((entry, i) => (
                     <PackFlipCard key={`${openKey}-${i}`} entry={entry} isFlipped={flipped.has(i)} index={i} />
                   ))
                 : Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} style={{
-                      width: 220, height: 308, flexShrink: 0, borderRadius: 14,
-                      background: theme.panelBg,
-                      border: `2px dashed ${theme.border}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: 34, opacity: 0.12, color: theme.textDim }}>?</span>
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 220, height: 308, flexShrink: 0, borderRadius: 14,
+                        background: theme.panelBg,
+                        border: `2px dashed ${theme.border}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <span style={{ fontSize: 34, opacity: 0.12, color: theme.textDim }}>?</span>
+                      </div>
+                      <div style={{ minHeight: 68 }} />
                     </div>
                   ))
               }
@@ -10522,7 +10526,7 @@ function PackSimulatorPage() {
             </div>
 
             {/* Credit — always visible */}
-            <div style={{ color: '#ffffff', fontSize: 22, textAlign: 'center' }}>
+            <div style={{ color: '#ffffff', fontSize: 16, textAlign: 'center' }}>
               Inspired &amp; contributed by Cratevar —{' '}
               <a href="https://cratervar.com/" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', textDecoration: 'underline' }}>cratervar.com</a>
             </div>
