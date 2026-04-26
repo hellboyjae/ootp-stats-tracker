@@ -10785,10 +10785,11 @@ function PTLivePage() {
       const all = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
       const byOvr = (a, b) => (b.card_value || 0) - (a.card_value || 0);
       const isBatter = c => !c.pitcher_role || Number(c.pitcher_role) === 0;
-      const isSP = c => Number(c.pitcher_role) === 1;
+      const isSP = c => Number(c.pitcher_role) === 11;
+      const isRP = c => Number(c.pitcher_role) === 12 || Number(c.pitcher_role) === 13;
       setBatters(all.filter(isBatter).sort(byOvr));
       setSps(all.filter(isSP).sort(byOvr));
-      setRps(all.filter(c => !isBatter(c) && !isSP(c)).sort(byOvr));
+      setRps(all.filter(isRP).sort(byOvr));
     } catch (e) { console.error('PTLive cards error:', e); }
     setIsLoadingCards(false);
   };
