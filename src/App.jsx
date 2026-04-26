@@ -10795,6 +10795,8 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
     if (!pid) return;
     const proj = projMap[String(pid)];
     if (!proj) return;
+    const playerName = normalizeName(fgStripHtml(player.Name || player.name || ''));
+    if (!LIVE_CARD_OVR[playerName]) return;
     const vol = fgGet(player, minVolKey);
     if (vol === null || vol < minVol) return;
     const actualPA = fgGet(player, 'PA');
