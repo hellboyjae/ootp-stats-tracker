@@ -10838,6 +10838,8 @@ function LiveSpecPage() {
   const [error, setError]     = useState(null);
   const [rawHitters, setRawHitters]   = useState(null);
   const [rawPitchers, setRawPitchers] = useState(null);
+  const [tierFilter, setTierFilter]   = useState('All');
+  const [minOvr, setMinOvr]           = useState(0);
 
   useEffect(() => { fetchLiveSpecData(); }, []);
 
@@ -10875,7 +10877,14 @@ function LiveSpecPage() {
     return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP);
   }, [rawPitchers, minIP]);
 
-  const currentRows  = tab === 'hitters' ? hitterRows  : pitcherRows;
+  const ovrToTier = ovr => ovr >= 100 ? 'Perfect' : ovr >= 90 ? 'Diamond' : ovr >= 80 ? 'Gold' : ovr >= 70 ? 'Silver' : ovr >= 60 ? 'Bronze' : 'Iron';
+  const allRows = tab === 'hitters' ? hitterRows : pitcherRows;
+  const currentRows = allRows.filter(row => {
+    const ovr = LIVE_CARD_OVR[normalizeName(row.name)];
+    if (minOvr > 0 && (ovr == null || ovr < minOvr)) return false;
+    if (tierFilter !== 'All' && ovrToTier(ovr) !== tierFilter) return false;
+    return true;
+  });
   const currentStats = tab === 'hitters' ? LIVESPEC_HITTER_STATS : LIVESPEC_PITCHER_STATS;
   const volLabel     = tab === 'hitters' ? 'PA' : 'IP';
   const minVal       = tab === 'hitters' ? minPA : minIP;
@@ -10933,6 +10942,36 @@ function LiveSpecPage() {
           <button onClick={fetchLiveSpecData} disabled={loading} style={{ padding: '10px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
+
+          <div style={{ height: 1, background: theme.border }} />
+
+          {/* Tier filter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Card Tier</div>
+            {[
+              { label: 'All',     color: theme.accent },
+              { label: 'Perfect', color: '#a855f7' },
+              { label: 'Diamond', color: '#32EBFC' },
+              { label: 'Gold',    color: '#FFE61F' },
+              { label: 'Silver',  color: '#E0E0E0' },
+              { label: 'Bronze',  color: '#cd7f32' },
+              { label: 'Iron',    color: '#888888' },
+            ].map(({ label, color }) => (
+              <button key={label} onClick={() => setTierFilter(label)} style={{ padding: '7px 10px', background: tierFilter === label ? color : theme.inputBg, color: tierFilter === label ? (label === 'Gold' || label === 'Silver' ? '#111' : '#fff') : color, border: `1px solid ${color}`, borderRadius: 4, fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'left', letterSpacing: '0.03em' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Min OVR filter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Min OVR</div>
+            <input
+              type="number" value={minOvr} min={0} max={100}
+              onChange={e => setMinOvr(Math.max(0, Number(e.target.value) || 0))}
+              style={{ padding: '8px 10px', background: theme.inputBg, border: `1px solid ${minOvr > 0 ? theme.accent : theme.border}`, borderRadius: 4, color: '#fff', fontSize: 14, boxSizing: 'border-box' }}
+            />
+          </div>
 
           <div style={{ height: 1, background: theme.border }} />
 
