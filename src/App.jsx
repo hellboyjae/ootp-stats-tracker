@@ -10210,6 +10210,7 @@ function PackSimulatorPage() {
   const [cardPool, setCardPool]         = useState({});
   const [histCardPool, setHistCardPool] = useState({});
   const [avgByTier, setAvgByTier]       = useState({});
+  const [histAvgByTier, setHistAvgByTier] = useState({});
   const [isLoading, setIsLoading]       = useState(true);
   const [needsSetup, setNeedsSetup]     = useState(false);
   const [selectedPack, setSelectedPack] = useState(PACK_DEFINITIONS_SIM[1]); // Silver default
@@ -10288,24 +10289,29 @@ function PackSimulatorPage() {
       if (!eligible || eligible.length === 0) { setNeedsSetup(true); setIsLoading(false); return; }
 
       // Step 4: build pools
-      const pool     = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
-      const histPool = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
-      const sums = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
-      const cnts = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
+      const pool      = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
+      const histPool  = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
+      const sums      = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
+      const cnts      = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
+      const histSums  = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
+      const histCnts  = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
 
       for (const card of eligible) {
         const tier = getSimCardTier(card.card_value);
         pool[tier].push(card);
-        if (card.card_type !== 1) histPool[tier].push(card);
         if ((card.last_10_price || 0) > 0) { sums[tier] += card.last_10_price; cnts[tier]++; }
+        if (card.card_type !== 1) {
+          histPool[tier].push(card);
+          if ((card.last_10_price || 0) > 0) { histSums[tier] += card.last_10_price; histCnts[tier]++; }
+        }
       }
 
-      const avgs = Object.fromEntries(
-        PACK_TIER_ORDER_SIM.map(t => [t, cnts[t] > 0 ? Math.round(sums[t] / cnts[t]) : 0])
-      );
+      const avgs     = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, cnts[t]     > 0 ? Math.round(sums[t]     / cnts[t])     : 0]));
+      const histAvgs = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, histCnts[t] > 0 ? Math.round(histSums[t] / histCnts[t]) : 0]));
       setCardPool(pool);
       setHistCardPool(histPool);
       setAvgByTier(avgs);
+      setHistAvgByTier(histAvgs);
     } catch (e) { console.error(e); setNeedsSetup(true); }
     setIsLoading(false);
   };
@@ -10329,7 +10335,7 @@ function PackSimulatorPage() {
           setIsOpening(false);
           setHasOpened(true);
           const packTotal = cards.reduce((s, e) => s + (e?.card?.last_10_price || 0), 0);
-          const packEV = Math.round(calcSimPackEV(selectedPack, avgByTier));
+          const packEV = Math.round(calcSimPackEV(selectedPack, selectedPack.group === 'Historical' ? histAvgByTier : avgByTier));
           setSessionPnL(prev => (prev ?? 0) + (packTotal - packEV));
         }
       }, 350 + i * 280);
@@ -10347,7 +10353,7 @@ function PackSimulatorPage() {
   };
 
   const totalCards  = useMemo(() => Object.values(cardPool).reduce((n, a) => n + a.length, 0), [cardPool]);
-  const packEVs     = useMemo(() => Object.fromEntries(PACK_DEFINITIONS_SIM.map(p => [p.key, Math.round(calcSimPackEV(p, avgByTier))])), [avgByTier]);
+  const packEVs     = useMemo(() => Object.fromEntries(PACK_DEFINITIONS_SIM.map(p => [p.key, Math.round(calcSimPackEV(p, p.group === 'Historical' ? histAvgByTier : avgByTier))])), [avgByTier, histAvgByTier]);
   const selectedEV  = selectedPack ? (packEVs[selectedPack.key] ?? 0) : 0;
   const drawnTotal  = useMemo(() => drawnCards.reduce((s, dc) => s + (dc?.card?.last_10_price || 0), 0), [drawnCards]);
   const topTier     = useMemo(() => selectedPack ? getSimTopTier(selectedPack) : 'Bronze', [selectedPack]);
