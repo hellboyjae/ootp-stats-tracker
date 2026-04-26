@@ -10828,8 +10828,8 @@ function PTLivePage() {
         });
       });
       setMlbStats(map);
-      const now = new Date();
-      setLastRefreshed(`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`);
+      const refreshedAt = new Date();
+      setLastRefreshed(`${refreshedAt.getHours()}:${String(refreshedAt.getMinutes()).padStart(2,'0')}`);
     } catch (e) {
       console.error('MLB stats error:', e);
       setStatsError('Could not load MLB stats.');
