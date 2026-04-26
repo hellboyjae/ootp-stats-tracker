@@ -10207,6 +10207,7 @@ function PackSimulatorPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const [cardPool, setCardPool]         = useState({});
+  const [histCardPool, setHistCardPool] = useState({});
   const [avgByTier, setAvgByTier]       = useState({});
   const [isLoading, setIsLoading]       = useState(true);
   const [needsSetup, setNeedsSetup]     = useState(false);
@@ -10236,7 +10237,7 @@ function PackSimulatorPage() {
       while (true) {
         const { data, error } = await supabase
           .from('pt_cards')
-          .select('card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs')
+          .select('card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs, card_type')
           .range(from, from + pageSize - 1);
         if (error) { setNeedsSetup(true); setIsLoading(false); return; }
         if (!data || data.length === 0) break;
@@ -10253,13 +10254,15 @@ function PackSimulatorPage() {
       );
       if (eligible.length === 0) { setNeedsSetup(true); setIsLoading(false); return; }
 
-      const pool = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
+      const pool     = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
+      const histPool = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
       const sums = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
       const cnts = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
 
       for (const card of eligible) {
         const tier = getSimCardTier(card.card_value);
         pool[tier].push(card);
+        if (card.card_type !== 1) histPool[tier].push(card); // exclude Live (card_type=1) from historical pool
         if ((card.last_10_price || 0) > 0) { sums[tier] += card.last_10_price; cnts[tier]++; }
       }
 
@@ -10267,6 +10270,7 @@ function PackSimulatorPage() {
         PACK_TIER_ORDER_SIM.map(t => [t, cnts[t] > 0 ? Math.round(sums[t] / cnts[t]) : 0])
       );
       setCardPool(pool);
+      setHistCardPool(histPool);
       setAvgByTier(avgs);
 
       const { data: uploadMeta } = await supabase.from('site_content').select('content').eq('id', 'pt_cards_upload').single();
@@ -10282,7 +10286,8 @@ function PackSimulatorPage() {
     if (isOpening) return;
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
-    const cards = openSimPack(selectedPack, cardPool);
+    const activePool = selectedPack.group === 'Historical' ? histCardPool : cardPool;
+    const cards = openSimPack(selectedPack, activePool);
     setDrawnCards(cards);
     setFlipped(new Set());
     setIsOpening(true);
