@@ -5,6 +5,7 @@ import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP, IMG_COMBINED_COLS_TOP, IMG_COMBINED_COLS_BOTTOM, IMG_ALL_PLAYERS_FILTER } from './tutorialImages.js';
+import { LIVE_CARD_COLORS } from './liveCardColors.js';
 
 const ThemeContext = createContext();
 const BannerContext = createContext();
@@ -10999,9 +11000,9 @@ function LiveSpecPage() {
               </thead>
               <tbody>
                 {currentRows.map((row, i) => (
-                  <tr key={row.playerid} style={{ borderBottom: `1px solid ${theme.tableBorder}`, background: i % 2 === 0 ? theme.tableRowBg : theme.cardBg }}>
+                  <tr key={row.playerid} style={{ borderBottom: `1px solid ${theme.tableBorder}`, background: i % 2 === 0 ? theme.tableRowBg : theme.panelBg }}>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{i + 1}</td>
-                    <td style={{ padding: '9px 12px', fontWeight: 700, fontSize: 14, color: '#fff', whiteSpace: 'nowrap' }}>{row.name}</td>
+                    <td style={{ padding: '9px 12px', fontWeight: 700, fontSize: 14, color: LIVE_CARD_COLORS[normalizeName(row.name)] || '#fff', whiteSpace: 'nowrap' }}>{row.name}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{row.team}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{Math.round(row.vol)}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center' }}>
