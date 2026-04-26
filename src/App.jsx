@@ -10007,8 +10007,28 @@ const PACK_TIER_BG_SIM = {
   Silver:  'linear-gradient(160deg, #252f3e 0%, #161d2a 100%)',
   Gold:    'linear-gradient(160deg, #2e2504 0%, #1e1802 100%)',
   Diamond: 'linear-gradient(160deg, #062238 0%, #031426 100%)',
-  Perfect: 'linear-gradient(160deg, #1e0638 0%, #120224 100%)',
+  Perfect: 'linear-gradient(160deg, #060606 0%, #0a0a0a 100%)',
 };
+
+// Per-pack accent color (not per tier — per pack type)
+const PACK_COLORS_SIM = {
+  standard:       '#cd7f32',
+  silver:         '#C8C8D4',
+  gold:           '#FFE61F',
+  diamond:        '#32EBFC',
+  perfect:        'perfect',
+  rainbow:        'rainbow',
+  histSilver:     '#C8C8D4',
+  histGold:       '#FFE61F',
+  histDiamond:    '#32EBFC',
+  histPerfect:    'perfect',
+  histRainbow:    'rainbow',
+  allDiamond:     '#32EBFC',
+  allPerfect:     'perfect',
+  histAllDiamond: '#32EBFC',
+  histAllPerfect: 'perfect',
+};
+const RAINBOW_GRAD = 'linear-gradient(90deg, #888888, #cd7f32, #C8C8D4, #FFE61F, #32EBFC, #a855f7)';
 
 // Unnormalized weights from outbaksean/ootp-pack-sampler
 const _RAW_W = { Iron: 0.769, Bronze: 0.200, Silver: 0.100, Gold: 0.020, Diamond: 0.00667, Perfect: 0.001 };
@@ -10087,7 +10107,7 @@ function PackFlipCard({ entry, isFlipped, index }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <div style={{ perspective: '1000px', width: 150, height: 210, flexShrink: 0 }}>
+      <div style={{ perspective: '1000px', width: 140, height: 196, flexShrink: 0 }}>
         <div style={{
           width: '100%', height: '100%', position: 'relative',
           transformStyle: 'preserve-3d',
@@ -10151,7 +10171,7 @@ function PackFlipCard({ entry, isFlipped, index }) {
         }}>{tier}</div>
         <div style={{
           color: '#e8edf5', fontSize: 11, fontWeight: 600,
-          maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{displayName}</div>
         {entry?.card?.last_10_price > 0 && (
           <div style={{ color: '#a4b1c7', fontSize: 10, marginTop: 1 }}>
@@ -10293,53 +10313,94 @@ function PackSimulatorPage() {
 
   const packGroups = ['Standard', 'Historical', 'Full Tier'];
 
+  // Per-pack color helpers
+  const pc = PACK_COLORS_SIM[selectedPack?.key] || '#cd7f32';
+  const isRainbow = pc === 'rainbow';
+  const isPerfectPack = pc === 'perfect';
+  const mainColor = isRainbow ? '#C8C8D4' : isPerfectPack ? '#ffffff' : pc;
+  const needsDarkText = mainColor === '#FFE61F' || mainColor === '#C8C8D4';
+  const btnTextColor = isOpening ? theme.textDim : needsDarkText ? '#111111' : '#ffffff';
+
+  const getPackBtnStyle = (pack, isSel) => {
+    const c = PACK_COLORS_SIM[pack.key] || '#cd7f32';
+    if (c === 'rainbow') return { background: isSel ? 'rgba(255,255,255,0.06)' : 'transparent', border: `1px solid ${isSel ? 'rgba(255,255,255,0.22)' : theme.border}` };
+    if (c === 'perfect') return { background: isSel ? '#0d0d0d' : 'transparent', border: `1px solid ${isSel ? 'rgba(255,255,255,0.32)' : theme.border}` };
+    return { background: isSel ? `${c}1a` : 'transparent', border: `1px solid ${isSel ? c + '60' : theme.border}` };
+  };
+
+  const getPackLblStyle = (pack, isSel) => {
+    const c = PACK_COLORS_SIM[pack.key] || '#cd7f32';
+    const base = { fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' };
+    if (c === 'rainbow') return { ...base, background: RAINBOW_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' };
+    if (c === 'perfect') return { ...base, color: isSel ? '#ffffff' : theme.textSecondary };
+    return { ...base, color: isSel ? c : theme.textSecondary };
+  };
+
   const sidebarGroupLabel = {
     fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
     fontFamily: "'Oswald', sans-serif", color: theme.textDim,
-    borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, marginBottom: 8, marginTop: 4,
+    borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, marginBottom: 8,
   };
+
+  const openBtn = (
+    <button
+      onClick={handleOpenPack}
+      disabled={isOpening}
+      style={{
+        padding: '13px 52px',
+        background: isOpening
+          ? theme.panelBg
+          : isPerfectPack
+            ? 'linear-gradient(135deg, #111111, #2a2a2a)'
+            : isRainbow
+              ? `linear-gradient(135deg, #cd7f3299, #FFE61F99, #32EBFC99, #a855f799)`
+              : `linear-gradient(135deg, ${mainColor}dd 0%, ${mainColor}88 100%)`,
+        border: `2px solid ${isOpening ? theme.border : isPerfectPack ? 'rgba(255,255,255,0.35)' : isRainbow ? 'rgba(255,255,255,0.2)' : mainColor + '70'}`,
+        borderRadius: 8, cursor: isOpening ? 'not-allowed' : 'pointer',
+        color: btnTextColor,
+        fontSize: 16, fontWeight: 700,
+        fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.1em',
+        transition: 'all 0.2s ease',
+        boxShadow: isOpening ? 'none' : isPerfectPack ? '0 4px 24px rgba(0,0,0,0.7)' : isRainbow ? '0 4px 24px rgba(255,255,255,0.1)' : `0 4px 24px ${mainColor}35`,
+      }}
+    >
+      {isOpening ? 'Opening...' : hasOpened ? '⚾ Open Another' : '⚾ Open Pack'}
+    </button>
+  );
 
   return (
     <Layout notification={notification}>
-      <div style={{ display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 58px)' }}>
+      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
 
         {/* ── Sidebar ── */}
         <div style={{
-          width: 240, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`,
-          padding: '16px 12px', flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0,
+          width: 228, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`,
+          padding: '16px 12px', flexShrink: 0, overflowY: 'auto',
         }}>
-          {/* Header */}
-          <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif", marginBottom: 4 }}>Pack Simulator</div>
             <div style={{ color: theme.textDim, fontSize: 11 }}>
               <span style={{ color: theme.accent, fontWeight: 600 }}>{totalCards.toLocaleString()}</span> eligible cards
             </div>
           </div>
 
-          {/* Pack groups */}
           {packGroups.map(group => (
-            <div key={group} style={{ marginBottom: 18 }}>
+            <div key={group} style={{ marginBottom: 16 }}>
               <div style={sidebarGroupLabel}>{group}</div>
               {PACK_DEFINITIONS_SIM.filter(p => p.group === group).map(pack => {
                 const ev = Math.round(calcSimPackEV(pack, avgByTier));
-                const isSelected = selectedPack?.key === pack.key;
-                const tc = PACK_TIER_COLORS_SIM[getSimTopTier(pack)];
+                const isSel = selectedPack?.key === pack.key;
                 return (
                   <button key={pack.key} onClick={() => handleSelectPack(pack)} style={{
                     width: '100%', marginBottom: 3, padding: '7px 10px',
-                    background: isSelected ? `${tc}18` : 'transparent',
-                    border: `1px solid ${isSelected ? tc + '55' : theme.border}`,
                     borderRadius: 6, cursor: 'pointer',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     transition: 'all 0.12s ease',
+                    ...getPackBtnStyle(pack, isSel),
                   }}>
-                    <span style={{
-                      color: isSelected ? tc : theme.textSecondary,
-                      fontSize: 12, fontWeight: 600,
-                      fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em',
-                    }}>{pack.label}</span>
+                    <span style={getPackLblStyle(pack, isSel)}>{pack.label}</span>
                     {ev > 0 && (
-                      <span style={{ color: theme.textDim, fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>
+                      <span style={{ color: '#ffffff', fontSize: 11, fontFamily: 'ui-monospace, monospace', fontWeight: 500 }}>
                         {ev.toLocaleString()}
                       </span>
                     )}
@@ -10348,146 +10409,103 @@ function PackSimulatorPage() {
               })}
             </div>
           ))}
-
-          {/* Avg L10 by tier */}
-          <div style={{
-            marginTop: 'auto', paddingTop: 14, borderTop: `1px solid ${theme.border}`,
-          }}>
-            <div style={{ ...sidebarGroupLabel, marginBottom: 10, borderBottom: 'none', paddingBottom: 0 }}>Avg L10 by Tier</div>
-            {[...PACK_TIER_ORDER_SIM].reverse().map(tier => (
-              <div key={tier} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                <span style={{ color: PACK_TIER_COLORS_SIM[tier], fontSize: 11, fontWeight: 600, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{tier}</span>
-                <span style={{ color: theme.textDim, fontSize: 11, fontFamily: 'ui-monospace, monospace' }}>
-                  {(avgByTier[tier] || 0) > 0 ? (avgByTier[tier] || 0).toLocaleString() : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* ── Main Content ── */}
-        <div style={{ flex: 1, padding: '28px 36px', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>
 
-          {/* Pack header */}
+          {/* Top row: title left, Avg L10 right */}
           {selectedPack && (
-            <div style={{ width: '100%', maxWidth: 960, marginBottom: 28 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-                <div>
-                  <h2 style={{
-                    margin: 0, fontSize: 30, fontFamily: "'Oswald', sans-serif",
-                    textTransform: 'uppercase', letterSpacing: '0.06em', color: topColor,
-                    textShadow: `0 0 20px ${topColor}40`,
-                  }}>{selectedPack.label} Pack</h2>
-                  <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span>{selectedPack.group}</span>
-                    {selectedEV > 0 && (
-                      <>
-                        <span style={{ color: theme.textDim }}>•</span>
-                        <span>EV: <span style={{ color: theme.gold, fontWeight: 600 }}>{selectedEV.toLocaleString()} PP</span></span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {/* Guaranteed slots */}
-                <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', paddingTop: 4 }}>
-                  {selectedPack.guaranteed.map((slot, i) => {
-                    const sc = slot ? PACK_TIER_COLORS_SIM[slot] : theme.textDim;
-                    return (
-                      <div key={i} style={{
-                        padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em',
-                        background: slot ? `${sc}18` : theme.panelBg,
-                        border: `1px solid ${slot ? sc + '50' : theme.border}`,
-                        color: sc,
-                      }}>{slot || 'RND'}</div>
-                    );
-                  })}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <h2 style={{
+                  margin: 0, fontSize: 30, fontFamily: "'Oswald', sans-serif",
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                  ...(isRainbow
+                    ? { background: RAINBOW_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }
+                    : { color: mainColor, textShadow: isPerfectPack ? '0 0 20px rgba(255,255,255,0.15)' : `0 0 20px ${mainColor}40` }
+                  ),
+                }}>{selectedPack.label} Pack</h2>
+                <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span>{selectedPack.group}</span>
+                  {selectedEV > 0 && (
+                    <><span style={{ color: theme.textDim }}>•</span>
+                    <span>EV: <span style={{ color: theme.gold, fontWeight: 600 }}>{selectedEV.toLocaleString()} PP</span></span></>
+                  )}
                 </div>
               </div>
 
-              {/* Open Pack Button */}
-              <button
-                onClick={handleOpenPack}
-                disabled={isOpening}
-                style={{
-                  marginTop: 20,
-                  padding: '13px 52px',
-                  background: isOpening
-                    ? theme.panelBg
-                    : `linear-gradient(135deg, ${topColor}dd 0%, ${topColor}88 100%)`,
-                  border: `2px solid ${isOpening ? theme.border : topColor + '70'}`,
-                  borderRadius: 8, cursor: isOpening ? 'not-allowed' : 'pointer',
-                  color: isOpening ? theme.textDim : '#fff',
-                  fontSize: 16, fontWeight: 700,
-                  fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.1em',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isOpening ? 'none' : `0 4px 24px ${topColor}35`,
-                }}
-              >
-                {isOpening ? 'Opening...' : hasOpened ? '⚾ Open Another' : '⚾ Open Pack'}
-              </button>
+              {/* Avg L10 by tier — plain text, top right */}
+              <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+                {[...PACK_TIER_ORDER_SIM].reverse().map(tier => (
+                  <div key={tier} style={{ textAlign: 'center' }}>
+                    <div style={{ color: PACK_TIER_COLORS_SIM[tier], fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{tier}</div>
+                    <div style={{ color: '#ffffff', fontSize: 12, fontFamily: 'ui-monospace, monospace', fontWeight: 500, marginTop: 2 }}>
+                      {(avgByTier[tier] || 0) > 0 ? avgByTier[tier].toLocaleString() : '—'}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Card Grid */}
-          <div style={{ width: '100%', maxWidth: 960 }}>
-            {drawnCards.length > 0 ? (
-              <>
-                <div style={{
-                  display: 'flex', gap: 18, justifyContent: 'center',
-                  flexWrap: 'wrap', marginBottom: 28,
-                }}>
-                  {drawnCards.map((entry, i) => (
-                    <PackFlipCard
-                      key={`${openKey}-${i}`}
-                      entry={entry}
-                      isFlipped={flipped.has(i)}
-                      index={i}
-                    />
-                  ))}
-                </div>
+          {/* Guaranteed slot badges */}
+          {selectedPack && (
+            <div style={{ display: 'flex', gap: 5, marginBottom: 24, flexWrap: 'wrap' }}>
+              {selectedPack.guaranteed.map((slot, i) => {
+                const sc = slot ? PACK_TIER_COLORS_SIM[slot] : theme.textDim;
+                return (
+                  <div key={i} style={{
+                    padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                    fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em',
+                    background: slot ? `${sc}18` : theme.panelBg,
+                    border: `1px solid ${slot ? sc + '50' : theme.border}`,
+                    color: sc,
+                  }}>{slot || 'RND'}</div>
+                );
+              })}
+            </div>
+          )}
 
-                {/* Pack value summary */}
-                {hasOpened && (
-                  <div style={{
-                    textAlign: 'center', padding: '18px 28px',
-                    background: theme.panelBg, borderRadius: 10,
-                    border: `1px solid ${theme.border}`,
-                    maxWidth: 380, margin: '0 auto',
-                  }}>
-                    <div style={{ color: theme.textMuted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Oswald', sans-serif", marginBottom: 6 }}>Pack Value</div>
-                    <div style={{ color: theme.gold, fontSize: 28, fontWeight: 700, fontFamily: "'Oswald', sans-serif" }}>
-                      {drawnTotal.toLocaleString()} PP
-                    </div>
-                    {selectedEV > 0 && (
-                      <div style={{
-                        color: drawnTotal >= selectedEV ? theme.success : theme.error,
-                        fontSize: 12, marginTop: 5, fontWeight: 600,
-                      }}>
-                        {drawnTotal >= selectedEV
-                          ? `▲ ${(drawnTotal - selectedEV).toLocaleString()} above EV`
-                          : `▼ ${(selectedEV - drawnTotal).toLocaleString()} below EV`}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Empty state */
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 40, gap: 20 }}>
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {Array.from({ length: 6 }, (_, i) => (
+          {/* Card area + button — centered vertically */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22 }}>
+
+            {/* 6-card row — no wrap */}
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'nowrap', overflowX: 'auto', maxWidth: '100%' }}>
+              {drawnCards.length > 0
+                ? drawnCards.map((entry, i) => (
+                    <PackFlipCard key={`${openKey}-${i}`} entry={entry} isFlipped={flipped.has(i)} index={i} />
+                  ))
+                : Array.from({ length: 6 }, (_, i) => (
                     <div key={i} style={{
-                      width: 150, height: 210, borderRadius: 10,
+                      width: 140, height: 196, flexShrink: 0, borderRadius: 10,
                       background: theme.panelBg,
                       border: `2px dashed ${theme.border}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <span style={{ fontSize: 28, opacity: 0.15, color: theme.textDim }}>?</span>
+                      <span style={{ fontSize: 24, opacity: 0.12, color: theme.textDim }}>?</span>
                     </div>
-                  ))}
+                  ))
+              }
+            </div>
+
+            {/* Open Pack button — below cards */}
+            {openBtn}
+
+            {/* Pack value — after opened */}
+            {hasOpened && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: theme.textMuted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Oswald', sans-serif", marginBottom: 4 }}>Pack Value</div>
+                <div style={{ color: theme.gold, fontSize: 26, fontWeight: 700, fontFamily: "'Oswald', sans-serif" }}>
+                  {drawnTotal.toLocaleString()} PP
                 </div>
-                <div style={{ color: theme.textDim, fontSize: 13 }}>Select a pack type and click Open Pack</div>
+                {selectedEV > 0 && (
+                  <div style={{ color: drawnTotal >= selectedEV ? theme.success : theme.error, fontSize: 12, marginTop: 4, fontWeight: 600 }}>
+                    {drawnTotal >= selectedEV
+                      ? `▲ ${(drawnTotal - selectedEV).toLocaleString()} above EV`
+                      : `▼ ${(selectedEV - drawnTotal).toLocaleString()} below EV`}
+                  </div>
+                )}
               </div>
             )}
           </div>
