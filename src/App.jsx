@@ -10826,7 +10826,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       composite: totalPct / validCount,
     });
   });
-  return rows.filter(r => r.composite > 0).sort((a, b) => b.composite - a.composite);
+  return rows.sort((a, b) => b.composite - a.composite);
 }
 
 function LiveSpecPage() {
@@ -10881,7 +10881,6 @@ function LiveSpecPage() {
   const allRows = tab === 'hitters' ? hitterRows : pitcherRows;
   const currentRows = allRows.filter(row => {
     const ovr = LIVE_CARD_OVR[normalizeName(row.name)];
-    if (ovr >= 100) return false;
     if (minOvr > 0 && (ovr == null || ovr < minOvr)) return false;
     if (tierFilter !== 'All' && ovrToTier(ovr) !== tierFilter) return false;
     return true;
@@ -10951,6 +10950,7 @@ function LiveSpecPage() {
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Card Tier</div>
             {[
               { label: 'All',     color: theme.accent },
+              { label: 'Perfect', color: '#a855f7' },
               { label: 'Diamond', color: '#32EBFC' },
               { label: 'Gold',    color: '#FFE61F' },
               { label: 'Silver',  color: '#E0E0E0' },
