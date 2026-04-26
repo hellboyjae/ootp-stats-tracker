@@ -10458,19 +10458,19 @@ function PackSimulatorPage() {
 
           {/* Variant odds info */}
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${theme.border}` }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif", color: theme.textDim, marginBottom: 8 }}>Variant Odds</div>
-            <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 4 }}>Base rate by tier:</div>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif", color: '#ffffff', marginBottom: 8 }}>Variant Odds</div>
+            <div style={{ fontSize: 12, color: '#ffffff', marginBottom: 4 }}>Base rate by tier:</div>
             {[['Iron / Bronze', '0.5%'], ['Silver', '1%'], ['Gold / Diamond / Perfect', '2%']].map(([label, pct]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ fontSize: 10, color: theme.textDim }}>{label}</span>
-                <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'ui-monospace, monospace' }}>{pct}</span>
+                <span style={{ fontSize: 12, color: '#ffffff' }}>{label}</span>
+                <span style={{ fontSize: 12, color: '#ef4444', fontFamily: 'ui-monospace, monospace' }}>{pct}</span>
               </div>
             ))}
-            <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 8, marginBottom: 4 }}>Level distribution:</div>
+            <div style={{ fontSize: 12, color: '#ffffff', marginTop: 8, marginBottom: 4 }}>Level distribution:</div>
             {[['Level 1', '87.2%'], ['Level 2', '10.0%'], ['Level 3', '2.0%'], ['Level 4', '0.7%'], ['Level 5', '0.1%']].map(([label, pct]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ fontSize: 10, color: theme.textDim }}>{label}</span>
-                <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'ui-monospace, monospace' }}>{pct}</span>
+                <span style={{ fontSize: 12, color: '#ffffff' }}>{label}</span>
+                <span style={{ fontSize: 12, color: '#ef4444', fontFamily: 'ui-monospace, monospace' }}>{pct}</span>
               </div>
             ))}
           </div>
