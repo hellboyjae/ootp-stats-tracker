@@ -10230,29 +10230,63 @@ function PackSimulatorPage() {
   const loadPackCards = async () => {
     setIsLoading(true);
     try {
-      // Fetch first page + total count in one request, then remaining pages in parallel
-      const pageSize = 1000;
-      const cols = 'card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs, card_type';
-      const { data: firstPage, count, error } = await supabase
-        .from('pt_cards').select(cols, { count: 'exact' }).range(0, pageSize - 1);
-      if (error) { setNeedsSetup(true); setIsLoading(false); return; }
-      const totalPages = Math.ceil((count || 0) / pageSize);
-      const rest = totalPages > 1
-        ? await Promise.all(
-            Array.from({ length: totalPages - 1 }, (_, i) =>
-              supabase.from('pt_cards').select(cols).range((i + 1) * pageSize, (i + 2) * pageSize - 1)
+      const CACHE_PREFIX = 'packsim_v1_';
+
+      // Step 1: fetch upload timestamp first (tiny query) — used for cache key + date display
+      const { data: uploadMeta } = await supabase.from('site_content').select('content').eq('id', 'pt_cards_upload').single();
+      const uploadedAt = uploadMeta?.content?.uploaded_at || null;
+      if (uploadedAt) {
+        const d = new Date(uploadedAt);
+        setLastUpdated(`${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
+      }
+
+      // Step 2: try session cache — skip all pt_cards fetches on hit
+      let eligible = null;
+      const cacheKey = uploadedAt ? CACHE_PREFIX + uploadedAt : null;
+      if (cacheKey) {
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) eligible = JSON.parse(cached);
+        } catch {}
+      }
+
+      // Step 3: cache miss — fetch from DB (parallel pages)
+      if (!eligible) {
+        const pageSize = 1000;
+        const cols = 'card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs, card_type';
+        const { data: firstPage, count, error } = await supabase
+          .from('pt_cards').select(cols, { count: 'exact' }).range(0, pageSize - 1);
+        if (error) { setNeedsSetup(true); setIsLoading(false); return; }
+        const totalPages = Math.ceil((count || 0) / pageSize);
+        const rest = totalPages > 1
+          ? await Promise.all(
+              Array.from({ length: totalPages - 1 }, (_, i) =>
+                supabase.from('pt_cards').select(cols).range((i + 1) * pageSize, (i + 2) * pageSize - 1)
+              )
             )
-          )
-        : [];
-      const data = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
+          : [];
+        const data = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
+        eligible = data.filter(c =>
+          c.packs === 1 &&
+          !['CS', 'ME', 'PTCS'].includes(c.card_badge || '') &&
+          (c.card_value || 0) > 0
+        );
 
-      const eligible = (data || []).filter(c =>
-        c.packs === 1 &&
-        !['CS', 'ME', 'PTCS'].includes(c.card_badge || '') &&
-        (c.card_value || 0) > 0
-      );
-      if (eligible.length === 0) { setNeedsSetup(true); setIsLoading(false); return; }
+        // Save to session cache and evict stale entries
+        if (cacheKey && eligible.length > 0) {
+          try {
+            for (let i = sessionStorage.length - 1; i >= 0; i--) {
+              const k = sessionStorage.key(i);
+              if (k?.startsWith(CACHE_PREFIX) && k !== cacheKey) sessionStorage.removeItem(k);
+            }
+            sessionStorage.setItem(cacheKey, JSON.stringify(eligible));
+          } catch {}
+        }
+      }
 
+      if (!eligible || eligible.length === 0) { setNeedsSetup(true); setIsLoading(false); return; }
+
+      // Step 4: build pools
       const pool     = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
       const histPool = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
       const sums = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
@@ -10261,7 +10295,7 @@ function PackSimulatorPage() {
       for (const card of eligible) {
         const tier = getSimCardTier(card.card_value);
         pool[tier].push(card);
-        if (card.card_type !== 1) histPool[tier].push(card); // exclude Live (card_type=1) from historical pool
+        if (card.card_type !== 1) histPool[tier].push(card);
         if ((card.last_10_price || 0) > 0) { sums[tier] += card.last_10_price; cnts[tier]++; }
       }
 
@@ -10271,12 +10305,6 @@ function PackSimulatorPage() {
       setCardPool(pool);
       setHistCardPool(histPool);
       setAvgByTier(avgs);
-
-      const { data: uploadMeta } = await supabase.from('site_content').select('content').eq('id', 'pt_cards_upload').single();
-      if (uploadMeta?.content?.uploaded_at) {
-        const d = new Date(uploadMeta.content.uploaded_at);
-        setLastUpdated(`${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
-      }
     } catch (e) { console.error(e); setNeedsSetup(true); }
     setIsLoading(false);
   };
