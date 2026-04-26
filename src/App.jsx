@@ -5,7 +5,7 @@ import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP, IMG_COMBINED_COLS_TOP, IMG_COMBINED_COLS_BOTTOM, IMG_ALL_PLAYERS_FILTER } from './tutorialImages.js';
-import { LIVE_CARD_COLORS } from './liveCardColors.js';
+import { LIVE_CARD_COLORS, LIVE_CARD_OVR } from './liveCardColors.js';
 
 const ThemeContext = createContext();
 const BannerContext = createContext();
@@ -10814,7 +10814,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       statResults[s.key] = { actual: a, proj: p, pct };
       if (!s.excludeFromComposite) { validCount++; totalPct += pct; }
     });
-    if (validCount < 3) return;
+    if (validCount < 1) return;
     rows.push({
       playerid: String(pid),
       name: fgStripHtml(player.Name || player.name || '—'),
@@ -10969,7 +10969,7 @@ function LiveSpecPage() {
               <thead>
                 {/* Group header row */}
                 <tr style={{ background: theme.sidebarBg }}>
-                  <th colSpan={5} style={{ ...thBase, borderBottom: sectionBorder, color: theme.textMuted }} />
+                  <th colSpan={6} style={{ ...thBase, borderBottom: sectionBorder, color: theme.textMuted }} />
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs ZiPS %</th>
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1e3a5f', padding: '10px 8px' }}>2026 Actual</th>
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1a2e1a', padding: '10px 8px' }}>ZiPS Projection</th>
@@ -10977,6 +10977,7 @@ function LiveSpecPage() {
                 {/* Stat label row */}
                 <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
                   <th style={{ ...thBase, color: theme.textMuted, width: 36 }}>#</th>
+                  <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>OVR</th>
                   <th style={{ ...thBase, color: theme.textMuted, textAlign: 'left', minWidth: 150, paddingLeft: 12 }}>Name</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 48 }}>TM</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>{volLabel}</th>
@@ -10999,6 +11000,9 @@ function LiveSpecPage() {
                 {currentRows.map((row, i) => (
                   <tr key={row.playerid} style={{ borderBottom: `1px solid ${theme.tableBorder}`, background: i % 2 === 0 ? theme.tableRowBg : theme.panelBg }}>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{i + 1}</td>
+                    <td style={{ padding: '9px 8px', textAlign: 'center', fontSize: 13, fontWeight: 700, color: LIVE_CARD_COLORS[normalizeName(row.name)] || '#fff' }}>
+                      {LIVE_CARD_OVR[normalizeName(row.name)] ?? '—'}
+                    </td>
                     <td style={{ padding: '9px 12px', fontWeight: 700, fontSize: 14, color: LIVE_CARD_COLORS[normalizeName(row.name)] || '#fff', whiteSpace: 'nowrap' }}>{row.name}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{row.team}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{Math.round(row.vol)}</td>
@@ -11045,7 +11049,7 @@ function LiveSpecPage() {
                 ))}
                 {currentRows.length === 0 && (
                   <tr>
-                    <td colSpan={5 + n * 3} style={{ textAlign: 'center', padding: 40, color: '#fff', fontSize: 14 }}>
+                    <td colSpan={6 + n * 3} style={{ textAlign: 'center', padding: 40, color: '#fff', fontSize: 14 }}>
                       No players met the min {volLabel} threshold.
                     </td>
                   </tr>
