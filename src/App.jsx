@@ -501,6 +501,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink>
             <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
             <NavLink to="/pt-live" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>PT Live</NavLink>
+            <NavLink to="/live-spec" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Live Spec</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
@@ -10738,6 +10739,265 @@ function PTLiveScoringKey({ theme }) {
   );
 }
 
+// ==================== LIVE SPEC PAGE ====================
+
+const LIVESPEC_HITTER_STATS = [
+  { key: 'OBP',   label: 'OBP',   higherBetter: true,  fmt: v => v.toFixed(3) },
+  { key: 'SLG',   label: 'SLG',   higherBetter: true,  fmt: v => v.toFixed(3) },
+  { key: 'ISO',   label: 'ISO',   higherBetter: true,  fmt: v => v.toFixed(3) },
+  { key: 'HR',    label: 'HR',    higherBetter: true,  fmt: v => v.toFixed(1), scaleByPA: true },
+  { key: 'BBpct', label: 'BB%',   higherBetter: true,  fmt: v => (v * 100).toFixed(1) + '%' },
+  { key: 'Kpct',  label: 'K%',    higherBetter: false, fmt: v => (v * 100).toFixed(1) + '%' },
+  { key: 'wRCp',  label: 'wRC+',  higherBetter: true,  fmt: v => Math.round(v).toString() },
+  { key: 'BABIP', label: 'BABIP', higherBetter: true,  fmt: v => v.toFixed(3) },
+];
+
+const LIVESPEC_PITCHER_STATS = [
+  { key: 'ERA',   label: 'ERA',   higherBetter: false, fmt: v => v.toFixed(2) },
+  { key: 'FIP',   label: 'FIP',   higherBetter: false, fmt: v => v.toFixed(2) },
+  { key: 'K9',    label: 'K/9',   higherBetter: true,  fmt: v => v.toFixed(2) },
+  { key: 'BB9',   label: 'BB/9',  higherBetter: false, fmt: v => v.toFixed(2) },
+  { key: 'HR9',   label: 'HR/9',  higherBetter: false, fmt: v => v.toFixed(2) },
+  { key: 'BABIP', label: 'BABIP', higherBetter: false, fmt: v => v.toFixed(3) },
+];
+
+function fgGet(obj, key) {
+  const aliases = {
+    'OBP':   ['OBP'],
+    'SLG':   ['SLG'],
+    'ISO':   ['ISO'],
+    'HR':    ['HR'],
+    'BBpct': ['BB%', 'BBperc', 'BBpct', 'bb_pct'],
+    'Kpct':  ['K%',  'Kperc',  'Kpct',  'k_pct', 'SO%'],
+    'wRCp':  ['wRC+', 'wRCplus', 'wRC_plus'],
+    'BABIP': ['BABIP'],
+    'ERA':   ['ERA'],
+    'FIP':   ['FIP'],
+    'K9':    ['K/9', 'K9', 'SO9'],
+    'BB9':   ['BB/9', 'BB9'],
+    'HR9':   ['HR/9', 'HR9'],
+    'PA':    ['PA', 'G_PA'],
+    'IP':    ['IP'],
+  };
+  for (const k of (aliases[key] || [key])) {
+    const v = obj[k];
+    if (v !== undefined && v !== null && v !== '' && v !== '-') return parseFloat(v);
+  }
+  return null;
+}
+
+function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
+  const rows = [];
+  actualArr.forEach(player => {
+    const pid = player.playerid;
+    if (!pid) return;
+    const proj = projMap[String(pid)];
+    if (!proj) return;
+    const vol = fgGet(player, minVolKey);
+    if (vol === null || vol < minVol) return;
+    const actualPA = fgGet(player, 'PA');
+    const projPA   = fgGet(proj,   'PA');
+    const statResults = {};
+    let validCount = 0, totalPct = 0;
+    stats.forEach(s => {
+      const a = fgGet(player, s.key);
+      let p   = fgGet(proj,   s.key);
+      if (a === null || p === null || isNaN(a) || isNaN(p) || Math.abs(p) < 0.0001) {
+        statResults[s.key] = { actual: a, proj: null, pct: null };
+        return;
+      }
+      if (s.scaleByPA && projPA > 0 && actualPA > 0) p = p * (actualPA / projPA);
+      let pct = ((a - p) / Math.abs(p)) * 100;
+      if (!s.higherBetter) pct = -pct;
+      statResults[s.key] = { actual: a, proj: p, pct };
+      validCount++;
+      totalPct += pct;
+    });
+    if (validCount < 3) return;
+    rows.push({
+      playerid: String(pid),
+      name: player.Name || player.name || '—',
+      team: player.Team || player.team || '',
+      pos:  player.Pos  || player.pos  || player.Role || '',
+      vol,
+      stats: statResults,
+      composite: totalPct / validCount,
+    });
+  });
+  return rows.sort((a, b) => b.composite - a.composite);
+}
+
+function LiveSpecPage() {
+  const { theme } = useTheme();
+  const [tab, setTab]         = useState('hitters');
+  const [minPA, setMinPA]     = useState(50);
+  const [minIP, setMinIP]     = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const [rawHitters, setRawHitters]   = useState(null);
+  const [rawPitchers, setRawPitchers] = useState(null);
+
+  useEffect(() => { fetchLiveSpecData(); }, []);
+
+  async function fetchLiveSpecData() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [zBat, zPit, aBat, aPit] = await Promise.all([
+        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
+        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
+        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=&enddate=&month=0').then(r => r.json()),
+        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=&enddate=&month=0').then(r => r.json()),
+      ]);
+      const toArr = x => Array.isArray(x) ? x : (x?.data || []);
+      const zBatArr = toArr(zBat), zPitArr = toArr(zPit);
+      const aBatArr = toArr(aBat), aPitArr = toArr(aPit);
+      const zBatMap = {}, zPitMap = {};
+      zBatArr.forEach(p => { if (p.playerid) zBatMap[String(p.playerid)] = p; });
+      zPitArr.forEach(p => { if (p.playerid) zPitMap[String(p.playerid)] = p; });
+      setRawHitters({ actualArr: aBatArr, projMap: zBatMap });
+      setRawPitchers({ actualArr: aPitArr, projMap: zPitMap });
+    } catch (e) {
+      setError(`Failed to load data. FanGraphs may be blocking browser requests (CORS). Error: ${e.message}`);
+    }
+    setLoading(false);
+  }
+
+  const hitterRows = useMemo(() => {
+    if (!rawHitters) return [];
+    return computeLiveSpecRows(rawHitters.actualArr, rawHitters.projMap, LIVESPEC_HITTER_STATS, 'PA', minPA);
+  }, [rawHitters, minPA]);
+
+  const pitcherRows = useMemo(() => {
+    if (!rawPitchers) return [];
+    return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP);
+  }, [rawPitchers, minIP]);
+
+  const currentRows  = tab === 'hitters' ? hitterRows  : pitcherRows;
+  const currentStats = tab === 'hitters' ? LIVESPEC_HITTER_STATS : LIVESPEC_PITCHER_STATS;
+  const volLabel     = tab === 'hitters' ? 'PA' : 'IP';
+  const minVal       = tab === 'hitters' ? minPA : minIP;
+  const setMinVal    = tab === 'hitters' ? setMinPA : setMinIP;
+
+  const pctColor = pct => {
+    if (pct === null) return theme.textMuted;
+    if (pct >= 15) return '#22c55e';
+    if (pct >= 5)  return '#86efac';
+    if (pct >= 0)  return theme.textPrimary;
+    if (pct >= -5) return '#fca5a5';
+    return '#ef4444';
+  };
+
+  const loaded = rawHitters !== null || rawPitchers !== null;
+
+  return (
+    <div style={{ minHeight: '100vh', background: theme.mainBg, color: theme.textPrimary, fontFamily: "'Inter', sans-serif" }}>
+      {/* Header */}
+      <div style={{ background: theme.panelBg, borderBottom: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+        <div style={{ maxWidth: 1600, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent }}>Live Spec</h2>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: theme.textMuted }}>% overperformance vs ZiPS projections · 2026 season · source: FanGraphs</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: theme.textMuted }}>Min {volLabel}</span>
+              <input
+                type="number" value={minVal} min={0}
+                onChange={e => setMinVal(Math.max(0, Number(e.target.value) || 0))}
+                style={{ width: 70, padding: '6px 10px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.textPrimary, fontSize: 13 }}
+              />
+              <button onClick={fetchLiveSpecData} style={{ padding: '6px 14px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Refresh</button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {['hitters', 'pitchers'].map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ padding: '8px 20px', background: tab === t ? theme.accent : theme.inputBg, color: tab === t ? '#fff' : theme.textMuted, border: `1px solid ${tab === t ? theme.accent : theme.border}`, borderRadius: '4px 4px 0 0', fontWeight: 600, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Oswald','Inter',sans-serif" }}>
+                {t === 'hitters' ? 'Hitters' : 'Pitchers'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ maxWidth: 1600, margin: '0 auto', padding: '24px' }}>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted, fontSize: 14 }}>Loading data from FanGraphs…</div>
+        )}
+        {error && (
+          <div style={{ padding: '16px 20px', background: '#1f1010', border: '1px solid #ef4444', borderRadius: 6, color: '#ef4444', fontSize: 13 }}>{error}</div>
+        )}
+        {!loading && !error && loaded && (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', minWidth: 700 + currentStats.length * 90 }}>
+              <thead>
+                <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 36 }}>#</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left',   color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 160 }}>NAME</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 50 }}>TM</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 50 }}>POS</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 55 }}>{volLabel}</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: theme.accent,    fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', width: 80 }}>COMP%</th>
+                  {currentStats.map(s => (
+                    <th key={s.key} style={{ padding: '10px 8px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 90 }}>{s.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {currentRows.map((row, i) => (
+                  <tr key={row.playerid} style={{ borderBottom: `1px solid ${theme.tableBorder}`, background: i % 2 === 0 ? theme.tableRowBg : theme.cardBg }}>
+                    <td style={{ padding: '8px', textAlign: 'center', color: theme.textDim, fontSize: 11 }}>{i + 1}</td>
+                    <td style={{ padding: '8px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{row.name}</td>
+                    <td style={{ padding: '8px', textAlign: 'center', color: theme.textMuted, fontSize: 11 }}>{row.team}</td>
+                    <td style={{ padding: '8px', textAlign: 'center', color: theme.textMuted, fontSize: 11 }}>{row.pos}</td>
+                    <td style={{ padding: '8px', textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>{Math.round(row.vol)}</td>
+                    <td style={{ padding: '8px', textAlign: 'center' }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
+                        {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
+                      </span>
+                    </td>
+                    {currentStats.map(s => {
+                      const st = row.stats[s.key];
+                      if (!st || st.actual === null) {
+                        return <td key={s.key} style={{ padding: '8px', textAlign: 'center', color: theme.textDim }}>—</td>;
+                      }
+                      return (
+                        <td key={s.key} style={{ padding: '6px 8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: st.pct !== null ? pctColor(st.pct) : theme.textPrimary }}>
+                            {s.fmt(st.actual)}
+                          </div>
+                          {st.proj !== null && (
+                            <div style={{ fontSize: 10, color: theme.textDim }}>{s.fmt(st.proj)}</div>
+                          )}
+                          {st.pct !== null && (
+                            <div style={{ fontSize: 10, color: st.pct >= 0 ? '#86efac' : '#fca5a5' }}>
+                              {st.pct >= 0 ? '+' : ''}{st.pct.toFixed(1)}%
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {currentRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6 + currentStats.length} style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>
+                      No players met the min {volLabel} threshold.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==================== PT LIVE PAGE ====================
+
 function PTLivePage() {
   const { theme } = useTheme();
   const [batters, setBatters]         = useState([]);
@@ -11109,6 +11369,7 @@ export default function App() {
     <Route path="/database" element={<DatabasePage />} />
     <Route path="/pack-simulator" element={<PackSimulatorPage />} />
     <Route path="/pt-live" element={<PTLivePage />} />
+    <Route path="/live-spec" element={<LiveSpecPage />} />
   </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
