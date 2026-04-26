@@ -10743,19 +10743,19 @@ function PTLiveScoringKey({ theme }) {
 // ==================== LIVE SPEC PAGE ====================
 
 const LIVESPEC_HITTER_STATS = [
-  { key: 'BBpct', label: 'BB%',   higherBetter: true,  fmt: v => (v * 100).toFixed(1) + '%' },
+  { key: 'wOBA',  label: 'wOBA',  higherBetter: true,  fmt: v => v.toFixed(3), excludeFromComposite: true },
   { key: 'Kpct',  label: 'K%',    higherBetter: false, fmt: v => (v * 100).toFixed(1) + '%' },
   { key: 'HRpct', label: 'HR%',   higherBetter: true,  fmt: v => (v * 100).toFixed(2) + '%',
     derive: obj => { const hr = fgGet(obj, 'HR'); const pa = fgGet(obj, 'PA'); return (hr !== null && pa !== null && pa > 0) ? hr / pa : null; } },
+  { key: 'BBpct', label: 'BB%',   higherBetter: true,  fmt: v => (v * 100).toFixed(1) + '%' },
   { key: 'BABIP', label: 'BABIP', higherBetter: true,  fmt: v => v.toFixed(3) },
-  { key: 'wOBA',  label: 'wOBA',  higherBetter: true,  fmt: v => v.toFixed(3) },
 ];
 
 const LIVESPEC_PITCHER_STATS = [
-  { key: 'FIP',   label: 'FIP',   higherBetter: false, fmt: v => v.toFixed(2) },
+  { key: 'FIP',   label: 'FIP',   higherBetter: false, fmt: v => v.toFixed(2), excludeFromComposite: true },
   { key: 'K9',    label: 'K/9',   higherBetter: true,  fmt: v => v.toFixed(2) },
-  { key: 'BB9',   label: 'BB/9',  higherBetter: false, fmt: v => v.toFixed(2) },
   { key: 'HR9',   label: 'HR/9',  higherBetter: false, fmt: v => v.toFixed(2) },
+  { key: 'BB9',   label: 'BB/9',  higherBetter: false, fmt: v => v.toFixed(2) },
   { key: 'BABIP', label: 'BABIP', higherBetter: false, fmt: v => v.toFixed(3) },
 ];
 
@@ -10812,8 +10812,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       let pct = ((a - p) / Math.abs(p)) * 100;
       if (!s.higherBetter) pct = -pct;
       statResults[s.key] = { actual: a, proj: p, pct };
-      validCount++;
-      totalPct += pct;
+      if (!s.excludeFromComposite) { validCount++; totalPct += pct; }
     });
     if (validCount < 3) return;
     rows.push({
@@ -10825,7 +10824,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       composite: totalPct / validCount,
     });
   });
-  return rows.sort((a, b) => b.composite - a.composite);
+  return rows.sort((a, b) => b.composite - a.composite).slice(0, 100);
 }
 
 function LiveSpecPage() {
@@ -11076,6 +11075,7 @@ function PTLivePage() {
     try { return JSON.parse(localStorage.getItem('ptlive_team_v1') || '{}'); } catch { return {}; }
   });
   const [isEditing, setIsEditing]     = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
   const [activePicker, setActivePicker] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
   const pickerRef = useRef(null);
@@ -11403,9 +11403,20 @@ function PTLivePage() {
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px' }}>
 
         {/* Edit button above the flex row — keeps sidebar top flush with roster top */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          {isEditing && (
+            <button
+              onClick={() => {
+                if (!clearConfirm) { setClearConfirm(true); }
+                else { setTeam({}); setClearConfirm(false); setActivePicker(null); setPickerSearch(''); }
+              }}
+              style={{ background: clearConfirm ? '#ef4444' : theme.inputBg, color: clearConfirm ? '#fff' : '#ef4444', border: `1px solid #ef4444`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
+            >
+              {clearConfirm ? 'Confirm Clear?' : 'Clear All'}
+            </button>
+          )}
           <button
-            onClick={() => { setIsEditing(e => !e); setActivePicker(null); setPickerSearch(''); }}
+            onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setActivePicker(null); setPickerSearch(''); }}
             style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
           >
             {isEditing ? 'Done Editing' : 'Edit Team'}
