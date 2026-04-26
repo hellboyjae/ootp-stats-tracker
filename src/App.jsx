@@ -10891,7 +10891,7 @@ function LiveSpecPage() {
     if (tierFilter !== 'All' && ovrToTier(ovr) !== tierFilter) return false;
     return true;
   }).sort((a, b) => {
-    if (!sortKey) return b.composite - a.composite;
+    if (!sortKey || sortKey === 'composite') return sortDir === 'desc' ? b.composite - a.composite : a.composite - b.composite;
     const av = a.stats[sortKey]?.pct ?? null;
     const bv = b.stats[sortKey]?.pct ?? null;
     if (av === null && bv === null) return 0;
@@ -11036,7 +11036,9 @@ function LiveSpecPage() {
                   <th style={{ ...thBase, color: theme.textMuted, textAlign: 'left', minWidth: 150, paddingLeft: 12 }}>Name</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 48 }}>TM</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>{volLabel}</th>
-                  <th style={{ ...thBase, color: theme.accent, width: 80, fontSize: 12 }}>COMP%</th>
+                  <th onClick={() => handleSort('composite')} style={{ ...thBase, color: theme.accent, width: 80, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+                    COMP%{sortKey === 'composite' || sortKey === null ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                  </th>
                   {/* % diff columns — clickable for sort */}
                   {currentStats.map(s => {
                     const active = sortKey === s.key;
