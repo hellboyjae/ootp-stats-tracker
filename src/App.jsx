@@ -10668,7 +10668,7 @@ function ptLiveBatterPP(s) {
   const singles = Math.max(0, h - d - t - hr);
   let pp = singles * 4 + d * 6 + t * 10 + hr * 15;
   if (hr >= 3) pp += 100;
-  if (h >= 4) pp += h * 25;
+  if (h >= 4) pp += (h - 3) * 25;
   pp += (s.runs || 0) * 6;
   pp += (s.rbi || 0) * 6;
   pp += ((s.baseOnBalls || 0) + (s.hitByPitch || 0)) * 3;
@@ -10729,7 +10729,7 @@ function PTLiveScoringKey({ theme }) {
   return (
     <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '14px 14px', position: 'sticky', top: 16 }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 12 }}>Scoring</div>
-      {section('Batters', [['Single','4 PP'],['Double','6 PP'],['Triple','10 PP'],['HR','15 PP'],['3+ HR','+100 PP'],['4+ Hit','25/hit PP'],['Run','6 PP'],['RBI','6 PP'],['BB/HBP','3 PP'],['SB','10 PP'],['CS','-2 PP']])}
+      {section('Batters', [['Single','4 PP'],['Double','6 PP'],['Triple','10 PP'],['HR','15 PP'],['3+ HR','+100 PP'],['Hit 4+','25 PP each'],['Run','6 PP'],['RBI','6 PP'],['BB/HBP','3 PP'],['SB','10 PP'],['CS','-2 PP']])}
       {section('Starting P', [['Win','20 PP'],['CG','50 PP'],['Shutout','100 PP'],['IP','4 PP'],['K','2 PP'],['10+ K','+40 PP'],['QS','5 PP'],['ER','-2 PP'],['BB/HBP','-1 PP']])}
       {section('Relief P', [['Win','12 PP'],['Save','35 PP'],['Hold','20 PP'],['IP','4 PP'],['K','3 PP'],['ER','-2 PP'],['Blown SV','-1 PP'],['BB/HBP','-1 PP']])}
     </div>
