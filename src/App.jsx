@@ -10508,7 +10508,7 @@ function PackSimulatorPage() {
             </div>
 
             {/* Credit — always visible */}
-            <div style={{ color: '#ffffff', fontSize: 11, textAlign: 'center' }}>
+            <div style={{ color: '#ffffff', fontSize: 22, textAlign: 'center' }}>
               Inspired &amp; contributed by Cratevar —{' '}
               <a href="https://cratervar.com/" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', textDecoration: 'underline' }}>cratervar.com</a>
             </div>
