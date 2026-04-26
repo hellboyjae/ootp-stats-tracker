@@ -10881,152 +10881,183 @@ function LiveSpecPage() {
   const minVal       = tab === 'hitters' ? minPA : minIP;
   const setMinVal    = tab === 'hitters' ? setMinPA : setMinIP;
   const loaded       = rawHitters !== null || rawPitchers !== null;
+  const n            = currentStats.length;
 
   const pctColor = pct => {
-    if (pct === null) return theme.textMuted;
+    if (pct === null) return '#fff';
     if (pct >= 15) return '#22c55e';
     if (pct >= 5)  return '#86efac';
-    if (pct >= 0)  return theme.textPrimary;
+    if (pct >= 0)  return '#fff';
     if (pct >= -5) return '#fca5a5';
     return '#ef4444';
   };
 
+  const thBase = { padding: '8px 8px', textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+  const sectionBorder = `2px solid ${theme.border}`;
+
   return (
-    <div style={{ display: 'flex', background: theme.mainBg, color: theme.textPrimary, fontFamily: "'Inter', sans-serif", minHeight: '100%' }}>
+    <Layout>
+      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
 
-      {/* ── Left Sidebar ── */}
-      <div style={{ width: 176, flexShrink: 0, background: theme.panelBg, borderRight: `1px solid ${theme.border}`, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* ── Sidebar ── */}
+        <div style={{ width: 220, flexShrink: 0, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 4 }}>Live Spec</div>
-          <div style={{ fontSize: 10, color: theme.textMuted, lineHeight: 1.5 }}>% vs ZiPS projections<br />2026 season · FanGraphs</div>
-        </div>
-
-        {/* Tab toggle */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textDim, marginBottom: 2 }}>View</div>
-          {['hitters', 'pitchers'].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ padding: '8px 10px', background: tab === t ? theme.accent : theme.inputBg, color: tab === t ? '#fff' : theme.textMuted, border: `1px solid ${tab === t ? theme.accent : theme.border}`, borderRadius: 4, fontWeight: 600, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Oswald','Inter',sans-serif", textAlign: 'left' }}>
-              {t === 'hitters' ? 'Hitters' : 'Pitchers'}
-            </button>
-          ))}
-        </div>
-
-        {/* Min filter */}
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textDim, marginBottom: 6 }}>Min {volLabel}</div>
-          <input
-            type="number" value={minVal} min={0}
-            onChange={e => setMinVal(Math.max(0, Number(e.target.value) || 0))}
-            style={{ width: '100%', padding: '6px 8px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 4, color: theme.textPrimary, fontSize: 13, boxSizing: 'border-box' }}
-          />
-        </div>
-
-        {/* Refresh */}
-        <button onClick={fetchLiveSpecData} disabled={loading} style={{ padding: '8px 10px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 600, fontSize: 12, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-
-        {/* Cell legend */}
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textDim, marginBottom: 8 }}>Each Cell</div>
-          <div style={{ fontSize: 11, color: theme.textPrimary, fontWeight: 700, marginBottom: 2 }}>Actual stat</div>
-          <div style={{ fontSize: 10, color: theme.textDim, marginBottom: 6 }}>z: ZiPS proj</div>
-          <div style={{ fontSize: 10, color: '#86efac' }}>+% = overperforming</div>
-          <div style={{ fontSize: 10, color: '#fca5a5', marginBottom: 10 }}>-% = underperforming</div>
-          {[
-            { color: '#22c55e', label: '≥ +15%' },
-            { color: '#86efac', label: '+5% to +15%' },
-            { color: theme.textPrimary, label: '0% to +5%' },
-            { color: '#fca5a5', label: '-5% to 0%' },
-            { color: '#ef4444', label: '< -5%' },
-          ].map(({ color, label }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, color: theme.textMuted }}>{label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Row count */}
-        {loaded && !loading && (
-          <div style={{ fontSize: 10, color: theme.textDim, marginTop: 'auto' }}>
-            {currentRows.length} players shown
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
+            <div style={{ fontSize: 14, color: '#fff', lineHeight: 1.5 }}>% overperformance<br />vs ZiPS · 2026 · FanGraphs</div>
           </div>
-        )}
-      </div>
 
-      {/* ── Main Table ── */}
-      <div style={{ flex: 1, overflowX: 'auto', padding: '16px 20px' }}>
-        {loading && (
-          <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted, fontSize: 14 }}>Loading data from FanGraphs…</div>
-        )}
-        {error && (
-          <div style={{ padding: '14px 18px', background: '#1f1010', border: '1px solid #ef4444', borderRadius: 6, color: '#ef4444', fontSize: 13 }}>{error}</div>
-        )}
-        {!loading && !error && loaded && (
-          <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
-            <thead>
-              <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
-                <th style={{ padding: '10px 6px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 32 }}>#</th>
-                <th style={{ padding: '10px 8px', textAlign: 'left',   color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', minWidth: 140 }}>NAME</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 42 }}>TM</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 50 }}>{volLabel}</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center', color: theme.accent,    fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', width: 76 }}>COMP%</th>
-                {currentStats.map(s => (
-                  <th key={s.key} style={{ padding: '10px 6px', textAlign: 'center', color: theme.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', width: 88 }}>{s.label}</th>
+          <div style={{ height: 1, background: theme.border }} />
+
+          {/* Tab toggle */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>View</div>
+            {['hitters', 'pitchers'].map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ padding: '10px 12px', background: tab === t ? theme.accent : theme.inputBg, color: '#fff', border: `1px solid ${tab === t ? theme.accent : theme.border}`, borderRadius: 4, fontWeight: 700, fontSize: 14, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Oswald','Inter',sans-serif", textAlign: 'left' }}>
+                {t === 'hitters' ? 'Hitters' : 'Pitchers'}
+              </button>
+            ))}
+          </div>
+
+          {/* Min filter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Min {volLabel}</div>
+            <input
+              type="number" value={minVal} min={0}
+              onChange={e => setMinVal(Math.max(0, Number(e.target.value) || 0))}
+              style={{ padding: '8px 10px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 4, color: '#fff', fontSize: 14, boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Refresh */}
+          <button onClick={fetchLiveSpecData} disabled={loading} style={{ padding: '10px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+
+          <div style={{ height: 1, background: theme.border }} />
+
+          {/* Legend */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Color Legend</div>
+            {[
+              { color: '#22c55e', label: '≥ +15%' },
+              { color: '#86efac', label: '+5% to +15%' },
+              { color: '#fff',    label: '0% to +5%' },
+              { color: '#fca5a5', label: '-5% to 0%' },
+              { color: '#ef4444', label: '< -5%' },
+            ].map(({ color, label }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: color, flexShrink: 0, border: color === '#fff' ? `1px solid ${theme.border}` : 'none' }} />
+                <span style={{ fontSize: 14, color: '#fff' }}>{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {loaded && !loading && (
+            <div style={{ fontSize: 14, color: '#fff', marginTop: 'auto' }}>{currentRows.length} players</div>
+          )}
+        </div>
+
+        {/* ── Main Table ── */}
+        <div style={{ flex: 1, overflowX: 'auto', background: theme.mainBg, padding: '16px 20px' }}>
+          {loading && (
+            <div style={{ textAlign: 'center', padding: 60, color: '#fff', fontSize: 16 }}>Loading data from FanGraphs…</div>
+          )}
+          {error && (
+            <div style={{ padding: '14px 18px', background: '#1f1010', border: '1px solid #ef4444', borderRadius: 6, color: '#ef4444', fontSize: 14 }}>{error}</div>
+          )}
+          {!loading && !error && loaded && (
+            <table style={{ borderCollapse: 'collapse', fontSize: 14, tableLayout: 'auto' }}>
+              <thead>
+                {/* Group header row */}
+                <tr style={{ background: theme.sidebarBg }}>
+                  <th colSpan={5} style={{ ...thBase, borderBottom: sectionBorder, color: theme.textMuted }} />
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1e3a5f', padding: '10px 8px' }}>2026 Actual</th>
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1a2e1a', padding: '10px 8px' }}>ZiPS Projection</th>
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs ZiPS %</th>
+                </tr>
+                {/* Stat label row */}
+                <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
+                  <th style={{ ...thBase, color: theme.textMuted, width: 36 }}>#</th>
+                  <th style={{ ...thBase, color: theme.textMuted, textAlign: 'left', minWidth: 150, paddingLeft: 12 }}>Name</th>
+                  <th style={{ ...thBase, color: theme.textMuted, width: 48 }}>TM</th>
+                  <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>{volLabel}</th>
+                  <th style={{ ...thBase, color: theme.accent, width: 80, fontSize: 12 }}>COMP%</th>
+                  {/* Actual columns */}
+                  {currentStats.map(s => (
+                    <th key={`a_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#131e2e', width: 88 }}>{s.label}</th>
+                  ))}
+                  {/* ZiPS columns */}
+                  {currentStats.map(s => (
+                    <th key={`z_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#121e12', width: 88 }}>{s.label}</th>
+                  ))}
+                  {/* % diff columns */}
+                  {currentStats.map(s => (
+                    <th key={`p_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#1e121e', width: 88 }}>{s.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {currentRows.map((row, i) => (
+                  <tr key={row.playerid} style={{ borderBottom: `1px solid ${theme.tableBorder}`, background: i % 2 === 0 ? theme.tableRowBg : theme.cardBg }}>
+                    <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{i + 1}</td>
+                    <td style={{ padding: '9px 12px', fontWeight: 700, fontSize: 14, color: '#fff', whiteSpace: 'nowrap' }}>{row.name}</td>
+                    <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{row.team}</td>
+                    <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{Math.round(row.vol)}</td>
+                    <td style={{ padding: '9px 8px', textAlign: 'center' }}>
+                      <span style={{ fontWeight: 700, fontSize: 15, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
+                        {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
+                      </span>
+                    </td>
+                    {/* Actual values */}
+                    {currentStats.map((s, si) => {
+                      const st = row.stats[s.key];
+                      return (
+                        <td key={`a_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: st?.pct != null ? pctColor(st.pct) : '#fff' }}>
+                            {st?.actual != null ? s.fmt(st.actual) : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                    {/* ZiPS projection values */}
+                    {currentStats.map((s, si) => {
+                      const st = row.stats[s.key];
+                      return (
+                        <td key={`z_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
+                          <span style={{ fontSize: 14, color: '#fff' }}>
+                            {st?.proj != null ? s.fmt(st.proj) : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                    {/* % diff values */}
+                    {currentStats.map((s, si) => {
+                      const st = row.stats[s.key];
+                      const pct = st?.pct ?? null;
+                      return (
+                        <td key={`p_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: pct != null ? pctColor(pct) : '#fff' }}>
+                            {pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {currentRows.map((row, i) => (
-                <tr key={row.playerid} style={{ borderBottom: `1px solid ${theme.tableBorder}`, background: i % 2 === 0 ? theme.tableRowBg : theme.cardBg }}>
-                  <td style={{ padding: '8px 6px', textAlign: 'center', color: theme.textDim, fontSize: 11 }}>{i + 1}</td>
-                  <td style={{ padding: '8px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>{row.name}</td>
-                  <td style={{ padding: '8px 6px', textAlign: 'center', color: theme.textMuted, fontSize: 11 }}>{row.team}</td>
-                  <td style={{ padding: '8px 6px', textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>{Math.round(row.vol)}</td>
-                  <td style={{ padding: '8px 6px', textAlign: 'center' }}>
-                    <span style={{ fontWeight: 700, fontSize: 14, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
-                    </span>
-                  </td>
-                  {currentStats.map(s => {
-                    const st = row.stats[s.key];
-                    if (!st || st.actual === null) {
-                      return <td key={s.key} style={{ padding: '8px 6px', textAlign: 'center', color: theme.textDim }}>—</td>;
-                    }
-                    return (
-                      <td key={s.key} style={{ padding: '5px 6px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: st.pct !== null ? pctColor(st.pct) : theme.textPrimary }}>
-                          {s.fmt(st.actual)}
-                        </div>
-                        {st.proj !== null && (
-                          <div style={{ fontSize: 10, color: theme.textDim }}>
-                            <span style={{ color: theme.textDim, opacity: 0.6 }}>z:</span>{s.fmt(st.proj)}
-                          </div>
-                        )}
-                        {st.pct !== null && (
-                          <div style={{ fontSize: 10, color: st.pct >= 0 ? '#86efac' : '#fca5a5' }}>
-                            {st.pct >= 0 ? '+' : ''}{st.pct.toFixed(1)}%
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {currentRows.length === 0 && (
-                <tr>
-                  <td colSpan={5 + currentStats.length} style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>
-                    No players met the min {volLabel} threshold.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
+                {currentRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5 + n * 3} style={{ textAlign: 'center', padding: 40, color: '#fff', fontSize: 14 }}>
+                      No players met the min {volLabel} threshold.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
