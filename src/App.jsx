@@ -10743,18 +10743,15 @@ function PTLiveScoringKey({ theme }) {
 // ==================== LIVE SPEC PAGE ====================
 
 const LIVESPEC_HITTER_STATS = [
-  { key: 'OBP',   label: 'OBP',   higherBetter: true,  fmt: v => v.toFixed(3) },
-  { key: 'SLG',   label: 'SLG',   higherBetter: true,  fmt: v => v.toFixed(3) },
-  { key: 'ISO',   label: 'ISO',   higherBetter: true,  fmt: v => v.toFixed(3) },
-  { key: 'HR',    label: 'HR',    higherBetter: true,  fmt: v => v.toFixed(1), scaleByPA: true },
   { key: 'BBpct', label: 'BB%',   higherBetter: true,  fmt: v => (v * 100).toFixed(1) + '%' },
   { key: 'Kpct',  label: 'K%',    higherBetter: false, fmt: v => (v * 100).toFixed(1) + '%' },
-  { key: 'wRCp',  label: 'wRC+',  higherBetter: true,  fmt: v => Math.round(v).toString() },
+  { key: 'HRpct', label: 'HR%',   higherBetter: true,  fmt: v => (v * 100).toFixed(2) + '%',
+    derive: obj => { const hr = fgGet(obj, 'HR'); const pa = fgGet(obj, 'PA'); return (hr !== null && pa !== null && pa > 0) ? hr / pa : null; } },
   { key: 'BABIP', label: 'BABIP', higherBetter: true,  fmt: v => v.toFixed(3) },
+  { key: 'wOBA',  label: 'wOBA',  higherBetter: true,  fmt: v => v.toFixed(3) },
 ];
 
 const LIVESPEC_PITCHER_STATS = [
-  { key: 'ERA',   label: 'ERA',   higherBetter: false, fmt: v => v.toFixed(2) },
   { key: 'FIP',   label: 'FIP',   higherBetter: false, fmt: v => v.toFixed(2) },
   { key: 'K9',    label: 'K/9',   higherBetter: true,  fmt: v => v.toFixed(2) },
   { key: 'BB9',   label: 'BB/9',  higherBetter: false, fmt: v => v.toFixed(2) },
@@ -10775,6 +10772,7 @@ function fgGet(obj, key) {
     'Kpct':  ['K%',  'Kperc',  'Kpct',  'k_pct', 'SO%'],
     'wRCp':  ['wRC+', 'wRCplus', 'wRC_plus'],
     'BABIP': ['BABIP'],
+    'wOBA':  ['wOBA'],
     'ERA':   ['ERA'],
     'FIP':   ['FIP'],
     'K9':    ['K/9', 'K9', 'SO9'],
@@ -10803,14 +10801,14 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
     const projPA   = fgGet(proj,   'PA');
     const statResults = {};
     let validCount = 0, totalPct = 0;
+    const getVal = (obj, s) => s.derive ? s.derive(obj) : fgGet(obj, s.key);
     stats.forEach(s => {
-      const a = fgGet(player, s.key);
-      let p   = fgGet(proj,   s.key);
+      const a = getVal(player, s);
+      let p   = getVal(proj,   s);
       if (a === null || p === null || isNaN(a) || isNaN(p) || Math.abs(p) < 0.0001) {
         statResults[s.key] = { actual: a, proj: null, pct: null };
         return;
       }
-      if (s.scaleByPA && projPA > 0 && actualPA > 0) p = p * (actualPA / projPA);
       let pct = ((a - p) / Math.abs(p)) * 100;
       if (!s.higherBetter) pct = -pct;
       statResults[s.key] = { actual: a, proj: p, pct };
@@ -10973,9 +10971,9 @@ function LiveSpecPage() {
                 {/* Group header row */}
                 <tr style={{ background: theme.sidebarBg }}>
                   <th colSpan={5} style={{ ...thBase, borderBottom: sectionBorder, color: theme.textMuted }} />
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs ZiPS %</th>
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1e3a5f', padding: '10px 8px' }}>2026 Actual</th>
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1a2e1a', padding: '10px 8px' }}>ZiPS Projection</th>
-                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs ZiPS %</th>
                 </tr>
                 {/* Stat label row */}
                 <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
@@ -10984,6 +10982,10 @@ function LiveSpecPage() {
                   <th style={{ ...thBase, color: theme.textMuted, width: 48 }}>TM</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>{volLabel}</th>
                   <th style={{ ...thBase, color: theme.accent, width: 80, fontSize: 12 }}>COMP%</th>
+                  {/* % diff columns */}
+                  {currentStats.map(s => (
+                    <th key={`p_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#1e121e', width: 88 }}>{s.label}</th>
+                  ))}
                   {/* Actual columns */}
                   {currentStats.map(s => (
                     <th key={`a_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#131e2e', width: 88 }}>{s.label}</th>
@@ -10991,10 +10993,6 @@ function LiveSpecPage() {
                   {/* ZiPS columns */}
                   {currentStats.map(s => (
                     <th key={`z_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#121e12', width: 88 }}>{s.label}</th>
-                  ))}
-                  {/* % diff columns */}
-                  {currentStats.map(s => (
-                    <th key={`p_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#1e121e', width: 88 }}>{s.label}</th>
                   ))}
                 </tr>
               </thead>
@@ -11010,6 +11008,18 @@ function LiveSpecPage() {
                         {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
                       </span>
                     </td>
+                    {/* % diff values */}
+                    {currentStats.map((s, si) => {
+                      const st = row.stats[s.key];
+                      const pct = st?.pct ?? null;
+                      return (
+                        <td key={`p_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: pct != null ? pctColor(pct) : '#fff' }}>
+                            {pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
                     {/* Actual values */}
                     {currentStats.map((s, si) => {
                       const st = row.stats[s.key];
@@ -11028,18 +11038,6 @@ function LiveSpecPage() {
                         <td key={`z_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
                           <span style={{ fontSize: 14, color: '#fff' }}>
                             {st?.proj != null ? s.fmt(st.proj) : '—'}
-                          </span>
-                        </td>
-                      );
-                    })}
-                    {/* % diff values */}
-                    {currentStats.map((s, si) => {
-                      const st = row.stats[s.key];
-                      const pct = st?.pct ?? null;
-                      return (
-                        <td key={`p_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: pct != null ? pctColor(pct) : '#fff' }}>
-                            {pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
                           </span>
                         </td>
                       );
