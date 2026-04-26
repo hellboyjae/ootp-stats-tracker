@@ -10056,6 +10056,19 @@ const PACK_DEFINITIONS_SIM = [
   { key: 'histAllPerfect',label: 'Hist All Perfect', group: 'Full Tier',  guaranteed: ['Perfect',  'Perfect', 'Perfect', 'Perfect', 'Perfect', 'Perfect'] },
 ];
 
+const VARIANT_BASE_ODDS_SIM = { Iron: 1/200, Bronze: 1/200, Silver: 1/100, Gold: 1/50, Diamond: 1/50, Perfect: 1/50 };
+const VARIANT_LEVEL_WEIGHTS_SIM = [0.872, 0.100, 0.020, 0.007, 0.001];
+
+function rollSimVariant(tier) {
+  if (Math.random() >= (VARIANT_BASE_ODDS_SIM[tier] || 0)) return null;
+  let r = Math.random();
+  for (let i = 0; i < VARIANT_LEVEL_WEIGHTS_SIM.length; i++) {
+    r -= VARIANT_LEVEL_WEIGHTS_SIM[i];
+    if (r <= 0) return i + 1;
+  }
+  return 1;
+}
+
 function getSimCardTier(ovr) {
   if (ovr >= 100) return 'Perfect';
   if (ovr >= 90)  return 'Diamond';
@@ -10079,7 +10092,8 @@ function openSimPack(pack, cardPool) {
     const tier = slot || drawSimRandomTier();
     const pool = cardPool[tier] || [];
     const card = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
-    return { card, tier };
+    const variantLevel = card ? rollSimVariant(tier) : null;
+    return { card, tier, variantLevel };
   });
 }
 
@@ -10162,7 +10176,7 @@ function PackFlipCard({ entry, isFlipped, index }) {
       <div style={{
         textAlign: 'center', transition: 'opacity 0.3s ease',
         opacity: isFlipped ? 1 : 0, pointerEvents: isFlipped ? 'auto' : 'none',
-        minHeight: 68,
+        minHeight: 86,
       }}>
         <div style={{
           display: 'inline-block', padding: '4px 12px', borderRadius: 4, marginBottom: 5,
@@ -10177,6 +10191,11 @@ function PackFlipCard({ entry, isFlipped, index }) {
         {entry?.card?.last_10_price > 0 && (
           <div style={{ color: '#a4b1c7', fontSize: 13, marginTop: 3 }}>
             {entry.card.last_10_price.toLocaleString()} PP
+          </div>
+        )}
+        {entry?.variantLevel && (
+          <div style={{ color: '#ef4444', fontSize: 12, fontWeight: 700, marginTop: 3, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Variant Level {entry.variantLevel}
           </div>
         )}
       </div>
@@ -10436,6 +10455,25 @@ function PackSimulatorPage() {
               })}
             </div>
           ))}
+
+          {/* Variant odds info */}
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${theme.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif", color: theme.textDim, marginBottom: 8 }}>Variant Odds</div>
+            <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 4 }}>Base rate by tier:</div>
+            {[['Iron / Bronze', '0.5%'], ['Silver', '1%'], ['Gold / Diamond / Perfect', '2%']].map(([label, pct]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ fontSize: 10, color: theme.textDim }}>{label}</span>
+                <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'ui-monospace, monospace' }}>{pct}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 8, marginBottom: 4 }}>Level distribution:</div>
+            {[['Level 1', '87.2%'], ['Level 2', '10.0%'], ['Level 3', '2.0%'], ['Level 4', '0.7%'], ['Level 5', '0.1%']].map(([label, pct]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ fontSize: 10, color: theme.textDim }}>{label}</span>
+                <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'ui-monospace, monospace' }}>{pct}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── Main Content ── */}
@@ -10528,7 +10566,7 @@ function PackSimulatorPage() {
                       }}>
                         <span style={{ fontSize: 34, opacity: 0.12, color: theme.textDim }}>?</span>
                       </div>
-                      <div style={{ minHeight: 68 }} />
+                      <div style={{ minHeight: 86 }} />
                     </div>
                   ))
               }
