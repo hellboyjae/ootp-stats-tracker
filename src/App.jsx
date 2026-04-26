@@ -10840,6 +10840,8 @@ function LiveSpecPage() {
   const [rawPitchers, setRawPitchers] = useState(null);
   const [tierFilter, setTierFilter]   = useState('All');
   const [minOvr, setMinOvr]           = useState(0);
+  const [sortKey, setSortKey]         = useState(null);
+  const [sortDir, setSortDir]         = useState('desc');
 
   useEffect(() => { fetchLiveSpecData(); }, []);
 
@@ -10879,11 +10881,23 @@ function LiveSpecPage() {
 
   const ovrToTier = ovr => ovr >= 100 ? 'Perfect' : ovr >= 90 ? 'Diamond' : ovr >= 80 ? 'Gold' : ovr >= 70 ? 'Silver' : ovr >= 60 ? 'Bronze' : 'Iron';
   const allRows = tab === 'hitters' ? hitterRows : pitcherRows;
+  const handleSort = key => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
   const currentRows = allRows.filter(row => {
     const ovr = LIVE_CARD_OVR[normalizeName(row.name)];
     if (minOvr > 0 && (ovr == null || ovr < minOvr)) return false;
     if (tierFilter !== 'All' && ovrToTier(ovr) !== tierFilter) return false;
     return true;
+  }).sort((a, b) => {
+    if (!sortKey) return b.composite - a.composite;
+    const av = a.stats[sortKey]?.pct ?? null;
+    const bv = b.stats[sortKey]?.pct ?? null;
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return sortDir === 'desc' ? bv - av : av - bv;
   });
   const currentStats = tab === 'hitters' ? LIVESPEC_HITTER_STATS : LIVESPEC_PITCHER_STATS;
   const volLabel     = tab === 'hitters' ? 'PA' : 'IP';
@@ -10922,7 +10936,7 @@ function LiveSpecPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>View</div>
             {['hitters', 'pitchers'].map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{ padding: '10px 12px', background: tab === t ? theme.accent : theme.inputBg, color: '#fff', border: `1px solid ${tab === t ? theme.accent : theme.border}`, borderRadius: 4, fontWeight: 700, fontSize: 14, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Oswald','Inter',sans-serif", textAlign: 'left' }}>
+              <button key={t} onClick={() => { setTab(t); setSortKey(null); setSortDir('desc'); }} style={{ padding: '10px 12px', background: tab === t ? theme.accent : theme.inputBg, color: '#fff', border: `1px solid ${tab === t ? theme.accent : theme.border}`, borderRadius: 4, fontWeight: 700, fontSize: 14, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Oswald','Inter',sans-serif", textAlign: 'left' }}>
                 {t === 'hitters' ? 'Hitters' : 'Pitchers'}
               </button>
             ))}
@@ -11023,10 +11037,15 @@ function LiveSpecPage() {
                   <th style={{ ...thBase, color: theme.textMuted, width: 48 }}>TM</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>{volLabel}</th>
                   <th style={{ ...thBase, color: theme.accent, width: 80, fontSize: 12 }}>COMP%</th>
-                  {/* % diff columns */}
-                  {currentStats.map(s => (
-                    <th key={`p_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#1e121e', width: 88 }}>{s.label}</th>
-                  ))}
+                  {/* % diff columns — clickable for sort */}
+                  {currentStats.map(s => {
+                    const active = sortKey === s.key;
+                    return (
+                      <th key={`p_${s.key}`} onClick={() => handleSort(s.key)} style={{ ...thBase, color: active ? theme.accent : '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#1e121e', width: 88, cursor: 'pointer', userSelect: 'none' }}>
+                        {s.label}{active ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                      </th>
+                    );
+                  })}
                   {/* Actual columns */}
                   {currentStats.map(s => (
                     <th key={`a_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#131e2e', width: 88 }}>{s.label}</th>
