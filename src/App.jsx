@@ -10644,6 +10644,8 @@ function PackSimulatorPage() {
 // ============================================================
 // PT LIVE — constants & scoring
 // ============================================================
+const normalizeName = (s) =>
+  (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const PT_LIVE_SLOTS = [
   { key: 'C',   label: 'C',    role: 'batter' },
   { key: '1B',  label: '1B',   role: 'batter' },
@@ -10823,7 +10825,7 @@ function PTLivePage() {
         const gameStatus = active[idx]?.status?.abstractGameState || '';
         ['home','away'].forEach(side => {
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
-            const name = (p.person?.fullName || '').toLowerCase().trim();
+            const name = normalizeName(p.person?.fullName);
             if (!name) return;
             const batting = p.stats?.batting || {};
             const pitching = p.stats?.pitching || {};
@@ -10848,7 +10850,7 @@ function PTLivePage() {
   const slotResults = useMemo(() => PT_LIVE_SLOTS.map(slot => {
     const card = team[slot.key] || null;
     if (!card) return { ...slot, card: null, playerData: null, pp: null };
-    const name = `${card.first_name || ''} ${card.last_name || ''}`.toLowerCase().trim();
+    const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
     const pd = mlbStats[name] || null;
     let pp = null;
     if (pd) {
