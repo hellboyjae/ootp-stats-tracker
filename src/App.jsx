@@ -10209,10 +10209,22 @@ function PackSimulatorPage() {
   const loadPackCards = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('pt_cards')
-        .select('card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs');
-      if (error) { setNeedsSetup(true); setIsLoading(false); return; }
+      // Paginate to bypass Supabase's default 1000-row limit
+      const allCards = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('pt_cards')
+          .select('card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs')
+          .range(from, from + pageSize - 1);
+        if (error) { setNeedsSetup(true); setIsLoading(false); return; }
+        if (!data || data.length === 0) break;
+        allCards.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      const data = allCards;
 
       const eligible = (data || []).filter(c =>
         c.packs === 1 &&
