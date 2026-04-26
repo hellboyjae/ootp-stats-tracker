@@ -10649,21 +10649,21 @@ function PackSimulatorPage() {
 const normalizeName = (s) =>
   (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const PT_LIVE_SLOTS = [
-  { key: 'C',   label: 'C',    role: 'batter' },
-  { key: '1B',  label: '1B',   role: 'batter' },
-  { key: '2B',  label: '2B',   role: 'batter' },
-  { key: '3B',  label: '3B',   role: 'batter' },
-  { key: 'SS',  label: 'SS',   role: 'batter' },
-  { key: 'LF',  label: 'LF',   role: 'batter' },
-  { key: 'CF',  label: 'CF',   role: 'batter' },
-  { key: 'RF',  label: 'RF',   role: 'batter' },
-  { key: 'DH',  label: 'DH',   role: 'batter' },
-  { key: 'U1',  label: 'UTIL', role: 'batter' },
-  { key: 'U2',  label: 'UTIL', role: 'batter' },
-  { key: 'SP1', label: 'SP',   role: 'sp' },
-  { key: 'SP2', label: 'SP',   role: 'sp' },
-  { key: 'RP1', label: 'RP',   role: 'rp' },
-  { key: 'RP2', label: 'RP',   role: 'rp' },
+  { key: 'C',   label: 'C',    role: 'batter', pos: 'C'  },
+  { key: '1B',  label: '1B',   role: 'batter', pos: '1B' },
+  { key: '2B',  label: '2B',   role: 'batter', pos: '2B' },
+  { key: '3B',  label: '3B',   role: 'batter', pos: '3B' },
+  { key: 'SS',  label: 'SS',   role: 'batter', pos: 'SS' },
+  { key: 'LF',  label: 'LF',   role: 'batter', pos: 'LF' },
+  { key: 'CF',  label: 'CF',   role: 'batter', pos: 'CF' },
+  { key: 'RF',  label: 'RF',   role: 'batter', pos: 'RF' },
+  { key: 'DH',  label: 'DH',   role: 'batter', pos: null },
+  { key: 'U1',  label: 'UTIL', role: 'batter', pos: null },
+  { key: 'U2',  label: 'UTIL', role: 'batter', pos: null },
+  { key: 'SP1', label: 'SP',   role: 'sp',     pos: null },
+  { key: 'SP2', label: 'SP',   role: 'sp',     pos: null },
+  { key: 'RP1', label: 'RP',   role: 'rp',     pos: null },
+  { key: 'RP2', label: 'RP',   role: 'rp',     pos: null },
 ];
 
 function ptLiveBatterPP(s) {
@@ -11107,7 +11107,7 @@ function PTLivePage() {
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
-      const cols = 'card_id,card_value,first_name,last_name,pitcher_role';
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position';
       const pageSize = 1000;
       const { data: firstPage, count } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
@@ -11145,6 +11145,30 @@ function PTLivePage() {
             .then(r => r.json()).catch(() => null)
         )
       );
+      // Merge IP strings (e.g. "5.1" = 5⅓ innings) into total outs, then back to string
+      const mergeIP = (a, b) => {
+        const toOuts = s => { const [inn, frac] = String(s || '0').split('.'); return parseInt(inn) * 3 + parseInt(frac || 0); };
+        const outs = toOuts(a) + toOuts(b);
+        return `${Math.floor(outs / 3)}.${outs % 3}`;
+      };
+      const sumStats = (a, b) => {
+        if (!a && !b) return null;
+        if (!a) return b;
+        if (!b) return a;
+        const result = { ...a };
+        for (const k of Object.keys(b)) {
+          if (k === 'inningsPitched') { result[k] = mergeIP(a[k], b[k]); }
+          else if (typeof b[k] === 'number') { result[k] = (result[k] || 0) + b[k]; }
+        }
+        return result;
+      };
+      const mergeStatus = (existing, incoming) => {
+        if (!existing) return incoming;
+        if (existing === 'Live' || incoming === 'Live') return 'Live';
+        if (existing === 'Preview' || incoming === 'Preview') return 'Preview';
+        return 'Final';
+      };
+
       const map = {};
       boxscores.forEach((bs, idx) => {
         if (!bs) return;
@@ -11153,13 +11177,19 @@ function PTLivePage() {
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
             const name = normalizeName(p.person?.fullName);
             if (!name) return;
-            const batting = p.stats?.batting || {};
+            const batting  = p.stats?.batting  || {};
             const pitching = p.stats?.pitching || {};
-            map[name] = {
-              batting: Object.keys(batting).length ? batting : null,
-              pitching: Object.keys(pitching).length ? pitching : null,
-              gameStatus,
-            };
+            const newBat   = Object.keys(batting).length  ? batting  : null;
+            const newPit   = Object.keys(pitching).length ? pitching : null;
+            if (map[name]) {
+              map[name] = {
+                batting:    sumStats(map[name].batting,  newBat),
+                pitching:   sumStats(map[name].pitching, newPit),
+                gameStatus: mergeStatus(map[name].gameStatus, gameStatus),
+              };
+            } else {
+              map[name] = { batting: newBat, pitching: newPit, gameStatus };
+            }
           });
         });
       });
@@ -11190,8 +11220,9 @@ function PTLivePage() {
 
   const totalPP = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
 
-  const getPickerCards = (role) => {
-    const pool = role === 'sp' ? sps : role === 'rp' ? rps : batters;
+  const getPickerCards = (slot) => {
+    let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
+    if (slot.pos) pool = pool.filter(c => c.position === slot.pos);
     if (!pickerSearch) return pool.slice(0, 60);
     const q = pickerSearch.toLowerCase();
     return pool.filter(c => `${c.first_name} ${c.last_name}`.toLowerCase().includes(q)).slice(0, 60);
@@ -11250,7 +11281,7 @@ function PTLivePage() {
     const pd = result?.playerData;
     const pp = result?.pp;
     const isOpen = activePicker === slot.key;
-    const pickerCards = isOpen ? getPickerCards(slot.role) : [];
+    const pickerCards = isOpen ? getPickerCards(slot) : [];
     const dotInfo = pd ? statusDot(pd.gameStatus) : null;
     const statsText = card && pd
       ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching))
@@ -11287,7 +11318,7 @@ function PTLivePage() {
                       autoFocus
                       value={pickerSearch}
                       onChange={e => setPickerSearch(e.target.value)}
-                      placeholder={`Search ${slot.role === 'sp' ? 'SPs' : slot.role === 'rp' ? 'relievers' : 'batters'}…`}
+                      placeholder={`Search ${slot.role === 'sp' ? 'SPs' : slot.role === 'rp' ? 'relievers' : slot.pos ? slot.pos : 'batters'}…`}
                       style={{ width: '100%', boxSizing: 'border-box', background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, borderRadius: 4, padding: '5px 8px', color: theme.textPrimary, fontSize: 13, outline: 'none' }}
                     />
                   </div>
