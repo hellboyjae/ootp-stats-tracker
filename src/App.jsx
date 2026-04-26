@@ -10522,14 +10522,12 @@ function PackSimulatorPage() {
                     </div>
                   ))}
                 </div>
-                {sessionPnL !== null && (
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: theme.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif" }}>Session Total</div>
-                    <div style={{ color: sessionPnL >= 0 ? theme.success : theme.error, fontSize: 14, fontWeight: 700, fontFamily: "'Oswald', sans-serif", marginTop: 2 }}>
-                      {sessionPnL >= 0 ? '▲' : '▼'} {Math.abs(sessionPnL).toLocaleString()} PP {sessionPnL >= 0 ? 'above' : 'below'} EV
-                    </div>
+                <div style={{ textAlign: 'right', visibility: sessionPnL !== null ? 'visible' : 'hidden' }}>
+                  <div style={{ color: theme.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif" }}>Session Total</div>
+                  <div style={{ color: (sessionPnL ?? 0) >= 0 ? theme.success : theme.error, fontSize: 14, fontWeight: 700, fontFamily: "'Oswald', sans-serif", marginTop: 2 }}>
+                    {(sessionPnL ?? 0) >= 0 ? '▲' : '▼'} {Math.abs(sessionPnL ?? 0).toLocaleString()} PP {(sessionPnL ?? 0) >= 0 ? 'above' : 'below'} EV
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}
