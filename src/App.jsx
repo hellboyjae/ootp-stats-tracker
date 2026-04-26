@@ -499,6 +499,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
             <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink>
             <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
+            <NavLink to="/pt-live" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>PT Live</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
@@ -10633,6 +10634,438 @@ function PackSimulatorPage() {
   );
 }
 
+// ============================================================
+// PT LIVE — constants & scoring
+// ============================================================
+const PT_LIVE_SLOTS = [
+  { key: 'C',   label: 'C',    role: 'batter' },
+  { key: '1B',  label: '1B',   role: 'batter' },
+  { key: '2B',  label: '2B',   role: 'batter' },
+  { key: '3B',  label: '3B',   role: 'batter' },
+  { key: 'SS',  label: 'SS',   role: 'batter' },
+  { key: 'LF',  label: 'LF',   role: 'batter' },
+  { key: 'CF',  label: 'CF',   role: 'batter' },
+  { key: 'RF',  label: 'RF',   role: 'batter' },
+  { key: 'DH',  label: 'DH',   role: 'batter' },
+  { key: 'U1',  label: 'UTIL', role: 'batter' },
+  { key: 'U2',  label: 'UTIL', role: 'batter' },
+  { key: 'SP1', label: 'SP',   role: 'sp' },
+  { key: 'SP2', label: 'SP',   role: 'sp' },
+  { key: 'RP1', label: 'RP',   role: 'rp' },
+  { key: 'RP2', label: 'RP',   role: 'rp' },
+];
+
+function ptLiveBatterPP(s) {
+  if (!s) return 0;
+  const h = s.hits || 0, d = s.doubles || 0, t = s.triples || 0, hr = s.homeRuns || 0;
+  const singles = Math.max(0, h - d - t - hr);
+  let pp = singles * 4 + d * 6 + t * 10 + hr * 15;
+  if (hr >= 3) pp += 100;
+  if (h >= 4) pp += h * 25;
+  pp += (s.runs || 0) * 6;
+  pp += (s.rbi || 0) * 6;
+  pp += ((s.baseOnBalls || 0) + (s.hitByPitch || 0)) * 3;
+  pp += (s.stolenBases || 0) * 10;
+  pp += (s.caughtStealing || 0) * -2;
+  return pp;
+}
+
+function ptLiveSpPP(s) {
+  if (!s) return 0;
+  let pp = 0;
+  pp += (s.wins || 0) * 20;
+  pp += (s.completeGames || 0) * 50;
+  pp += (s.shutouts || 0) * 100;
+  const ipStr = String(s.inningsPitched || '0');
+  const parts = ipStr.split('.');
+  const fullIP = parseInt(parts[0]) || 0;
+  const extraOuts = parseInt(parts[1]) || 0;
+  const totalOuts = fullIP * 3 + extraOuts;
+  pp += fullIP * 4;
+  const ks = s.strikeOuts || 0;
+  pp += ks * 2;
+  if (ks >= 10) pp += 40;
+  if (totalOuts >= 18 && (s.earnedRuns || 0) <= 3) pp += 5;
+  pp += (s.earnedRuns || 0) * -2;
+  pp += ((s.baseOnBalls || 0) + (s.hitByPitch || 0)) * -1;
+  return pp;
+}
+
+function ptLiveRpPP(s) {
+  if (!s) return 0;
+  let pp = 0;
+  pp += (s.wins || 0) * 12;
+  pp += (s.saves || 0) * 35;
+  pp += (s.holds || 0) * 20;
+  const fullIP = parseInt(String(s.inningsPitched || '0').split('.')[0]) || 0;
+  pp += fullIP * 4;
+  pp += (s.strikeOuts || 0) * 3;
+  pp += (s.earnedRuns || 0) * -2;
+  pp += (s.blownSaves || 0) * -1;
+  pp += ((s.baseOnBalls || 0) + (s.hitByPitch || 0)) * -1;
+  return pp;
+}
+
+function PTLiveScoringKey({ theme }) {
+  const col = (items) => items.map(([k, v]) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: theme.textMuted }}>
+      <span>{k}</span>
+      <span style={{ color: v.startsWith('-') ? '#ef4444' : '#22c55e', fontWeight: 600, marginLeft: 16 }}>{v}</span>
+    </div>
+  ));
+  return (
+    <div style={{ marginTop: 24, background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '16px 20px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 12 }}>Scoring Reference</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px 40px', fontSize: 12 }}>
+        <div>
+          <div style={{ fontWeight: 600, color: theme.textSecondary, marginBottom: 6 }}>Batters</div>
+          {col([['Single','4 PP'],['Double','6 PP'],['Triple','10 PP'],['Home Run','15 PP'],['3+ HR bonus','+100 PP'],['4+ Hit bonus','25 PP/hit'],['Run','6 PP'],['RBI','6 PP'],['BB / HBP','3 PP'],['SB','10 PP'],['CS','-2 PP']])}
+        </div>
+        <div>
+          <div style={{ fontWeight: 600, color: theme.textSecondary, marginBottom: 6 }}>Starting Pitchers</div>
+          {col([['Win','20 PP'],['Complete Game','50 PP'],['Shutout','100 PP'],['Inning Pitched','4 PP'],['Strikeout','2 PP'],['10+ K bonus','+40 PP'],['Quality Start','5 PP'],['Earned Run','-2 PP'],['BB / HBP','-1 PP']])}
+        </div>
+        <div>
+          <div style={{ fontWeight: 600, color: theme.textSecondary, marginBottom: 6 }}>Relief Pitchers</div>
+          {col([['Win','12 PP'],['Save','35 PP'],['Hold','20 PP'],['Inning Pitched','4 PP'],['Strikeout','3 PP'],['Earned Run','-2 PP'],['Blown Save','-1 PP'],['BB / HBP','-1 PP']])}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PTLivePage() {
+  const { theme } = useTheme();
+  const [batters, setBatters]         = useState([]);
+  const [sps, setSps]                 = useState([]);
+  const [rps, setRps]                 = useState([]);
+  const [isLoadingCards, setIsLoadingCards] = useState(true);
+  const [mlbStats, setMlbStats]       = useState({});
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [statsError, setStatsError]   = useState(null);
+  const [team, setTeam]               = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ptlive_team_v1') || '{}'); } catch { return {}; }
+  });
+  const [isEditing, setIsEditing]     = useState(false);
+  const [activePicker, setActivePicker] = useState(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const pickerRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem('ptlive_team_v1', JSON.stringify(team));
+  }, [team]);
+
+  useEffect(() => {
+    if (!activePicker) return;
+    const handler = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setActivePicker(null); setPickerSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [activePicker]);
+
+  useEffect(() => { loadPTLiveCards(); fetchMLBToday(); }, []);
+
+  const loadPTLiveCards = async () => {
+    setIsLoadingCards(true);
+    try {
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role';
+      const pageSize = 1000;
+      const { data: firstPage, count } = await supabase
+        .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
+      const totalPages = Math.ceil((count || 0) / pageSize);
+      const rest = totalPages > 1
+        ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, i) =>
+            supabase.from('pt_cards').select(cols).eq('card_type', 1)
+              .range((i + 1) * pageSize, (i + 2) * pageSize - 1)))
+        : [];
+      const all = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
+      const byOvr = (a, b) => (b.card_value || 0) - (a.card_value || 0);
+      const isBatter = c => !c.pitcher_role || Number(c.pitcher_role) === 0;
+      const isSP = c => Number(c.pitcher_role) === 1;
+      setBatters(all.filter(isBatter).sort(byOvr));
+      setSps(all.filter(isSP).sort(byOvr));
+      setRps(all.filter(c => !isBatter(c) && !isSP(c)).sort(byOvr));
+    } catch (e) { console.error('PTLive cards error:', e); }
+    setIsLoadingCards(false);
+  };
+
+  const fetchMLBToday = async () => {
+    setIsLoadingStats(true); setStatsError(null);
+    try {
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
+      const schedData = await schedRes.json();
+      const games = schedData.dates?.[0]?.games || [];
+      const active = games.filter(g => g.status?.abstractGameState !== 'Preview');
+      if (active.length === 0) { setMlbStats({}); setIsLoadingStats(false); return; }
+      const boxscores = await Promise.all(
+        active.map(g =>
+          fetch(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`)
+            .then(r => r.json()).catch(() => null)
+        )
+      );
+      const map = {};
+      boxscores.forEach((bs, idx) => {
+        if (!bs) return;
+        const gameStatus = active[idx]?.status?.abstractGameState || '';
+        ['home','away'].forEach(side => {
+          Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
+            const name = (p.person?.fullName || '').toLowerCase().trim();
+            if (!name) return;
+            const batting = p.stats?.batting || {};
+            const pitching = p.stats?.pitching || {};
+            map[name] = {
+              batting: Object.keys(batting).length ? batting : null,
+              pitching: Object.keys(pitching).length ? pitching : null,
+              gameStatus,
+            };
+          });
+        });
+      });
+      setMlbStats(map);
+    } catch (e) {
+      console.error('MLB stats error:', e);
+      setStatsError('Could not load MLB stats.');
+    }
+    setIsLoadingStats(false);
+  };
+
+  const slotResults = useMemo(() => PT_LIVE_SLOTS.map(slot => {
+    const card = team[slot.key] || null;
+    if (!card) return { ...slot, card: null, playerData: null, pp: null };
+    const name = `${card.first_name || ''} ${card.last_name || ''}`.toLowerCase().trim();
+    const pd = mlbStats[name] || null;
+    let pp = null;
+    if (pd) {
+      if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
+      else if (slot.role === 'sp' && pd.pitching) pp = ptLiveSpPP(pd.pitching);
+      else if (slot.role === 'rp' && pd.pitching) pp = ptLiveRpPP(pd.pitching);
+      else pp = 0;
+    }
+    return { ...slot, card, playerData: pd, pp };
+  }), [team, mlbStats]);
+
+  const totalPP = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
+
+  const getPickerCards = (role) => {
+    const pool = role === 'sp' ? sps : role === 'rp' ? rps : batters;
+    if (!pickerSearch) return pool.slice(0, 60);
+    const q = pickerSearch.toLowerCase();
+    return pool.filter(c => `${c.first_name} ${c.last_name}`.toLowerCase().includes(q)).slice(0, 60);
+  };
+
+  const selectCard = (slotKey, card) => {
+    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value } }));
+    setActivePicker(null); setPickerSearch('');
+  };
+
+  const clearSlot = (slotKey, e) => {
+    e.stopPropagation();
+    setTeam(prev => { const n = { ...prev }; delete n[slotKey]; return n; });
+  };
+
+  const tierColor = (ovr) => {
+    if (ovr >= 100) return '#a855f7';
+    if (ovr >= 90)  return '#32EBFC';
+    if (ovr >= 80)  return '#FFE61F';
+    if (ovr >= 70)  return '#E0E0E0';
+    if (ovr >= 60)  return '#cd7f32';
+    return '#888888';
+  };
+
+  const fmtBatter = (s) => {
+    if (!s) return '—';
+    const parts = [`${s.hits||0}H`];
+    if (s.homeRuns)     parts.push(`${s.homeRuns}HR`);
+    if (s.rbi)          parts.push(`${s.rbi}RBI`);
+    if (s.runs)         parts.push(`${s.runs}R`);
+    const bb = (s.baseOnBalls||0)+(s.hitByPitch||0);
+    if (bb)             parts.push(`${bb}BB`);
+    if (s.stolenBases)  parts.push(`${s.stolenBases}SB`);
+    return parts.join(' · ');
+  };
+
+  const fmtPitcher = (s) => {
+    if (!s) return '—';
+    const parts = [`${s.inningsPitched||'0.0'}IP`, `${s.strikeOuts||0}K`, `${s.earnedRuns||0}ER`];
+    if (s.wins)        parts.push('W');
+    if (s.saves)       parts.push('SV');
+    if (s.holds)       parts.push('HLD');
+    if (s.blownSaves)  parts.push('BS');
+    return parts.join(' · ');
+  };
+
+  const statusDot = (status) => {
+    if (status === 'Final') return { color: '#6b7280', label: 'Final' };
+    if (status === 'Live')  return { color: '#22c55e', label: '● Live' };
+    return { color: '#f59e0b', label: status || '' };
+  };
+
+  const renderRow = (slot) => {
+    const result = slotResults.find(r => r.key === slot.key);
+    const card = result?.card;
+    const pd = result?.playerData;
+    const pp = result?.pp;
+    const isOpen = activePicker === slot.key;
+    const pickerCards = isOpen ? getPickerCards(slot.role) : [];
+    const dotInfo = pd ? statusDot(pd.gameStatus) : null;
+    const statsText = card && pd
+      ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching))
+      : null;
+
+    return (
+      <div key={slot.key} style={{ borderBottom: `1px solid ${theme.border}`, position: 'relative' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
+
+          {/* Slot label */}
+          <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em' }}>{slot.label}</div>
+
+          {/* Card picker / display */}
+          {isEditing ? (
+            <div ref={isOpen ? pickerRef : null} style={{ position: 'relative' }}>
+              <div
+                onClick={() => { setActivePicker(isOpen ? null : slot.key); setPickerSearch(''); }}
+                style={{ cursor: 'pointer', background: theme.inputBg, border: `1px solid ${isOpen ? theme.accent : theme.inputBorder}`, borderRadius: 6, padding: '5px 10px', fontSize: 13, color: card ? theme.textPrimary : theme.textDim, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, userSelect: 'none' }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {card
+                    ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 6 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
+                    : 'Select player…'}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  {card && <span onMouseDown={(e) => clearSlot(slot.key, e)} style={{ color: theme.error, fontSize: 13, lineHeight: 1, cursor: 'pointer' }}>✕</span>}
+                  <span style={{ color: theme.textDim, fontSize: 9 }}>▼</span>
+                </div>
+              </div>
+              {isOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, zIndex: 200, background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6, boxShadow: '0 8px 28px rgba(0,0,0,0.6)' }}>
+                  <div style={{ padding: 8, borderBottom: `1px solid ${theme.border}` }}>
+                    <input
+                      autoFocus
+                      value={pickerSearch}
+                      onChange={e => setPickerSearch(e.target.value)}
+                      placeholder={`Search ${slot.role === 'sp' ? 'SPs' : slot.role === 'rp' ? 'relievers' : 'batters'}…`}
+                      style={{ width: '100%', boxSizing: 'border-box', background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, borderRadius: 4, padding: '5px 8px', color: theme.textPrimary, fontSize: 13, outline: 'none' }}
+                    />
+                  </div>
+                  <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                    {isLoadingCards
+                      ? <div style={{ padding: 12, color: theme.textMuted, fontSize: 12 }}>Loading…</div>
+                      : pickerCards.length === 0
+                        ? <div style={{ padding: 12, color: theme.textMuted, fontSize: 12 }}>No matches</div>
+                        : pickerCards.map(c => (
+                          <div
+                            key={c.card_id}
+                            onMouseDown={() => selectCard(slot.key, c)}
+                            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${theme.border}` }}
+                            onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <span style={{ color: tierColor(c.card_value || 0), fontWeight: 700, minWidth: 28 }}>{c.card_value}</span>
+                            <span>{c.first_name} {c.last_name}</span>
+                          </div>
+                        ))
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {card
+                ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
+                : <span style={{ color: theme.textDim }}>—</span>}
+            </div>
+          )}
+
+          {/* Game status */}
+          <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {dotInfo?.label || ''}
+          </div>
+
+          {/* Stats */}
+          <div style={{ fontSize: 11, color: theme.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isLoadingStats
+              ? <span style={{ color: theme.textDim }}>…</span>
+              : card
+                ? (statsText || <span style={{ color: theme.textDim }}>No game</span>)
+                : ''}
+          </div>
+
+          {/* PP */}
+          <div style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: (pp || 0) > 0 ? '#22c55e' : (pp || 0) < 0 ? '#ef4444' : theme.textDim }}>
+            {card && pp !== null ? `${pp >= 0 ? '+' : ''}${pp}` : '—'}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Layout>
+      {/* Header */}
+      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: '4px solid #22c55e' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#22c55e' }}>PT Live</h1>
+            <div style={{ fontSize: 11, color: theme.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div style={{ textAlign: 'right', fontSize: 12, color: theme.textMuted }}>
+              {isLoadingStats ? 'Loading MLB stats…' : statsError ? <span style={{ color: theme.error }}>{statsError}</span> : 'Refresh page to update'}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
+              <div style={{ fontSize: 11, color: theme.textDim, textTransform: 'uppercase', marginTop: 2 }}>Total Points</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 24px' }}>
+        {/* Edit button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+          <button
+            onClick={() => { setIsEditing(e => !e); setActivePicker(null); setPickerSearch(''); }}
+            style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
+          >
+            {isEditing ? 'Done Editing' : 'Edit Team'}
+          </button>
+        </div>
+
+        {/* Roster */}
+        <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
+          {/* Batters header */}
+          <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>BATTERS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+          </div>
+          {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
+
+          {/* Pitchers header */}
+          <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>PITCHERS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+          </div>
+          {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
+        </div>
+
+        <PTLiveScoringKey theme={theme} />
+      </div>
+    </Layout>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><BannerProvider><Routes>
     <Route path="/" element={<WelcomePage />} />
@@ -10646,6 +11079,7 @@ export default function App() {
     <Route path="/re-viewer" element={<REViewerPage />} />
     <Route path="/database" element={<DatabasePage />} />
     <Route path="/pack-simulator" element={<PackSimulatorPage />} />
+    <Route path="/pt-live" element={<PTLivePage />} />
   </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
