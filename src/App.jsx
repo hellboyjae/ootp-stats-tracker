@@ -10649,14 +10649,14 @@ function PackSimulatorPage() {
 const normalizeName = (s) =>
   (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const PT_LIVE_SLOTS = [
-  { key: 'C',   label: 'C',    role: 'batter', pos: 'C'  },
-  { key: '1B',  label: '1B',   role: 'batter', pos: '1B' },
-  { key: '2B',  label: '2B',   role: 'batter', pos: '2B' },
-  { key: '3B',  label: '3B',   role: 'batter', pos: '3B' },
-  { key: 'SS',  label: 'SS',   role: 'batter', pos: 'SS' },
-  { key: 'LF',  label: 'LF',   role: 'batter', pos: 'LF' },
-  { key: 'CF',  label: 'CF',   role: 'batter', pos: 'CF' },
-  { key: 'RF',  label: 'RF',   role: 'batter', pos: 'RF' },
+  { key: 'C',   label: 'C',    role: 'batter', pos: 2    },
+  { key: '1B',  label: '1B',   role: 'batter', pos: 3    },
+  { key: '2B',  label: '2B',   role: 'batter', pos: 4    },
+  { key: '3B',  label: '3B',   role: 'batter', pos: 5    },
+  { key: 'SS',  label: 'SS',   role: 'batter', pos: 6    },
+  { key: 'LF',  label: 'LF',   role: 'batter', pos: 7    },
+  { key: 'CF',  label: 'CF',   role: 'batter', pos: 8    },
+  { key: 'RF',  label: 'RF',   role: 'batter', pos: 9    },
   { key: 'DH',  label: 'DH',   role: 'batter', pos: null },
   { key: 'U1',  label: 'UTIL', role: 'batter', pos: null },
   { key: 'U2',  label: 'UTIL', role: 'batter', pos: null },
@@ -11222,7 +11222,7 @@ function PTLivePage() {
 
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
-    if (slot.pos) pool = pool.filter(c => c.position === slot.pos);
+    if (slot.pos) pool = pool.filter(c => Number(c.position) === slot.pos);
     if (!pickerSearch) return pool.slice(0, 60);
     const q = pickerSearch.toLowerCase();
     return pool.filter(c => `${c.first_name} ${c.last_name}`.toLowerCase().includes(q)).slice(0, 60);
