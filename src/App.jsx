@@ -10505,10 +10505,12 @@ function PackSimulatorPage() {
                     : `▼ ${(selectedEV - drawnTotal).toLocaleString()} below EV`}
                 </div>
               )}
-              <div style={{ color: '#ffffff', fontSize: 11, marginTop: 8 }}>
-                Inspired &amp; contributed by Cratevar —{' '}
-                <a href="https://cratervar.com/" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', textDecoration: 'underline' }}>cratervar.com</a>
-              </div>
+            </div>
+
+            {/* Credit — always visible */}
+            <div style={{ color: '#ffffff', fontSize: 11, textAlign: 'center' }}>
+              Inspired &amp; contributed by Cratevar —{' '}
+              <a href="https://cratervar.com/" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', textDecoration: 'underline' }}>cratervar.com</a>
             </div>
           </div>
         </div>
