@@ -11035,49 +11035,51 @@ function PTLivePage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px' }}>
 
-        {/* Left sidebar: scoring reference */}
-        <div style={{ width: 190, flexShrink: 0 }}>
-          <PTLiveScoringKey theme={theme} />
+        {/* Edit button above the flex row — keeps sidebar top flush with roster top */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+          <button
+            onClick={() => { setIsEditing(e => !e); setActivePicker(null); setPickerSearch(''); }}
+            style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
+          >
+            {isEditing ? 'Done Editing' : 'Edit Team'}
+          </button>
         </div>
 
-        {/* Right: edit button + roster */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Edit button */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-            <button
-              onClick={() => { setIsEditing(e => !e); setActivePicker(null); setPickerSearch(''); }}
-              style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
-            >
-              {isEditing ? 'Done Editing' : 'Edit Team'}
-            </button>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+
+          {/* Left sidebar */}
+          <div style={{ width: 190, flexShrink: 0 }}>
+            <PTLiveScoringKey theme={theme} />
           </div>
 
-          {/* Roster */}
-          <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
-            {/* Batters header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>BATTERS</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
-            </div>
-            {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
+          {/* Right: roster */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
+              {/* Batters header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>BATTERS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+              </div>
+              {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
 
-            {/* Pitchers header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>PITCHERS</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+              {/* Pitchers header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>PITCHERS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+              </div>
+              {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
             </div>
-            {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
           </div>
+
         </div>
-
       </div>
     </Layout>
   );
