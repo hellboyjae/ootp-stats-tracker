@@ -498,6 +498,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
             <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
             <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink>
+            <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
             <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
@@ -1958,6 +1959,11 @@ function InfoPage() {
           'Pos Rating 2B': 'pos_2b', 'Pos Rating 3B': 'pos_3b', 'Pos Rating SS': 'pos_ss',
           'Pos Rating LF': 'pos_lf', 'Pos Rating CF': 'pos_cf', 'Pos Rating RF': 'pos_rf',
           'Card ID': 'card_id',
+          'Card Value': 'card_value',
+          'Card Type': 'card_type',
+          'Card Badge': 'card_badge',
+          'Last 10 Price': 'last_10_price',
+          'packs': 'packs',
         };
 
         console.log('PapaParse headers:', parsed.meta?.fields?.slice(0, 15));
@@ -1968,7 +1974,7 @@ function InfoPage() {
           const mapped = {};
           for (const [csvCol, dbCol] of Object.entries(colMap)) {
             const val = row[csvCol];
-            if (dbCol === 'card_title' || dbCol === 'last_name' || dbCol === 'first_name' || dbCol === 'pitcher_role' || dbCol === 'velocity') {
+            if (dbCol === 'card_title' || dbCol === 'last_name' || dbCol === 'first_name' || dbCol === 'pitcher_role' || dbCol === 'velocity' || dbCol === 'card_badge') {
               mapped[dbCol] = val || null;
             } else {
               mapped[dbCol] = parseInt(val) || 0;
@@ -9973,6 +9979,524 @@ function DatabasePage() {
   );
 }
 
+// ============ Pack Simulator ============
+
+const PACK_TIER_ORDER_SIM = ['Iron', 'Bronze', 'Silver', 'Gold', 'Diamond', 'Perfect'];
+
+const PACK_TIER_COLORS_SIM = {
+  Iron:    '#888888',
+  Bronze:  '#cd7f32',
+  Silver:  '#E0E0E0',
+  Gold:    '#FFE61F',
+  Diamond: '#32EBFC',
+  Perfect: '#a855f7',
+};
+
+const PACK_TIER_GLOW_SIM = {
+  Iron:    '#88888840',
+  Bronze:  '#cd7f3240',
+  Silver:  '#E0E0E040',
+  Gold:    '#FFE61F40',
+  Diamond: '#32EBFC40',
+  Perfect: '#a855f740',
+};
+
+const PACK_TIER_BG_SIM = {
+  Iron:    'linear-gradient(160deg, #1e2430 0%, #161b26 100%)',
+  Bronze:  'linear-gradient(160deg, #2e1a08 0%, #1e0e02 100%)',
+  Silver:  'linear-gradient(160deg, #252f3e 0%, #161d2a 100%)',
+  Gold:    'linear-gradient(160deg, #2e2504 0%, #1e1802 100%)',
+  Diamond: 'linear-gradient(160deg, #062238 0%, #031426 100%)',
+  Perfect: 'linear-gradient(160deg, #1e0638 0%, #120224 100%)',
+};
+
+// Unnormalized weights from outbaksean/ootp-pack-sampler
+const _RAW_W = { Iron: 0.769, Bronze: 0.200, Silver: 0.100, Gold: 0.020, Diamond: 0.00667, Perfect: 0.001 };
+const _W_TOTAL = Object.values(_RAW_W).reduce((a, b) => a + b, 0);
+const PACK_TIER_WEIGHTS_SIM = Object.fromEntries(
+  Object.entries(_RAW_W).map(([k, v]) => [k, v / _W_TOTAL])
+);
+
+const PACK_DEFINITIONS_SIM = [
+  { key: 'standard',      label: 'Standard',        group: 'Standard',   guaranteed: ['Bronze',   null,      null,      null,      null,      null     ] },
+  { key: 'silver',        label: 'Silver',           group: 'Standard',   guaranteed: ['Silver',   null,      null,      null,      null,      null     ] },
+  { key: 'gold',          label: 'Gold',             group: 'Standard',   guaranteed: ['Gold',     null,      null,      null,      null,      null     ] },
+  { key: 'diamond',       label: 'Diamond',          group: 'Standard',   guaranteed: ['Diamond',  null,      null,      null,      null,      null     ] },
+  { key: 'perfect',       label: 'Perfect',          group: 'Standard',   guaranteed: ['Perfect',  null,      null,      null,      null,      null     ] },
+  { key: 'rainbow',       label: 'Rainbow',          group: 'Standard',   guaranteed: ['Iron',     'Bronze',  'Silver',  'Gold',    'Diamond', 'Perfect'] },
+  { key: 'histSilver',    label: 'Hist Silver',      group: 'Historical', guaranteed: ['Silver',   null,      null,      null,      null,      null     ] },
+  { key: 'histGold',      label: 'Hist Gold',        group: 'Historical', guaranteed: ['Gold',     null,      null,      null,      null,      null     ] },
+  { key: 'histDiamond',   label: 'Hist Diamond',     group: 'Historical', guaranteed: ['Diamond',  null,      null,      null,      null,      null     ] },
+  { key: 'histPerfect',   label: 'Hist Perfect',     group: 'Historical', guaranteed: ['Perfect',  null,      null,      null,      null,      null     ] },
+  { key: 'histRainbow',   label: 'Hist Rainbow',     group: 'Historical', guaranteed: ['Iron',     'Bronze',  'Silver',  'Gold',    'Diamond', 'Perfect'] },
+  { key: 'allDiamond',    label: 'All Diamond',      group: 'Full Tier',  guaranteed: ['Diamond',  'Diamond', 'Diamond', 'Diamond', 'Diamond', 'Diamond'] },
+  { key: 'allPerfect',    label: 'All Perfect',      group: 'Full Tier',  guaranteed: ['Perfect',  'Perfect', 'Perfect', 'Perfect', 'Perfect', 'Perfect'] },
+  { key: 'histAllDiamond',label: 'Hist All Diamond', group: 'Full Tier',  guaranteed: ['Diamond',  'Diamond', 'Diamond', 'Diamond', 'Diamond', 'Diamond'] },
+  { key: 'histAllPerfect',label: 'Hist All Perfect', group: 'Full Tier',  guaranteed: ['Perfect',  'Perfect', 'Perfect', 'Perfect', 'Perfect', 'Perfect'] },
+];
+
+function getSimCardTier(ovr) {
+  if (ovr >= 100) return 'Perfect';
+  if (ovr >= 90)  return 'Diamond';
+  if (ovr >= 80)  return 'Gold';
+  if (ovr >= 70)  return 'Silver';
+  if (ovr >= 60)  return 'Bronze';
+  return 'Iron';
+}
+
+function drawSimRandomTier() {
+  let r = Math.random();
+  for (const tier of PACK_TIER_ORDER_SIM) {
+    r -= PACK_TIER_WEIGHTS_SIM[tier];
+    if (r <= 0) return tier;
+  }
+  return 'Iron';
+}
+
+function openSimPack(pack, cardPool) {
+  return pack.guaranteed.map(slot => {
+    const tier = slot || drawSimRandomTier();
+    const pool = cardPool[tier] || [];
+    const card = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    return { card, tier };
+  });
+}
+
+function calcSimPackEV(pack, avgByTier) {
+  const randEV = PACK_TIER_ORDER_SIM.reduce(
+    (sum, tier) => sum + (avgByTier[tier] || 0) * PACK_TIER_WEIGHTS_SIM[tier], 0
+  );
+  return pack.guaranteed.reduce((sum, slot) => sum + (slot ? (avgByTier[slot] || 0) : randEV), 0);
+}
+
+function getSimTopTier(pack) {
+  return [...pack.guaranteed].reverse().find(t => t !== null) || 'Bronze';
+}
+
+function PackFlipCard({ entry, isFlipped, index }) {
+  const { theme } = useTheme();
+  const SUPABASE_IMG = 'https://iscjwwaaukxfoiqgaqmw.supabase.co/storage/v1/object/public/card-images';
+  const tier = entry?.tier || 'Iron';
+  const tierColor = PACK_TIER_COLORS_SIM[tier];
+  const imgUrl = entry?.card?.card_id ? `${SUPABASE_IMG}/${entry.card.card_id}.webp` : null;
+  const [imgError, setImgError] = useState(false);
+
+  const displayName = entry?.card
+    ? (entry.card.first_name ? `${entry.card.first_name} ${entry.card.last_name}` : entry.card.card_title)
+    : '???';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <div style={{ perspective: '1000px', width: 150, height: 210, flexShrink: 0 }}>
+        <div style={{
+          width: '100%', height: '100%', position: 'relative',
+          transformStyle: 'preserve-3d',
+          transition: 'transform 0.65s cubic-bezier(0.4, 0, 0.2, 1)',
+          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+        }}>
+          {/* Card Back */}
+          <div style={{
+            position: 'absolute', inset: 0, backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden', borderRadius: 10, overflow: 'hidden',
+            background: PACK_TIER_BG_SIM[tier],
+            border: `2px solid ${tierColor}30`,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+            boxShadow: `0 0 20px ${PACK_TIER_GLOW_SIM[tier]}`,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              border: `2px solid ${tierColor}50`,
+              background: `${tierColor}12`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: tierColor, fontFamily: "'Oswald', sans-serif", letterSpacing: '0.05em' }}>PT</span>
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: `${tierColor}90`, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.12em' }}>Perfect Team</div>
+          </div>
+          {/* Card Front */}
+          <div style={{
+            position: 'absolute', inset: 0, backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden', borderRadius: 10, overflow: 'hidden',
+            transform: 'rotateY(180deg)',
+            border: `2px solid ${tierColor}60`,
+            boxShadow: `0 0 20px ${PACK_TIER_GLOW_SIM[tier]}, 0 4px 16px rgba(0,0,0,0.5)`,
+            background: PACK_TIER_BG_SIM[tier],
+          }}>
+            {imgUrl && !imgError ? (
+              <img
+                src={imgUrl}
+                alt={displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: tierColor, textAlign: 'center', lineHeight: 1.4 }}>{displayName}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {/* Below-card info (only visible when flipped) */}
+      <div style={{
+        textAlign: 'center', transition: 'opacity 0.3s ease',
+        opacity: isFlipped ? 1 : 0, pointerEvents: isFlipped ? 'auto' : 'none',
+        minHeight: 44,
+      }}>
+        <div style={{
+          display: 'inline-block', padding: '2px 8px', borderRadius: 4, marginBottom: 4,
+          background: `${tierColor}20`, border: `1px solid ${tierColor}50`,
+          color: tierColor, fontSize: 10, fontWeight: 700,
+          fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em',
+        }}>{tier}</div>
+        <div style={{
+          color: '#e8edf5', fontSize: 11, fontWeight: 600,
+          maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{displayName}</div>
+        {entry?.card?.last_10_price > 0 && (
+          <div style={{ color: '#a4b1c7', fontSize: 10, marginTop: 1 }}>
+            {entry.card.last_10_price.toLocaleString()} PP
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PackSimulatorPage() {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+  const [cardPool, setCardPool]         = useState({});
+  const [avgByTier, setAvgByTier]       = useState({});
+  const [isLoading, setIsLoading]       = useState(true);
+  const [needsSetup, setNeedsSetup]     = useState(false);
+  const [selectedPack, setSelectedPack] = useState(PACK_DEFINITIONS_SIM[1]); // Silver default
+  const [drawnCards, setDrawnCards]     = useState([]);
+  const [flipped, setFlipped]           = useState(new Set());
+  const [isOpening, setIsOpening]       = useState(false);
+  const [hasOpened, setHasOpened]       = useState(false);
+  const [openKey, setOpenKey]           = useState(0); // force remount of flip cards
+  const [notification, setNotification] = useState(null);
+  const timeoutsRef = useRef([]);
+
+  useEffect(() => {
+    loadPackCards();
+    return () => timeoutsRef.current.forEach(clearTimeout);
+  }, []);
+
+  const loadPackCards = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pt_cards')
+        .select('card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs');
+      if (error) { setNeedsSetup(true); setIsLoading(false); return; }
+
+      const eligible = (data || []).filter(c =>
+        c.packs === 1 &&
+        !['CS', 'ME', 'PTCS'].includes(c.card_badge || '') &&
+        (c.card_value || 0) > 0
+      );
+      if (eligible.length === 0) { setNeedsSetup(true); setIsLoading(false); return; }
+
+      const pool = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, []]));
+      const sums = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
+      const cnts = Object.fromEntries(PACK_TIER_ORDER_SIM.map(t => [t, 0]));
+
+      for (const card of eligible) {
+        const tier = getSimCardTier(card.card_value);
+        pool[tier].push(card);
+        if ((card.last_10_price || 0) > 0) { sums[tier] += card.last_10_price; cnts[tier]++; }
+      }
+
+      const avgs = Object.fromEntries(
+        PACK_TIER_ORDER_SIM.map(t => [t, cnts[t] > 0 ? Math.round(sums[t] / cnts[t]) : 0])
+      );
+      setCardPool(pool);
+      setAvgByTier(avgs);
+    } catch (e) { console.error(e); setNeedsSetup(true); }
+    setIsLoading(false);
+  };
+
+  const handleOpenPack = () => {
+    if (isOpening) return;
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+    const cards = openSimPack(selectedPack, cardPool);
+    setDrawnCards(cards);
+    setFlipped(new Set());
+    setIsOpening(true);
+    setHasOpened(false);
+    setOpenKey(k => k + 1);
+
+    cards.forEach((_, i) => {
+      const t = setTimeout(() => {
+        setFlipped(prev => new Set([...prev, i]));
+        if (i === cards.length - 1) { setIsOpening(false); setHasOpened(true); }
+      }, 350 + i * 280);
+      timeoutsRef.current.push(t);
+    });
+  };
+
+  const handleSelectPack = (pack) => {
+    timeoutsRef.current.forEach(clearTimeout);
+    setSelectedPack(pack);
+    setDrawnCards([]);
+    setFlipped(new Set());
+    setIsOpening(false);
+    setHasOpened(false);
+  };
+
+  const totalCards = Object.values(cardPool).flat().length;
+  const selectedEV = selectedPack ? Math.round(calcSimPackEV(selectedPack, avgByTier)) : 0;
+  const drawnTotal = drawnCards.reduce((s, dc) => s + (dc?.card?.last_10_price || 0), 0);
+  const topTier = selectedPack ? getSimTopTier(selectedPack) : 'Bronze';
+  const topColor = PACK_TIER_COLORS_SIM[topTier];
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div style={{ ...styles.loading }}>
+          <div className="loading-spinner" />
+          <div style={{ color: theme.textMuted }}>Loading card pool...</div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (needsSetup) {
+    return (
+      <Layout>
+        <div style={{ padding: '60px 40px', maxWidth: 680, margin: '0 auto' }}>
+          <div style={{ fontSize: 44, marginBottom: 16, textAlign: 'center' }}>📦</div>
+          <h2 style={{ color: theme.textPrimary, marginBottom: 10, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', textAlign: 'center' }}>Card Pool Not Ready</h2>
+          <p style={{ color: theme.textSecondary, lineHeight: 1.7, marginBottom: 20, textAlign: 'center' }}>
+            Pack Simulator needs updated card data. Run this SQL in Supabase first, then re-upload <code style={{ background: theme.panelBg, padding: '1px 6px', borderRadius: 4, fontSize: 12 }}>pt_card_list.csv</code> from the Info tab.
+          </p>
+          <pre style={{
+            background: theme.panelBg, border: `1px solid ${theme.border}`, borderRadius: 8,
+            padding: '16px 20px', fontSize: 12, color: theme.textSecondary, lineHeight: 1.7,
+            overflowX: 'auto', fontFamily: 'ui-monospace, monospace',
+          }}>{`ALTER TABLE pt_cards
+  ADD COLUMN IF NOT EXISTS card_value      INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS packs           INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_10_price   INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS card_badge      TEXT    DEFAULT '',
+  ADD COLUMN IF NOT EXISTS card_type       INTEGER DEFAULT 0;`}</pre>
+          <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 12, textAlign: 'center' }}>
+            After running the SQL, go to Info → Upload pt_card_list.csv, then return here.
+          </p>
+        </div>
+      </Layout>
+    );
+  }
+
+  const packGroups = ['Standard', 'Historical', 'Full Tier'];
+
+  const sidebarGroupLabel = {
+    fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+    fontFamily: "'Oswald', sans-serif", color: theme.textDim,
+    borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, marginBottom: 8, marginTop: 4,
+  };
+
+  return (
+    <Layout notification={notification}>
+      <div style={{ display: 'flex', maxWidth: 1800, margin: '0 auto', minHeight: 'calc(100vh - 58px)' }}>
+
+        {/* ── Sidebar ── */}
+        <div style={{
+          width: 240, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`,
+          padding: '16px 12px', flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0,
+        }}>
+          {/* Header */}
+          <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
+            <div style={{ color: theme.textMuted, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif", marginBottom: 4 }}>Pack Simulator</div>
+            <div style={{ color: theme.textDim, fontSize: 11 }}>
+              <span style={{ color: theme.accent, fontWeight: 600 }}>{totalCards.toLocaleString()}</span> eligible cards
+            </div>
+          </div>
+
+          {/* Pack groups */}
+          {packGroups.map(group => (
+            <div key={group} style={{ marginBottom: 18 }}>
+              <div style={sidebarGroupLabel}>{group}</div>
+              {PACK_DEFINITIONS_SIM.filter(p => p.group === group).map(pack => {
+                const ev = Math.round(calcSimPackEV(pack, avgByTier));
+                const isSelected = selectedPack?.key === pack.key;
+                const tc = PACK_TIER_COLORS_SIM[getSimTopTier(pack)];
+                return (
+                  <button key={pack.key} onClick={() => handleSelectPack(pack)} style={{
+                    width: '100%', marginBottom: 3, padding: '7px 10px',
+                    background: isSelected ? `${tc}18` : 'transparent',
+                    border: `1px solid ${isSelected ? tc + '55' : theme.border}`,
+                    borderRadius: 6, cursor: 'pointer',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    transition: 'all 0.12s ease',
+                  }}>
+                    <span style={{
+                      color: isSelected ? tc : theme.textSecondary,
+                      fontSize: 12, fontWeight: 600,
+                      fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em',
+                    }}>{pack.label}</span>
+                    {ev > 0 && (
+                      <span style={{ color: theme.textDim, fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>
+                        {ev.toLocaleString()}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+
+          {/* Avg L10 by tier */}
+          <div style={{
+            marginTop: 'auto', paddingTop: 14, borderTop: `1px solid ${theme.border}`,
+          }}>
+            <div style={{ ...sidebarGroupLabel, marginBottom: 10, borderBottom: 'none', paddingBottom: 0 }}>Avg L10 by Tier</div>
+            {[...PACK_TIER_ORDER_SIM].reverse().map(tier => (
+              <div key={tier} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                <span style={{ color: PACK_TIER_COLORS_SIM[tier], fontSize: 11, fontWeight: 600, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{tier}</span>
+                <span style={{ color: theme.textDim, fontSize: 11, fontFamily: 'ui-monospace, monospace' }}>
+                  {(avgByTier[tier] || 0) > 0 ? (avgByTier[tier] || 0).toLocaleString() : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Main Content ── */}
+        <div style={{ flex: 1, padding: '28px 36px', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto' }}>
+
+          {/* Pack header */}
+          {selectedPack && (
+            <div style={{ width: '100%', maxWidth: 960, marginBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{
+                    margin: 0, fontSize: 30, fontFamily: "'Oswald', sans-serif",
+                    textTransform: 'uppercase', letterSpacing: '0.06em', color: topColor,
+                    textShadow: `0 0 20px ${topColor}40`,
+                  }}>{selectedPack.label} Pack</h2>
+                  <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span>{selectedPack.group}</span>
+                    {selectedEV > 0 && (
+                      <>
+                        <span style={{ color: theme.textDim }}>•</span>
+                        <span>EV: <span style={{ color: theme.gold, fontWeight: 600 }}>{selectedEV.toLocaleString()} PP</span></span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {/* Guaranteed slots */}
+                <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', paddingTop: 4 }}>
+                  {selectedPack.guaranteed.map((slot, i) => {
+                    const sc = slot ? PACK_TIER_COLORS_SIM[slot] : theme.textDim;
+                    return (
+                      <div key={i} style={{
+                        padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em',
+                        background: slot ? `${sc}18` : theme.panelBg,
+                        border: `1px solid ${slot ? sc + '50' : theme.border}`,
+                        color: sc,
+                      }}>{slot || 'RND'}</div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Open Pack Button */}
+              <button
+                onClick={handleOpenPack}
+                disabled={isOpening}
+                style={{
+                  marginTop: 20,
+                  padding: '13px 52px',
+                  background: isOpening
+                    ? theme.panelBg
+                    : `linear-gradient(135deg, ${topColor}dd 0%, ${topColor}88 100%)`,
+                  border: `2px solid ${isOpening ? theme.border : topColor + '70'}`,
+                  borderRadius: 8, cursor: isOpening ? 'not-allowed' : 'pointer',
+                  color: isOpening ? theme.textDim : '#fff',
+                  fontSize: 16, fontWeight: 700,
+                  fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.1em',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isOpening ? 'none' : `0 4px 24px ${topColor}35`,
+                }}
+              >
+                {isOpening ? 'Opening...' : hasOpened ? '⚾ Open Another' : '⚾ Open Pack'}
+              </button>
+            </div>
+          )}
+
+          {/* Card Grid */}
+          <div style={{ width: '100%', maxWidth: 960 }}>
+            {drawnCards.length > 0 ? (
+              <>
+                <div style={{
+                  display: 'flex', gap: 18, justifyContent: 'center',
+                  flexWrap: 'wrap', marginBottom: 28,
+                }}>
+                  {drawnCards.map((entry, i) => (
+                    <PackFlipCard
+                      key={`${openKey}-${i}`}
+                      entry={entry}
+                      isFlipped={flipped.has(i)}
+                      index={i}
+                    />
+                  ))}
+                </div>
+
+                {/* Pack value summary */}
+                {hasOpened && (
+                  <div style={{
+                    textAlign: 'center', padding: '18px 28px',
+                    background: theme.panelBg, borderRadius: 10,
+                    border: `1px solid ${theme.border}`,
+                    maxWidth: 380, margin: '0 auto',
+                  }}>
+                    <div style={{ color: theme.textMuted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Oswald', sans-serif", marginBottom: 6 }}>Pack Value</div>
+                    <div style={{ color: theme.gold, fontSize: 28, fontWeight: 700, fontFamily: "'Oswald', sans-serif" }}>
+                      {drawnTotal.toLocaleString()} PP
+                    </div>
+                    {selectedEV > 0 && (
+                      <div style={{
+                        color: drawnTotal >= selectedEV ? theme.success : theme.error,
+                        fontSize: 12, marginTop: 5, fontWeight: 600,
+                      }}>
+                        {drawnTotal >= selectedEV
+                          ? `▲ ${(drawnTotal - selectedEV).toLocaleString()} above EV`
+                          : `▼ ${(selectedEV - drawnTotal).toLocaleString()} below EV`}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Empty state */
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 40, gap: 20 }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <div key={i} style={{
+                      width: 150, height: 210, borderRadius: 10,
+                      background: theme.panelBg,
+                      border: `2px dashed ${theme.border}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: 28, opacity: 0.15, color: theme.textDim }}>?</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ color: theme.textDim, fontSize: 13 }}>Select a pack type and click Open Pack</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
 export default function App() {
   return (<BrowserRouter><ThemeProvider><AuthProvider><BannerProvider><Routes>
     <Route path="/" element={<WelcomePage />} />
@@ -9985,6 +10509,7 @@ export default function App() {
     <Route path="/draft-assistant" element={<DraftAssistantPage />} />
     <Route path="/re-viewer" element={<REViewerPage />} />
     <Route path="/database" element={<DatabasePage />} />
+    <Route path="/pack-simulator" element={<PackSimulatorPage />} />
   </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
 }
 
