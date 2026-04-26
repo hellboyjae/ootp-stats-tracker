@@ -10108,7 +10108,7 @@ function getSimTopTier(pack) {
   return [...pack.guaranteed].reverse().find(t => t !== null) || 'Bronze';
 }
 
-function PackFlipCard({ entry, isFlipped, index }) {
+const PackFlipCard = React.memo(function PackFlipCard({ entry, isFlipped, index }) {
   const { theme } = useTheme();
   const SUPABASE_IMG = 'https://iscjwwaaukxfoiqgaqmw.supabase.co/storage/v1/object/public/card-images';
   const tier = entry?.tier || 'Iron';
@@ -10201,7 +10201,7 @@ function PackFlipCard({ entry, isFlipped, index }) {
       </div>
     </div>
   );
-}
+});
 
 function PackSimulatorPage() {
   const { theme } = useTheme();
@@ -10230,22 +10230,21 @@ function PackSimulatorPage() {
   const loadPackCards = async () => {
     setIsLoading(true);
     try {
-      // Paginate to bypass Supabase's default 1000-row limit
-      const allCards = [];
+      // Fetch first page + total count in one request, then remaining pages in parallel
       const pageSize = 1000;
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('pt_cards')
-          .select('card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs, card_type')
-          .range(from, from + pageSize - 1);
-        if (error) { setNeedsSetup(true); setIsLoading(false); return; }
-        if (!data || data.length === 0) break;
-        allCards.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
-      }
-      const data = allCards;
+      const cols = 'card_id, card_value, last_name, first_name, card_title, last_10_price, card_badge, packs, card_type';
+      const { data: firstPage, count, error } = await supabase
+        .from('pt_cards').select(cols, { count: 'exact' }).range(0, pageSize - 1);
+      if (error) { setNeedsSetup(true); setIsLoading(false); return; }
+      const totalPages = Math.ceil((count || 0) / pageSize);
+      const rest = totalPages > 1
+        ? await Promise.all(
+            Array.from({ length: totalPages - 1 }, (_, i) =>
+              supabase.from('pt_cards').select(cols).range((i + 1) * pageSize, (i + 2) * pageSize - 1)
+            )
+          )
+        : [];
+      const data = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
 
       const eligible = (data || []).filter(c =>
         c.packs === 1 &&
@@ -10296,7 +10295,7 @@ function PackSimulatorPage() {
 
     cards.forEach((_, i) => {
       const t = setTimeout(() => {
-        setFlipped(prev => new Set([...prev, i]));
+        setFlipped(prev => { const s = new Set(prev); s.add(i); return s; });
         if (i === cards.length - 1) {
           setIsOpening(false);
           setHasOpened(true);
@@ -10318,11 +10317,12 @@ function PackSimulatorPage() {
     setHasOpened(false);
   };
 
-  const totalCards = Object.values(cardPool).flat().length;
-  const selectedEV = selectedPack ? Math.round(calcSimPackEV(selectedPack, avgByTier)) : 0;
-  const drawnTotal = drawnCards.reduce((s, dc) => s + (dc?.card?.last_10_price || 0), 0);
-  const topTier = selectedPack ? getSimTopTier(selectedPack) : 'Bronze';
-  const topColor = PACK_TIER_COLORS_SIM[topTier];
+  const totalCards  = useMemo(() => Object.values(cardPool).reduce((n, a) => n + a.length, 0), [cardPool]);
+  const packEVs     = useMemo(() => Object.fromEntries(PACK_DEFINITIONS_SIM.map(p => [p.key, Math.round(calcSimPackEV(p, avgByTier))])), [avgByTier]);
+  const selectedEV  = selectedPack ? (packEVs[selectedPack.key] ?? 0) : 0;
+  const drawnTotal  = useMemo(() => drawnCards.reduce((s, dc) => s + (dc?.card?.last_10_price || 0), 0), [drawnCards]);
+  const topTier     = useMemo(() => selectedPack ? getSimTopTier(selectedPack) : 'Bronze', [selectedPack]);
+  const topColor    = PACK_TIER_COLORS_SIM[topTier];
 
   if (isLoading) {
     return (
@@ -10439,7 +10439,7 @@ function PackSimulatorPage() {
             <div key={group} style={{ marginBottom: 16 }}>
               <div style={sidebarGroupLabel}>{group}</div>
               {PACK_DEFINITIONS_SIM.filter(p => p.group === group).map(pack => {
-                const ev = Math.round(calcSimPackEV(pack, avgByTier));
+                const ev = packEVs[pack.key] ?? 0;
                 const isSel = selectedPack?.key === pack.key;
                 return (
                   <button key={pack.key} onClick={() => handleSelectPack(pack)} style={{
