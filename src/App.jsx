@@ -10199,6 +10199,7 @@ function PackSimulatorPage() {
   const [openKey, setOpenKey]           = useState(0); // force remount of flip cards
   const [notification, setNotification] = useState(null);
   const [lastUpdated, setLastUpdated]   = useState(null);
+  const [sessionPnL, setSessionPnL]     = useState(null); // null = no packs opened yet
   const timeoutsRef = useRef([]);
 
   useEffect(() => {
@@ -10272,7 +10273,13 @@ function PackSimulatorPage() {
     cards.forEach((_, i) => {
       const t = setTimeout(() => {
         setFlipped(prev => new Set([...prev, i]));
-        if (i === cards.length - 1) { setIsOpening(false); setHasOpened(true); }
+        if (i === cards.length - 1) {
+          setIsOpening(false);
+          setHasOpened(true);
+          const packTotal = cards.reduce((s, e) => s + (e?.card?.last_10_price || 0), 0);
+          const packEV = Math.round(calcSimPackEV(selectedPack, avgByTier));
+          setSessionPnL(prev => (prev ?? 0) + (packTotal - packEV));
+        }
       }, 350 + i * 280);
       timeoutsRef.current.push(t);
     });
@@ -10434,14 +10441,7 @@ function PackSimulatorPage() {
         {/* ── Main Content ── */}
         <div style={{ flex: 1, padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>
 
-          {/* Last updated date */}
-          {lastUpdated && (
-            <div style={{ textAlign: 'center', marginBottom: 10, fontSize: 20, color: '#6fcf97', fontFamily: "'Oswald', sans-serif", letterSpacing: '0.04em' }}>
-              Last 10 values last updated on {lastUpdated}
-            </div>
-          )}
-
-          {/* Top row: title left, Avg L10 right */}
+          {/* Top row: title left, date center, Avg L10 right */}
           {selectedPack && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
               <div>
@@ -10462,16 +10462,31 @@ function PackSimulatorPage() {
                 </div>
               </div>
 
-              {/* Avg L10 by tier — plain text, top right */}
-              <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-                {[...PACK_TIER_ORDER_SIM].reverse().map(tier => (
-                  <div key={tier} style={{ textAlign: 'center' }}>
-                    <div style={{ color: PACK_TIER_COLORS_SIM[tier], fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{tier}</div>
-                    <div style={{ color: '#ffffff', fontSize: 12, fontFamily: 'ui-monospace, monospace', fontWeight: 500, marginTop: 2 }}>
-                      {(avgByTier[tier] || 0) > 0 ? avgByTier[tier].toLocaleString() : '—'}
+              {/* Date — centered between title and tier avgs */}
+              <div style={{ textAlign: 'center', fontSize: 20, color: '#6fcf97', fontFamily: "'Oswald', sans-serif", letterSpacing: '0.04em', alignSelf: 'center' }}>
+                {lastUpdated ? `Last 10 values last updated on ${lastUpdated}` : ''}
+              </div>
+
+              {/* Avg L10 by tier + session tracker — top right */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+                  {[...PACK_TIER_ORDER_SIM].reverse().map(tier => (
+                    <div key={tier} style={{ textAlign: 'center' }}>
+                      <div style={{ color: PACK_TIER_COLORS_SIM[tier], fontSize: 10, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{tier}</div>
+                      <div style={{ color: '#ffffff', fontSize: 12, fontFamily: 'ui-monospace, monospace', fontWeight: 500, marginTop: 2 }}>
+                        {(avgByTier[tier] || 0) > 0 ? avgByTier[tier].toLocaleString() : '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {sessionPnL !== null && (
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ color: theme.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Oswald', sans-serif" }}>Session Total</div>
+                    <div style={{ color: sessionPnL >= 0 ? theme.success : theme.error, fontSize: 14, fontWeight: 700, fontFamily: "'Oswald', sans-serif", marginTop: 2 }}>
+                      {sessionPnL >= 0 ? '▲' : '▼'} {Math.abs(sessionPnL).toLocaleString()} PP {sessionPnL >= 0 ? 'above' : 'below'} EV
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           )}
