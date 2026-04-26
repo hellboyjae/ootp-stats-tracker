@@ -10846,8 +10846,8 @@ function LiveSpecPage() {
       const [zBat, zPit, aBat, aPit] = await Promise.all([
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
-        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=&enddate=&month=0&pageItems=500').then(r => r.json()),
-        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=&enddate=&month=0&pageItems=500').then(r => r.json()),
+        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=&enddate=&month=0&pageItems=2000').then(r => r.json()),
+        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=&enddate=&month=0&pageItems=2000').then(r => r.json()),
       ]);
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
       const zBatArr = toArr(zBat), zPitArr = toArr(zPit);
