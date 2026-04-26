@@ -10826,7 +10826,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       composite: totalPct / validCount,
     });
   });
-  return rows.sort((a, b) => b.composite - a.composite).slice(0, 100);
+  return rows.filter(r => r.composite > 0).sort((a, b) => b.composite - a.composite);
 }
 
 function LiveSpecPage() {
