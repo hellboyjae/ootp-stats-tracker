@@ -11231,9 +11231,18 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
             {/* Column headers */}
             <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, paddingBottom: 10, marginBottom: 4, borderBottom: `2px solid ${theme.border}` }}>
               <div />
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#22c55e' }}>2026 Season</div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#22c55e' }}>2026 Season</div>
+                {isBatter && fgGet(season, 'PA') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Math.round(fgGet(season, 'PA'))} PA</div>}
+                {!isBatter && fgGet(season, 'IP') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Number(fgGet(season, 'IP')).toFixed(1)} IP</div>}
+              </div>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280' }}>ZiPS Proj</div>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#60a5fa' }}>Last 14 Days</div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#60a5fa' }}>Last 14 Days</div>
+                {l14 && isBatter && fgGet(l14, 'PA') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Math.round(fgGet(l14, 'PA'))} PA</div>}
+                {l14 && !isBatter && fgGet(l14, 'IP') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Number(fgGet(l14, 'IP')).toFixed(1)} IP</div>}
+                {!l14 && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>no data</div>}
+              </div>
             </div>
 
             {/* Stat rows */}
@@ -11420,18 +11429,50 @@ function PTLivePage() {
       l14Date.setDate(l14Date.getDate() - 14);
       const l14Str = fmtDate(l14Date);
       const season = now.getFullYear();
-      const mkFg = (start, end) => `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${start}&enddate=${end}&month=0&pageItems=2000`;
+
+      console.log('[FG] Season range:', `${season}-03-01`, '→', todayStr);
+      console.log('[FG] L14 range:', l14Str, '→', todayStr);
+
+      // month=0 + startdate/enddate = FanGraphs custom date range
+      const mkFg = (start, end) =>
+        `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${start}&enddate=${end}&month=0&pageItems=2000`;
+
       const seasonBase = mkFg(`${season}-03-01`, todayStr);
       const l14Base    = mkFg(l14Str, todayStr);
+
+      // Fetch each endpoint individually — partial failure is OK (season + ZiPS still show)
+      const safeFetch = async (url) => {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) { console.warn('[FG] HTTP', r.status, url.slice(0, 120)); return []; }
+          return await r.json();
+        } catch (e) { console.warn('[FG] Fetch failed:', url.slice(0, 120), e.message); return []; }
+      };
+
       const [zBat, zPit, sBat, sPit, lBat, lPit] = await Promise.all([
-        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
-        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
-        fetch(`${seasonBase}&stats=bat`).then(r => r.json()),
-        fetch(`${seasonBase}&stats=pit`).then(r => r.json()),
-        fetch(`${l14Base}&stats=bat`).then(r => r.json()),
-        fetch(`${l14Base}&stats=pit`).then(r => r.json()),
+        safeFetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0'),
+        safeFetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0'),
+        safeFetch(`${seasonBase}&stats=bat`),
+        safeFetch(`${seasonBase}&stats=pit`),
+        safeFetch(`${l14Base}&stats=bat`),
+        safeFetch(`${l14Base}&stats=pit`),
       ]);
+
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
+      const sArr = toArr(sBat), lArr = toArr(lBat);
+      const sPitArr = toArr(sPit), lPitArr = toArr(lPit);
+
+      // Debug: compare row counts & sample PAs to verify date filtering is working
+      console.log(`[FG] Season bat: ${sArr.length} rows | 1st player: ${sArr[0]?.Name} PA=${sArr[0]?.PA}`);
+      console.log(`[FG] L14 bat:    ${lArr.length} rows | 1st player: ${lArr[0]?.Name} PA=${lArr[0]?.PA}`);
+      console.log(`[FG] Season pit: ${sPitArr.length} rows | L14 pit: ${lPitArr.length} rows`);
+      if (sArr.length > 0 && lArr.length > 0) {
+        // Find a known player in both to compare PAs directly
+        const sampleName = sArr[0]?.Name;
+        const lMatch = lArr.find(p => p.Name === sampleName);
+        console.log(`[FG] PA check for "${sampleName}": season=${sArr[0]?.PA}, L14=${lMatch?.PA ?? '(not found)'}`);
+      }
+
       const byName = arr => {
         const m = {};
         toArr(arr).forEach(p => {
@@ -11439,13 +11480,17 @@ function PTLivePage() {
           const name = normalizeName(fgStripHtml(raw));
           if (!name) return;
           m[name] = p;
-          // Also index without hyphens (e.g. "Hye-Seong Kim" → "hyeseong kim")
           const noHyphen = name.replace(/-/g, '');
           if (noHyphen !== name) m[noHyphen] = p;
         });
         return m;
       };
-      setFgData({ zBatMap: byName(zBat), zPitMap: byName(zPit), sBatMap: byName(sBat), sPitMap: byName(sPit), lBatMap: byName(lBat), lPitMap: byName(lPit) });
+
+      setFgData({
+        zBatMap: byName(zBat), zPitMap: byName(zPit),
+        sBatMap: byName(sBat), sPitMap: byName(sPit),
+        lBatMap: byName(lBat), lPitMap: byName(lPit),
+      });
     } catch (e) {
       console.error('FG perf data error:', e);
     }
