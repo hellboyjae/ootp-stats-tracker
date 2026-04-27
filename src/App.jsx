@@ -10843,17 +10843,52 @@ function LiveSpecPage() {
   const [sortKey, setSortKey]         = useState(null);
   const [sortDir, setSortDir]         = useState('desc');
 
+  // 2026 season evaluation windows.
+  // Each entry: [cutoff date string, window start date string].
+  // Cutoff = 3 days before first Monday of the next month.
+  // Ordered latest → earliest for simple iteration.
+  function getEvalWindow() {
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+
+    const WINDOWS_2026 = [
+      ['2026-10-30', null],          // Oct 30+ → off-season (Nov 2 first Monday)
+      ['2026-10-02', '2026-10-01'],  // Oct 2–29  → October  (Oct 5 first Monday)
+      ['2026-09-04', '2026-09-01'],  // Sep 4–Oct 1 → September (Sep 7 first Monday)
+      ['2026-07-31', '2026-08-01'],  // Jul 31–Sep 3 → August  (Aug 3 first Monday)
+      ['2026-07-03', '2026-07-01'],  // Jul 3–Jul 30 → July    (Jul 6 first Monday)
+      ['2026-05-29', '2026-06-01'],  // May 29–Jul 2 → June    (Jun 1 first Monday)
+      ['2026-05-01', '2026-05-01'],  // May 1–May 28 → May     (May 4 first Monday)
+    ];
+
+    for (const [cutoff, start] of WINDOWS_2026) {
+      if (todayStr >= cutoff) {
+        if (!start) return null; // off-season
+        return { startdate: start, enddate: todayStr };
+      }
+    }
+
+    // Before May 1 = April window (first month of season, no prior month to exclude)
+    return { startdate: '2026-04-01', enddate: todayStr };
+  }
+
   useEffect(() => { fetchLiveSpecData(); }, []);
 
   async function fetchLiveSpecData() {
     setLoading(true);
     setError(null);
     try {
+      const evalWindow = getEvalWindow();
+      if (!evalWindow) { setLoading(false); return; } // off-season
+      const { startdate, enddate } = evalWindow;
+      const season = new Date().getFullYear();
+      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=1&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=0&pageItems=2000`;
+
       const [zBat, zPit, aBat, aPit] = await Promise.all([
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
-        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=1&age=0&filter=&players=0&startdate=&enddate=&month=0&pageItems=2000').then(r => r.json()),
-        fetch('https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&qual=0&type=8&season=2026&season1=2026&ind=0&team=0&rost=1&age=0&filter=&players=0&startdate=&enddate=&month=0&pageItems=2000').then(r => r.json()),
+        fetch(`${fgBase}&stats=bat`).then(r => r.json()),
+        fetch(`${fgBase}&stats=pit`).then(r => r.json()),
       ]);
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
       const zBatArr = toArr(zBat), zPitArr = toArr(zPit);
@@ -11356,7 +11391,7 @@ function PTLivePage() {
         <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
 
           {/* Slot label */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em' }}>{slot.label}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em' }}>{slot.label}</div>
 
           {/* Card picker / display */}
           {isEditing ? (
@@ -11422,16 +11457,16 @@ function PTLivePage() {
           </div>
 
           {/* Stats */}
-          <div style={{ fontSize: 11, color: theme.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {isLoadingStats
-              ? <span style={{ color: theme.textDim }}>…</span>
+              ? <span style={{ color: '#fff' }}>…</span>
               : card
-                ? (statsText || <span style={{ color: theme.textDim }}>No game</span>)
+                ? (statsText || <span style={{ color: '#fff' }}>No game</span>)
                 : ''}
           </div>
 
           {/* PP */}
-          <div style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: (pp || 0) > 0 ? '#22c55e' : (pp || 0) < 0 ? '#ef4444' : theme.textDim }}>
+          <div style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: (pp || 0) > 0 ? '#22c55e' : (pp || 0) < 0 ? '#ef4444' : '#fff' }}>
             {card && pp !== null ? `${pp >= 0 ? '+' : ''}${pp}` : '—'}
           </div>
         </div>
@@ -11446,10 +11481,10 @@ function PTLivePage() {
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#22c55e' }}>PT Live</h1>
-            <div style={{ fontSize: 11, color: theme.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
+            <div style={{ fontSize: 11, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-            <div style={{ textAlign: 'right', fontSize: 12, color: theme.textMuted }}>
+            <div style={{ textAlign: 'right', fontSize: 12, color: '#fff' }}>
               {isLoadingStats
               ? 'Updating…'
               : statsError
@@ -11460,7 +11495,7 @@ function PTLivePage() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
-              <div style={{ fontSize: 11, color: theme.textDim, textTransform: 'uppercase', marginTop: 2 }}>Total Points</div>
+              <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>Total Points</div>
             </div>
           </div>
         </div>
@@ -11501,21 +11536,21 @@ function PTLivePage() {
             <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
               {/* Batters header */}
               <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>BATTERS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
               </div>
               {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
 
               {/* Pitchers header */}
               <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>POS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>PITCHERS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>STATUS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim }}>TODAY</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textDim, textAlign: 'right' }}>PP</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
               </div>
               {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
             </div>
