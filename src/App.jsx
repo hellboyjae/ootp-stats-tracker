@@ -10882,7 +10882,7 @@ function LiveSpecPage() {
       if (!evalWindow) { setLoading(false); return; } // off-season
       const { startdate, enddate } = evalWindow;
       const season = new Date().getFullYear();
-      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=1&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=0&pageItems=2000`;
+      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=0&pageItems=2000`;
 
       const [zBat, zPit, aBat, aPit] = await Promise.all([
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
