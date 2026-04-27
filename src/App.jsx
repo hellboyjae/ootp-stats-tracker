@@ -11658,6 +11658,7 @@ function PTLivePage() {
   };
 
   return (
+    <>
     <Layout>
       {/* Header */}
       <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: '4px solid #22c55e' }}>
@@ -11753,6 +11754,7 @@ function PTLivePage() {
         onClose={() => setPerfModal(null)}
       />
     )}
+    </>
   );
 }
 
