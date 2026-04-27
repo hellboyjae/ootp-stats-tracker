@@ -11412,19 +11412,16 @@ function PTLivePage() {
     try {
       const now = new Date();
       const todayStr = now.toISOString().slice(0, 10);
-      const l14 = new Date(now);
-      l14.setDate(l14.getDate() - 14);
-      const l14Str = l14.toISOString().slice(0, 10);
       const season = now.getFullYear();
-      const mkBase = (start, end) =>
-        `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${start}&enddate=${end}&month=0&pageItems=2000`;
+      const seasonBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${season}-03-01&enddate=${todayStr}&month=0&pageItems=2000`;
+      const l14Base   = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&month=33&pageItems=2000`;
       const [zBat, zPit, sBat, sPit, lBat, lPit] = await Promise.all([
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
-        fetch(`${mkBase(`${season}-03-01`, todayStr)}&stats=bat`).then(r => r.json()),
-        fetch(`${mkBase(`${season}-03-01`, todayStr)}&stats=pit`).then(r => r.json()),
-        fetch(`${mkBase(l14Str, todayStr)}&stats=bat`).then(r => r.json()),
-        fetch(`${mkBase(l14Str, todayStr)}&stats=pit`).then(r => r.json()),
+        fetch(`${seasonBase}&stats=bat`).then(r => r.json()),
+        fetch(`${seasonBase}&stats=pit`).then(r => r.json()),
+        fetch(`${l14Base}&stats=bat`).then(r => r.json()),
+        fetch(`${l14Base}&stats=pit`).then(r => r.json()),
       ]);
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
       const byName = arr => {
