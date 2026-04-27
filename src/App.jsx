@@ -11264,6 +11264,9 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
             {!proj && (
               <div style={{ marginTop: 12, fontSize: 12, color: '#4b5563' }}>ZiPS projections not available for this player.</div>
             )}
+            <div style={{ marginTop: 14, fontSize: 10, color: '#374151', borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
+              Season + ZiPS via FanGraphs · Last 14 Days via MLB Stats API{isBatter ? ' · wRC+ not available for L14' : ' · FIP not available for L14'}
+            </div>
           </>
         )}
       </div>
@@ -11430,49 +11433,84 @@ function PTLivePage() {
       const l14Str = fmtDate(l14Date);
       const season = now.getFullYear();
 
-      console.log('[FG] Season range:', `${season}-03-01`, '→', todayStr);
-      console.log('[FG] L14 range:', l14Str, '→', todayStr);
-
-      // month=0 + startdate/enddate = FanGraphs custom date range
-      const mkFg = (start, end) =>
-        `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${start}&enddate=${end}&month=0&pageItems=2000`;
-
-      const seasonBase = mkFg(`${season}-03-01`, todayStr);
-      const l14Base    = mkFg(l14Str, todayStr);
-
-      // Fetch each endpoint individually — partial failure is OK (season + ZiPS still show)
       const safeFetch = async (url) => {
         try {
           const r = await fetch(url);
-          if (!r.ok) { console.warn('[FG] HTTP', r.status, url.slice(0, 120)); return []; }
+          if (!r.ok) { console.warn('[Stats] HTTP', r.status, url.slice(0, 100)); return null; }
           return await r.json();
-        } catch (e) { console.warn('[FG] Fetch failed:', url.slice(0, 120), e.message); return []; }
+        } catch (e) { console.warn('[Stats] Fetch failed:', url.slice(0, 100), e.message); return null; }
       };
 
-      const [zBat, zPit, sBat, sPit, lBat, lPit] = await Promise.all([
+      // Season + ZiPS from FanGraphs (month=0 = full season; date params are ignored by FG)
+      const fgSeasonBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&month=0&pageItems=2000`;
+      const [zBat, zPit, sBat, sPit] = await Promise.all([
         safeFetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0'),
         safeFetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0'),
-        safeFetch(`${seasonBase}&stats=bat`),
-        safeFetch(`${seasonBase}&stats=pit`),
-        safeFetch(`${l14Base}&stats=bat`),
-        safeFetch(`${l14Base}&stats=pit`),
+        safeFetch(`${fgSeasonBase}&stats=bat`),
+        safeFetch(`${fgSeasonBase}&stats=pit`),
       ]);
 
+      // L14 from MLB Stats API — FanGraphs ignores startdate/enddate, MLB API actually honors them
+      const mlbBase = `https://statsapi.mlb.com/api/v1/stats?stats=byDateRange&startDate=${l14Str}&endDate=${todayStr}&playerPool=all&sportId=1&limit=2000`;
+      const [mlbL14Bat, mlbL14Pit] = await Promise.all([
+        safeFetch(`${mlbBase}&group=hitting`),
+        safeFetch(`${mlbBase}&group=pitching`),
+      ]);
+
+      const l14BatSplits = mlbL14Bat?.stats?.[0]?.splits || [];
+      const l14PitSplits = mlbL14Pit?.stats?.[0]?.splits || [];
+      console.log(`[MLB] L14 bat: ${l14BatSplits.length} rows | sample: ${l14BatSplits[0]?.player?.fullName} PA=${l14BatSplits[0]?.stat?.plateAppearances}`);
+      console.log(`[MLB] L14 pit: ${l14PitSplits.length} rows`);
+
+      // Normalize MLB batter split → FanGraphs-compatible keys so fgGet() still works
+      const normMlbBatter = split => {
+        const s = split.stat || {};
+        const pa = parseInt(s.plateAppearances) || 0;
+        const so = parseInt(s.strikeOuts) || 0;
+        const bb = parseInt(s.baseOnBalls) || 0;
+        const hr = parseInt(s.homeRuns) || 0;
+        const ab = parseInt(s.atBats) || 0;
+        const h  = parseInt(s.hits) || 0;
+        const sf = parseInt(s.sacFlies) || 0;
+        const babip = (ab - so - hr + sf) > 0 ? (h - hr) / (ab - so - hr + sf) : null;
+        return {
+          Name: split.player?.fullName || '',
+          PA: pa,
+          AVG:   parseFloat(s.avg) || null,
+          OBP:   parseFloat(s.obp) || null,
+          SLG:   parseFloat(s.slg) || null,
+          HR:    hr,
+          'K%':  pa > 0 ? so / pa : null,
+          'BB%': pa > 0 ? bb / pa : null,
+          BABIP: babip,
+          // wRC+ not available from MLB API — fgGet will return null and show —
+        };
+      };
+
+      // Normalize MLB pitcher split → FanGraphs-compatible keys
+      const normMlbPitcher = split => {
+        const s = split.stat || {};
+        // Convert baseball IP notation (e.g. "25.1" = 25⅓ innings) to actual decimal innings
+        const toOuts = ipStr => { const [inn, frac] = String(ipStr || '0').split('.'); return parseInt(inn) * 3 + parseInt(frac || 0); };
+        const outs = toOuts(s.inningsPitched);
+        const innings = outs / 3;
+        const so = parseInt(s.strikeOuts) || 0;
+        const bb = parseInt(s.baseOnBalls) || 0;
+        const hr = parseInt(s.homeRuns) || 0;
+        const h  = parseInt(s.hits) || 0;
+        return {
+          Name: split.player?.fullName || '',
+          IP:     innings,
+          ERA:    parseFloat(s.era) || null,
+          WHIP:   innings > 0 ? (bb + h) / innings : null,
+          'K/9':  innings > 0 ? so  / innings * 9 : null,
+          'BB/9': innings > 0 ? bb  / innings * 9 : null,
+          'HR/9': innings > 0 ? hr  / innings * 9 : null,
+          // FIP not available from MLB API — fgGet will return null and show —
+        };
+      };
+
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
-      const sArr = toArr(sBat), lArr = toArr(lBat);
-      const sPitArr = toArr(sPit), lPitArr = toArr(lPit);
-
-      // Debug: compare row counts & sample PAs to verify date filtering is working
-      console.log(`[FG] Season bat: ${sArr.length} rows | 1st player: ${sArr[0]?.Name} PA=${sArr[0]?.PA}`);
-      console.log(`[FG] L14 bat:    ${lArr.length} rows | 1st player: ${lArr[0]?.Name} PA=${lArr[0]?.PA}`);
-      console.log(`[FG] Season pit: ${sPitArr.length} rows | L14 pit: ${lPitArr.length} rows`);
-      if (sArr.length > 0 && lArr.length > 0) {
-        // Find a known player in both to compare PAs directly
-        const sampleName = sArr[0]?.Name;
-        const lMatch = lArr.find(p => p.Name === sampleName);
-        console.log(`[FG] PA check for "${sampleName}": season=${sArr[0]?.PA}, L14=${lMatch?.PA ?? '(not found)'}`);
-      }
-
       const byName = arr => {
         const m = {};
         toArr(arr).forEach(p => {
@@ -11486,10 +11524,13 @@ function PTLivePage() {
         return m;
       };
 
+      const lBatArr = l14BatSplits.map(normMlbBatter);
+      const lPitArr = l14PitSplits.map(normMlbPitcher);
+
       setFgData({
-        zBatMap: byName(zBat), zPitMap: byName(zPit),
-        sBatMap: byName(sBat), sPitMap: byName(sPit),
-        lBatMap: byName(lBat), lPitMap: byName(lPit),
+        zBatMap: byName(zBat),     zPitMap: byName(zPit),
+        sBatMap: byName(sBat),     sPitMap: byName(sPit),
+        lBatMap: byName(lBatArr),  lPitMap: byName(lPitArr),
       });
     } catch (e) {
       console.error('FG perf data error:', e);
