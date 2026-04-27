@@ -11885,7 +11885,7 @@ function PTLivePage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px' }}>
+      <div style={{ maxWidth: 1600, margin: '0 auto', padding: '20px 8px' }}>
 
         {/* Edit button above the flex row — keeps sidebar top flush with roster top */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -11911,8 +11911,8 @@ function PTLivePage() {
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
 
           {/* Left sidebar — vertical tab nav */}
-          <div style={{ width: 190, flexShrink: 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 20 }}>
+          <div style={{ width: 160, flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {[
                 { id: 'team',        label: 'My Team' },
                 { id: 'leaderboard', label: 'My Group' },
@@ -11936,10 +11936,9 @@ function PTLivePage() {
                 </button>
               ))}
             </div>
-            {activeTab === 'team' && <PTLiveScoringKey theme={theme} />}
           </div>
 
-          {/* Right: content area */}
+          {/* Center: content area */}
           <div style={{ flex: 1, minWidth: 0 }}>
 
             {/* ── MY TEAM TAB ─────────────────────────────────────────────── */}
@@ -12124,6 +12123,14 @@ function PTLivePage() {
             )}
 
           </div>
+
+          {/* Right: scoring key — only on My Team tab */}
+          {activeTab === 'team' && (
+            <div style={{ width: 180, flexShrink: 0 }}>
+              <PTLiveScoringKey theme={theme} />
+            </div>
+          )}
+
         </div>
       </div>
     </Layout>
