@@ -11313,7 +11313,7 @@ function PTLivePage() {
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
-      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position';
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price';
       const pageSize = 1000;
       const { data: firstPage, count } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
@@ -11467,7 +11467,8 @@ function PTLivePage() {
     return { ...slot, card, playerData: pd, pp };
   }), [team, mlbStats]);
 
-  const totalPP = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
+  const totalPP   = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
+  const totalCost = useMemo(() => Object.values(team).reduce((s, c) => s + (c?.last_10_price || 0), 0), [team]);
 
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
@@ -11478,7 +11479,7 @@ function PTLivePage() {
   };
 
   const selectCard = (slotKey, card) => {
-    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value } }));
+    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value, last_10_price: card.last_10_price || 0 } }));
     setActivePicker(null); setPickerSearch('');
   };
 
@@ -11654,6 +11655,12 @@ function PTLivePage() {
                   ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
                   : 'Updates every 2 min'}
             </div>
+            {totalCost > 0 && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: '#fbbf24', lineHeight: 1 }}>{totalCost.toLocaleString()} PP</div>
+                <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>L10 Team Cost</div>
+              </div>
+            )}
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
               <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>Total Points</div>
