@@ -11197,94 +11197,61 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
   ];
 
   const defs = isBatter ? batDefs : pitDefs;
-
-  const vsColor = pct => pct >= 10 ? '#22c55e' : pct >= 3 ? '#86efac' : pct >= -3 ? '#aaa' : pct >= -10 ? '#fca5a5' : '#ef4444';
   const roleLabel = role === 'sp' ? 'Starting Pitcher' : role === 'rp' ? 'Relief Pitcher' : 'Batter';
 
-  const sectionLabel = txt => (
-    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: theme.accent, marginBottom: 10 }}>{txt}</div>
-  );
+  const seasonColor = (sv, pv, higher) => {
+    if (sv == null || pv == null || higher === null || Math.abs(pv) < 0.0001) return '#fff';
+    return (higher ? sv > pv : sv < pv) ? '#22c55e' : '#ef4444';
+  };
 
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: 24, width: 440, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.8)' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '24px 32px', width: 680, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{name}</div>
-            <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{roleLabel} · OVR {cardOvr}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{name}</div>
+            <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>{roleLabel} · OVR {cardOvr}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer', padding: 0, lineHeight: 1 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>✕</button>
         </div>
 
         {fgLoading && (
-          <div style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>Loading FanGraphs data…</div>
+          <div style={{ color: theme.textMuted, fontSize: 14, textAlign: 'center', padding: '40px 0' }}>Loading FanGraphs data…</div>
         )}
-
         {!fgLoading && !season && (
-          <div style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No FanGraphs data found for this player.</div>
+          <div style={{ color: theme.textMuted, fontSize: 14, textAlign: 'center', padding: '40px 0' }}>No FanGraphs data found for this player.</div>
         )}
 
         {!fgLoading && season && (
           <>
-            {/* Season stats */}
-            <div style={{ marginBottom: 20 }}>
-              {sectionLabel('2026 Season')}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 16px' }}>
-                {defs.map(s => {
-                  const v = fgGet(season, s.key);
-                  return (
-                    <div key={s.key}>
-                      <div style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{s.label}</div>
-                      <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{v != null ? s.fmt(v) : '—'}</div>
-                    </div>
-                  );
-                })}
-              </div>
+            {/* Column headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, paddingBottom: 10, marginBottom: 4, borderBottom: `2px solid ${theme.border}` }}>
+              <div />
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#22c55e' }}>2026 Season</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280' }}>ZiPS Proj</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#60a5fa' }}>Last 14 Days</div>
             </div>
 
-            {/* vs ZiPS */}
-            {proj && (
-              <div style={{ marginBottom: 20 }}>
-                {sectionLabel('vs ZiPS Projection')}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {defs.filter(s => s.higher !== null).map(s => {
-                    const actual    = fgGet(season, s.key);
-                    const projected = fgGet(proj, s.key);
-                    if (actual == null || projected == null || Math.abs(projected) < 0.0001) return null;
-                    const rawPct = ((actual - projected) / Math.abs(projected)) * 100;
-                    const adjPct = s.higher ? rawPct : -rawPct;
-                    const sign   = rawPct >= 0 ? '+' : '';
-                    return (
-                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '44px 60px 80px 1fr', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                        <span style={{ color: theme.textMuted }}>{s.label}</span>
-                        <span style={{ color: '#fff', fontWeight: 600 }}>{s.fmt(actual)}</span>
-                        <span style={{ color: '#555', fontSize: 11 }}>proj {s.fmt(projected)}</span>
-                        <span style={{ color: vsColor(adjPct), fontWeight: 700 }}>{sign}{rawPct.toFixed(1)}%</span>
-                      </div>
-                    );
-                  }).filter(Boolean)}
+            {/* Stat rows */}
+            {defs.map((s, i) => {
+              const sv = fgGet(season, s.key);
+              const pv = proj   ? fgGet(proj, s.key) : null;
+              const lv = l14    ? fgGet(l14,  s.key) : null;
+              const sColor = seasonColor(sv, pv, s.higher);
+              return (
+                <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, padding: '11px 0', borderBottom: `1px solid rgba(255,255,255,0.06)`, alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: sColor, fontFamily: "'Oswald',sans-serif" }}>{sv != null ? s.fmt(sv) : '—'}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#4b5563', fontFamily: "'Oswald',sans-serif" }}>{pv != null ? s.fmt(pv) : '—'}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{lv != null ? s.fmt(lv) : '—'}</div>
                 </div>
-              </div>
-            )}
+              );
+            })}
 
-            {/* Last 14 days */}
-            {l14 && (
-              <div>
-                {sectionLabel('Last 14 Days')}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 16px' }}>
-                  {defs.map(s => {
-                    const v = fgGet(l14, s.key);
-                    return (
-                      <div key={s.key}>
-                        <div style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{s.label}</div>
-                        <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{v != null ? s.fmt(v) : '—'}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {!proj && (
+              <div style={{ marginTop: 12, fontSize: 12, color: '#4b5563' }}>ZiPS projections not available for this player.</div>
             )}
           </>
         )}
@@ -11463,7 +11430,8 @@ function PTLivePage() {
       const byName = arr => {
         const m = {};
         toArr(arr).forEach(p => {
-          const name = normalizeName(fgStripHtml(p.Name || p.name || ''));
+          const raw = p.Name || p.name || p.PlayerName || p.playerName || '';
+          const name = normalizeName(fgStripHtml(raw));
           if (name) m[name] = p;
         });
         return m;
@@ -11561,10 +11529,22 @@ function PTLivePage() {
 
     return (
       <div key={slot.key} style={{ borderBottom: `1px solid ${theme.border}`, position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '52px 36px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
 
           {/* Slot label */}
           <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em' }}>{slot.label}</div>
+
+          {/* Stats button column */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {card && !isEditing && (
+              <button
+                onClick={() => setPerfModal({ name: `${card.first_name} ${card.last_name}`, role: slot.role, cardOvr: card.card_value || 0 })}
+                style={{ fontSize: 9, fontWeight: 700, padding: '3px 5px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+              >
+                Stats
+              </button>
+            )}
+          </div>
 
           {/* Card picker / display */}
           {isEditing ? (
@@ -11617,20 +11597,10 @@ function PTLivePage() {
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-              <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                {card
-                  ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
-                  : <span style={{ color: theme.textDim }}>—</span>}
-              </div>
-              {card && (
-                <button
-                  onClick={() => setPerfModal({ name: `${card.first_name} ${card.last_name}`, role: slot.role, cardOvr: card.card_value || 0 })}
-                  style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 7px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
-                >
-                  Stats
-                </button>
-              )}
+            <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {card
+                ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
+                : <span style={{ color: theme.textDim }}>—</span>}
             </div>
           )}
 
@@ -11719,8 +11689,9 @@ function PTLivePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
               {/* Batters header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '52px 36px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
+                <div />
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
@@ -11729,8 +11700,9 @@ function PTLivePage() {
               {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
 
               {/* Pitchers header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '52px 36px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
+                <div />
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
