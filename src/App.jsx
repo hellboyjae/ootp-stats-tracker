@@ -11369,7 +11369,6 @@ function PTLivePage() {
     const code  = submitModalCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
     if (!uname || uname.length < 2) { setSubmitError('Username must be at least 2 characters.'); return; }
     if (!code  || code.length  < 2) { setSubmitError('Group code must be at least 2 characters.'); return; }
-    if (isLocked && !hasSubmittedToday) { setSubmitError(`Submissions locked — games started at ${fmtTime(lockTime)}.`); return; }
     setSubmitLoading(true); setSubmitError('');
     const { error } = await supabase.from('ptlive_groups').upsert(
       { group_code: code, username: uname, date: todayStr, team, pp: totalPP },
@@ -11984,19 +11983,17 @@ function PTLivePage() {
                         <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>{groupCode}</div>
                         <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
                           {isLocked
-                            ? <span style={{ color: '#ef4444' }}>Locked · Submissions closed at {fmtTime(lockTime)}</span>
+                            ? <span style={{ color: '#fbbf24' }}>First pitch {fmtTime(lockTime)} · Late submissions won't count toward group average</span>
                             : lockTime
-                              ? <span style={{ color: '#fbbf24' }}>Locks at {fmtTime(lockTime)} — update your team before first pitch</span>
+                              ? <span style={{ color: '#fbbf24' }}>Locks at {fmtTime(lockTime)} · Submit before first pitch to count toward group average</span>
                               : 'Loading game times…'}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        {!isLocked && (
-                          <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(groupCode); setShowSubmitModal(true); }}
-                            style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                            {hasSubmittedToday ? 'Update Team' : 'Submit Team'}
-                          </button>
-                        )}
+                        <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(groupCode); setShowSubmitModal(true); }}
+                          style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          {hasSubmittedToday ? 'Update Team' : 'Submit Team'}
+                        </button>
                         <button onClick={() => navigator.clipboard?.writeText(groupCode)}
                           style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                           Copy Code
@@ -12154,9 +12151,9 @@ function PTLivePage() {
             {hasSubmittedToday ? 'Update Submission' : 'Join / Create Group'}
           </div>
 
-          {isLocked && !hasSubmittedToday && (
-            <div style={{ background: '#ef444422', border: '1px solid #ef4444', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#ef4444' }}>
-              Submissions locked — first game started at {fmtTime(lockTime)}. You can only view the leaderboard.
+          {isLocked && (
+            <div style={{ background: '#fbbf2418', border: '1px solid #fbbf2466', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#fbbf24' }}>
+              First pitch has passed ({fmtTime(lockTime)}). You can still submit, but this team won't count toward your group's average.
             </div>
           )}
 
@@ -12201,9 +12198,9 @@ function PTLivePage() {
               Cancel
             </button>
             <button onClick={handleSubmit}
-              disabled={submitLoading || (isLocked && !hasSubmittedToday)}
-              style={{ flex: 2, background: (isLocked && !hasSubmittedToday) ? '#374151' : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: (isLocked && !hasSubmittedToday) ? 'not-allowed' : 'pointer', opacity: (isLocked && !hasSubmittedToday) ? 0.5 : 1 }}>
-              {submitLoading ? 'Submitting…' : (isLocked && !hasSubmittedToday) ? 'Locked' : hasSubmittedToday ? 'Update Team' : 'Submit Team'}
+              disabled={submitLoading}
+              style={{ flex: 2, background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: submitLoading ? 'not-allowed' : 'pointer', opacity: submitLoading ? 0.6 : 1 }}>
+              {submitLoading ? 'Submitting…' : hasSubmittedToday ? 'Update Team' : 'Submit Team'}
             </button>
           </div>
         </div>
