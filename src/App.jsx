@@ -11315,6 +11315,7 @@ function PTLivePage() {
   const [globalRankings, setGlobalRankings] = useState([]);
   const [globalLoading, setGlobalLoading]   = useState(false);
   const [expandedUser, setExpandedUser]     = useState(null);
+  const [updateConfirm, setUpdateConfirm]   = useState(false);
 
   const isLocked = lockTime && new Date() >= lockTime;
 
@@ -11384,6 +11385,17 @@ function PTLivePage() {
     setShowSubmitModal(false);
     setActiveTab('leaderboard');
     loadGroupLeaderboard(code);
+  };
+
+  // Direct update — uses already-stored username/groupCode, no modal needed
+  const updateLeaderboardTeam = async () => {
+    if (!username || !groupCode) return;
+    await supabase.from('ptlive_groups').upsert(
+      { group_code: groupCode, username, date: todayStr, team, pp: totalPP },
+      { onConflict: 'group_code,username,date' }
+    );
+    setHasSubmittedToday(true);
+    setUpdateConfirm(false);
   };
 
   useEffect(() => {
@@ -11673,6 +11685,24 @@ function PTLivePage() {
   const totalPP   = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
   const totalCost = useMemo(() => Object.values(team).reduce((s, c) => s + (c?.last_10_price || 0), 0), [team]);
 
+  // Team construction eligibility
+  // Budget: max 2 Perfect (100), max 5 Diamond-or-higher (90+), max 9 Gold-or-higher (80+)
+  // Unused Perfect slots cascade to Diamond, unused Diamond slots cascade to Gold
+  const tierCounts = useMemo(() => {
+    const cards = Object.values(team).filter(Boolean);
+    return {
+      perfect:          cards.filter(c => (c.card_value || 0) >= 100).length,
+      diamondOrHigher:  cards.filter(c => (c.card_value || 0) >= 90).length,
+      goldOrHigher:     cards.filter(c => (c.card_value || 0) >= 80).length,
+    };
+  }, [team]);
+  const teamEligible = tierCounts.perfect <= 2 && tierCounts.diamondOrHigher <= 5 && tierCounts.goldOrHigher <= 9;
+  const tierViolations = [
+    tierCounts.perfect         > 2 && `${tierCounts.perfect}/2 Perfects`,
+    tierCounts.diamondOrHigher > 5 && `${tierCounts.diamondOrHigher}/5 Diamond+`,
+    tierCounts.goldOrHigher    > 9 && `${tierCounts.goldOrHigher}/9 Gold+`,
+  ].filter(Boolean);
+
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
     if (slot.pos) pool = pool.filter(c => Number(c.position) === slot.pos);
@@ -11899,8 +11929,31 @@ function PTLivePage() {
               {clearConfirm ? 'Confirm Clear?' : 'Clear All'}
             </button>
           )}
+          {/* Update Leaderboard Team — only visible in non-edit mode when already in a group */}
+          {!isEditing && groupCode && (
+            updateConfirm ? (
+              <>
+                <span style={{ fontSize: 12, color: '#fbbf24' }}>
+                  {isLocked ? 'After lock — won\'t count toward group average. Confirm?' : 'Update your submitted team?'}
+                </span>
+                <button onClick={() => setUpdateConfirm(false)}
+                  style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={updateLeaderboardTeam}
+                  style={{ background: isLocked ? '#fbbf24' : theme.accent, color: isLocked ? '#000' : '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  Confirm Update
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setUpdateConfirm(true)}
+                style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
+                Update Leaderboard Team
+              </button>
+            )
+          )}
           <button
-            onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setActivePicker(null); setPickerSearch(''); }}
+            onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setUpdateConfirm(false); setActivePicker(null); setPickerSearch(''); }}
             style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
           >
             {isEditing ? 'Done Editing' : 'Edit Team'}
@@ -11942,7 +11995,15 @@ function PTLivePage() {
 
             {/* ── MY TEAM TAB ─────────────────────────────────────────────── */}
             {activeTab === 'team' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
+              <div>
+              {!teamEligible && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#ef444418', border: '1px solid #ef444466', borderRadius: 8, padding: '10px 16px', marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>Ineligible Team</div>
+                  <div style={{ fontSize: 12, color: '#ef4444' }}>Over limit: {tierViolations.join(' · ')}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginLeft: 'auto', whiteSpace: 'nowrap' }}>Max 2 Perfect · 5 Diamond+ · 9 Gold+</div>
+                </div>
+              )}
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${teamEligible ? theme.border : '#ef444466'}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
@@ -11959,6 +12020,7 @@ function PTLivePage() {
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
                 </div>
                 {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
+              </div>
               </div>
             )}
 
@@ -12151,6 +12213,11 @@ function PTLivePage() {
             {hasSubmittedToday ? 'Update Submission' : 'Join / Create Group'}
           </div>
 
+          {!teamEligible && (
+            <div style={{ background: '#ef444418', border: '1px solid #ef444466', borderRadius: 6, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#ef4444' }}>
+              Ineligible team: {tierViolations.join(' · ')}. Fix your roster before submitting.
+            </div>
+          )}
           {isLocked && (
             <div style={{ background: '#fbbf2418', border: '1px solid #fbbf2466', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#fbbf24' }}>
               First pitch has passed ({fmtTime(lockTime)}). You can still submit, but this team won't count toward your group's average.
