@@ -11299,9 +11299,116 @@ function PTLivePage() {
   const [fgLoading, setFgLoading] = useState(false);
   const [perfModal, setPerfModal] = useState(null); // { name, role, cardOvr }
 
+  // ── Leaderboard state ──────────────────────────────────────────────────────
+  const [activeTab, setActiveTab]           = useState('team');
+  const [username, setUsername]             = useState(() => localStorage.getItem('ptlive_username') || '');
+  const [groupCode, setGroupCode]           = useState(() => localStorage.getItem('ptlive_group_code') || '');
+  const [lockTime, setLockTime]             = useState(null);
+  const [hasSubmittedToday, setHasSubmittedToday] = useState(false);
+  const [showSubmitModal, setShowSubmitModal]     = useState(false);
+  const [submitModalUsername, setSubmitModalUsername] = useState('');
+  const [submitModalCode, setSubmitModalCode]         = useState('');
+  const [submitLoading, setSubmitLoading]   = useState(false);
+  const [submitError, setSubmitError]       = useState('');
+  const [groupEntries, setGroupEntries]     = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [globalRankings, setGlobalRankings] = useState([]);
+  const [globalLoading, setGlobalLoading]   = useState(false);
+  const [expandedUser, setExpandedUser]     = useState(null);
+
+  const isLocked = lockTime && new Date() >= lockTime;
+
+  const todayStr = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  })();
+
+  const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+  const genCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  };
+
+  const computeTeamPP = (teamObj) => {
+    let total = 0;
+    PT_LIVE_SLOTS.forEach(slot => {
+      const card = teamObj?.[slot.key];
+      if (!card) return;
+      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+      const pd = mlbStats[name] || null;
+      if (!pd) return;
+      if (slot.role === 'batter' && pd.batting) total += ptLiveBatterPP(pd.batting);
+      else if (slot.role === 'sp' && pd.pitching) total += ptLiveSpPP(pd.pitching);
+      else if (slot.role === 'rp' && pd.pitching) total += ptLiveRpPP(pd.pitching);
+    });
+    return total;
+  };
+
+  const loadGroupLeaderboard = async (code) => {
+    if (!code) return;
+    setLeaderboardLoading(true);
+    const { data } = await supabase
+      .from('ptlive_groups')
+      .select('username, team, pp, submitted_at')
+      .eq('group_code', code)
+      .eq('date', todayStr);
+    setGroupEntries(data || []);
+    setLeaderboardLoading(false);
+  };
+
+  const loadGlobalRankings = async () => {
+    setGlobalLoading(true);
+    const { data, error } = await supabase.rpc('ptlive_global_rankings', { p_date: todayStr });
+    if (!error) setGlobalRankings(data || []);
+    setGlobalLoading(false);
+  };
+
+  const handleSubmit = async () => {
+    const uname = submitModalUsername.trim();
+    const code  = submitModalCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+    if (!uname || uname.length < 2) { setSubmitError('Username must be at least 2 characters.'); return; }
+    if (!code  || code.length  < 2) { setSubmitError('Group code must be at least 2 characters.'); return; }
+    if (isLocked && !hasSubmittedToday) { setSubmitError(`Submissions locked — games started at ${fmtTime(lockTime)}.`); return; }
+    setSubmitLoading(true); setSubmitError('');
+    const { error } = await supabase.from('ptlive_groups').upsert(
+      { group_code: code, username: uname, date: todayStr, team, pp: totalPP },
+      { onConflict: 'group_code,username,date' }
+    );
+    setSubmitLoading(false);
+    if (error) { setSubmitError(error.message); return; }
+    localStorage.setItem('ptlive_username', uname);
+    localStorage.setItem('ptlive_group_code', code);
+    setUsername(uname);
+    setGroupCode(code);
+    setHasSubmittedToday(true);
+    setShowSubmitModal(false);
+    setActiveTab('leaderboard');
+    loadGroupLeaderboard(code);
+  };
+
   useEffect(() => {
     localStorage.setItem('ptlive_team_v1', JSON.stringify(team));
   }, [team]);
+
+  // Check if user already has a submission today
+  useEffect(() => {
+    if (!username || !groupCode) return;
+    supabase.from('ptlive_groups')
+      .select('username', { count: 'exact', head: true })
+      .eq('group_code', groupCode).eq('username', username).eq('date', todayStr)
+      .then(({ count }) => { if (count > 0) setHasSubmittedToday(true); });
+  }, [username, groupCode]);
+
+  // Push PP to Supabase whenever mlbStats refreshes (keeps global rankings fresh)
+  useEffect(() => {
+    if (!username || !groupCode || !hasSubmittedToday) return;
+    if (Object.keys(mlbStats).length === 0) return;
+    supabase.from('ptlive_groups')
+      .update({ pp: totalPP })
+      .eq('group_code', groupCode).eq('username', username).eq('date', todayStr)
+      .then();
+  }, [mlbStats]);
 
   useEffect(() => {
     if (!activePicker) return;
@@ -11355,6 +11462,17 @@ function PTLivePage() {
       const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
       const schedData = await schedRes.json();
       const games = schedData.dates?.[0]?.games || [];
+
+      // Extract first game time for submission lock
+      const gameTimes = games.map(g => new Date(g.gameDate).getTime()).filter(t => !isNaN(t));
+      if (gameTimes.length > 0) {
+        const firstTime = new Date(Math.min(...gameTimes));
+        setLockTime(firstTime);
+        supabase.from('ptlive_lock_times')
+          .upsert({ date: dateStr, lock_time: firstTime.toISOString() }, { onConflict: 'date' })
+          .then();
+      }
+
       const active = games.filter(g => g.status?.abstractGameState !== 'Preview');
       if (active.length === 0) { setMlbStats({}); setIsLoadingStats(false); return; }
       const boxscores = await Promise.all(
@@ -11731,7 +11849,7 @@ function PTLivePage() {
             <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#22c55e' }}>PT Live</h1>
             <div style={{ fontSize: 11, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ textAlign: 'right', fontSize: 12, color: '#fff' }}>
               {isLoadingStats
               ? 'Updating…'
@@ -11741,6 +11859,18 @@ function PTLivePage() {
                   ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
                   : 'Updates every 2 min'}
             </div>
+            {/* Leaderboard chip */}
+            {groupCode && hasSubmittedToday ? (
+              <button onClick={() => { setActiveTab('leaderboard'); loadGroupLeaderboard(groupCode); }}
+                style={{ background: `${theme.accent}22`, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: theme.accent, cursor: 'pointer', letterSpacing: '0.04em' }}>
+                {groupCode}
+              </button>
+            ) : !groupCode ? (
+              <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(''); setShowSubmitModal(true); }}
+                style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: theme.textMuted, cursor: 'pointer' }}>
+                + Join Leaderboard
+              </button>
+            ) : null}
             {totalCost > 0 && (
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: '#fbbf24', lineHeight: 1 }}>{totalCost.toLocaleString()} PP</div>
@@ -11780,36 +11910,220 @@ function PTLivePage() {
 
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
 
-          {/* Left sidebar */}
+          {/* Left sidebar — vertical tab nav */}
           <div style={{ width: 190, flexShrink: 0 }}>
-            <PTLiveScoringKey theme={theme} />
-          </div>
-
-          {/* Right: roster */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
-              {/* Batters header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
-              </div>
-              {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
-
-              {/* Pitchers header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
-              </div>
-              {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 20 }}>
+              {[
+                { id: 'team',        label: 'My Team' },
+                { id: 'leaderboard', label: 'My Group' },
+                { id: 'global',      label: 'Global Rankings' },
+              ].map(tab => (
+                <button key={tab.id} onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode);
+                  if (tab.id === 'global') loadGlobalRankings();
+                }} style={{
+                  textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
+                  border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
+                  background: activeTab === tab.id ? `${theme.accent}22` : 'transparent',
+                  color: activeTab === tab.id ? theme.accent : theme.textMuted,
+                  fontWeight: 600, fontSize: 13, letterSpacing: '0.02em',
+                }}>
+                  {tab.label}
+                  {tab.id === 'leaderboard' && groupCode && (
+                    <div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>{groupCode}</div>
+                  )}
+                </button>
+              ))}
             </div>
+            {activeTab === 'team' && <PTLiveScoringKey theme={theme} />}
           </div>
 
+          {/* Right: content area */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+
+            {/* ── MY TEAM TAB ─────────────────────────────────────────────── */}
+            {activeTab === 'team' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
+                </div>
+                {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
+                </div>
+                {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
+              </div>
+            )}
+
+            {/* ── MY GROUP TAB ─────────────────────────────────────────────── */}
+            {activeTab === 'leaderboard' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                {!groupCode ? (
+                  /* No group yet */
+                  <div style={{ textAlign: 'center', padding: '48px 0' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Join a Group</div>
+                    <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 24 }}>Submit your team and track how you stack up against friends.</div>
+                    <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(groupCode); setShowSubmitModal(true); }}
+                      style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '10px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em' }}>
+                      Join / Create Group
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Group header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                      <div>
+                        <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>{groupCode}</div>
+                        <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
+                          {isLocked
+                            ? <span style={{ color: '#ef4444' }}>Locked · Submissions closed at {fmtTime(lockTime)}</span>
+                            : lockTime
+                              ? <span style={{ color: '#fbbf24' }}>Locks at {fmtTime(lockTime)} — update your team before first pitch</span>
+                              : 'Loading game times…'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {!isLocked && (
+                          <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(groupCode); setShowSubmitModal(true); }}
+                            style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            {hasSubmittedToday ? 'Update Team' : 'Submit Team'}
+                          </button>
+                        )}
+                        <button onClick={() => navigator.clipboard?.writeText(groupCode)}
+                          style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Copy Code
+                        </button>
+                        <button onClick={() => { setGroupCode(''); localStorage.removeItem('ptlive_group_code'); setGroupEntries([]); setHasSubmittedToday(false); }}
+                          style={{ background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Change Group
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Leaderboard table */}
+                    {leaderboardLoading ? (
+                      <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                    ) : groupEntries.length === 0 ? (
+                      <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>
+                        No submissions yet.{!hasSubmittedToday && !isLocked ? ' Be the first — submit your team above.' : ''}
+                      </div>
+                    ) : (() => {
+                      const ranked = [...groupEntries]
+                        .map(e => ({ ...e, livePP: computeTeamPP(e.team) }))
+                        .sort((a, b) => b.livePP - a.livePP);
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {/* Header row */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                            {['#', 'Username', 'Submitted', 'Live PP'].map(h => (
+                              <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
+                            ))}
+                          </div>
+                          {ranked.map((entry, idx) => {
+                            const isMe = entry.username === username;
+                            const isLate = lockTime && new Date(entry.submitted_at) > new Date(lockTime);
+                            const isExpanded = expandedUser === entry.username;
+                            return (
+                              <div key={entry.username}>
+                                <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
+                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                    {entry.username}{isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: isLate ? '#ef4444' : theme.textMuted }}>
+                                    {fmtTime(entry.submitted_at)}{isLate && ' · late'}
+                                  </div>
+                                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
+                                    {entry.livePP} PP
+                                  </div>
+                                </div>
+                                {isExpanded && (
+                                  <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {PT_LIVE_SLOTS.map(slot => {
+                                      const card = entry.team?.[slot.key];
+                                      if (!card) return (
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, color: '#374151' }}>
+                                          <span>{slot.label}</span><span>—</span><span />
+                                        </div>
+                                      );
+                                      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+                                      const pd = mlbStats[name];
+                                      let slotPP = null;
+                                      if (pd) {
+                                        if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
+                                        else if (slot.role === 'sp' && pd.pitching) slotPP = ptLiveSpPP(pd.pitching);
+                                        else if (slot.role === 'rp' && pd.pitching) slotPP = ptLiveRpPP(pd.pitching);
+                                      }
+                                      return (
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
+                                          <span style={{ color: theme.textMuted, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
+                                          <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
+                                          <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : theme.textMuted }}>
+                                            {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── GLOBAL RANKINGS TAB ──────────────────────────────────────── */}
+            {activeTab === 'global' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Group Rankings</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>Average PP per member · today · min. 2 members · late submissions excluded from average</div>
+                </div>
+                {globalLoading ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                ) : globalRankings.length === 0 ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No qualifying groups yet today.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {['#', 'Group', 'Members', 'Avg PP'].map(h => (
+                        <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
+                      ))}
+                    </div>
+                    {globalRankings.map((g, idx) => {
+                      const isMyGroup = g.group_code === groupCode;
+                      return (
+                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em' }}>
+                            {g.group_code}{isMyGroup && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11, fontFamily: 'inherit' }}>you</span>}
+                          </div>
+                          <div style={{ fontSize: 13, color: theme.textMuted }}>{g.member_count} members</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
     </Layout>
@@ -11823,6 +12137,71 @@ function PTLivePage() {
         theme={theme}
         onClose={() => setPerfModal(null)}
       />
+    )}
+
+    {/* ── Submit / Join Modal ──────────────────────────────────────────────── */}
+    {showSubmitModal && ReactDOM.createPortal(
+      <div onClick={() => setShowSubmitModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '28px 32px', width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
+          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 20 }}>
+            {hasSubmittedToday ? 'Update Submission' : 'Join / Create Group'}
+          </div>
+
+          {isLocked && !hasSubmittedToday && (
+            <div style={{ background: '#ef444422', border: '1px solid #ef4444', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#ef4444' }}>
+              Submissions locked — first game started at {fmtTime(lockTime)}. You can only view the leaderboard.
+            </div>
+          )}
+
+          {/* Username */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 6 }}>Username</div>
+            <input
+              value={submitModalUsername}
+              onChange={e => setSubmitModalUsername(e.target.value)}
+              maxLength={20}
+              placeholder="Your display name"
+              style={{ width: '100%', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '9px 12px', fontSize: 14, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Group code */}
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 6 }}>Group Code</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={submitModalCode}
+                onChange={e => setSubmitModalCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5))}
+                maxLength={5}
+                placeholder="e.g. GANG5"
+                style={{ flex: 1, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '9px 12px', fontSize: 14, color: '#fff', outline: 'none', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.1em' }}
+              />
+              <button onClick={() => setSubmitModalCode(genCode())}
+                style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '9px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Random
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 20 }}>Max 5 characters · uppercase letters and numbers only · share with friends</div>
+
+          {submitError && (
+            <div style={{ fontSize: 13, color: '#ef4444', marginBottom: 14 }}>{submitError}</div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => { setShowSubmitModal(false); setSubmitError(''); }}
+              style={{ flex: 1, background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={handleSubmit}
+              disabled={submitLoading || (isLocked && !hasSubmittedToday)}
+              style={{ flex: 2, background: (isLocked && !hasSubmittedToday) ? '#374151' : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: (isLocked && !hasSubmittedToday) ? 'not-allowed' : 'pointer', opacity: (isLocked && !hasSubmittedToday) ? 0.5 : 1 }}>
+              {submitLoading ? 'Submitting…' : (isLocked && !hasSubmittedToday) ? 'Locked' : hasSubmittedToday ? 'Update Team' : 'Submit Team'}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
     )}
     </>
   );
