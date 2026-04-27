@@ -11164,10 +11164,12 @@ function LiveSpecPage() {
 
 function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose }) {
   const normName = normalizeName(name);
+  const normNameNoHyphen = normName.replace(/-/g, '');
+  const look = (map) => map ? (map[normName] || map[normNameNoHyphen] || null) : null;
   const isBatter = role === 'batter';
-  const season = fgData ? (isBatter ? fgData.sBatMap[normName] : fgData.sPitMap[normName]) : null;
-  const proj   = fgData ? (isBatter ? fgData.zBatMap[normName] : fgData.zPitMap[normName]) : null;
-  const l14    = fgData ? (isBatter ? fgData.lBatMap[normName] : fgData.lPitMap[normName]) : null;
+  const season = isBatter ? look(fgData?.sBatMap) : look(fgData?.sPitMap);
+  const proj   = isBatter ? look(fgData?.zBatMap) : look(fgData?.zPitMap);
+  const l14    = isBatter ? look(fgData?.lBatMap) : look(fgData?.lPitMap);
 
   const f3 = v => (v != null && !isNaN(v)) ? Number(v).toFixed(3) : '—';
   const f2 = v => (v != null && !isNaN(v)) ? Number(v).toFixed(2) : '—';
@@ -11411,10 +11413,16 @@ function PTLivePage() {
     setFgLoading(true);
     try {
       const now = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
+      const pad = n => String(n).padStart(2, '0');
+      const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      const todayStr = fmtDate(now);
+      const l14Date = new Date(now);
+      l14Date.setDate(l14Date.getDate() - 14);
+      const l14Str = fmtDate(l14Date);
       const season = now.getFullYear();
-      const seasonBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${season}-03-01&enddate=${todayStr}&month=0&pageItems=2000`;
-      const l14Base   = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&month=33&pageItems=2000`;
+      const mkFg = (start, end) => `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${start}&enddate=${end}&month=0&pageItems=2000`;
+      const seasonBase = mkFg(`${season}-03-01`, todayStr);
+      const l14Base    = mkFg(l14Str, todayStr);
       const [zBat, zPit, sBat, sPit, lBat, lPit] = await Promise.all([
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
         fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
@@ -11429,7 +11437,11 @@ function PTLivePage() {
         toArr(arr).forEach(p => {
           const raw = p.Name || p.name || p.PlayerName || p.playerName || '';
           const name = normalizeName(fgStripHtml(raw));
-          if (name) m[name] = p;
+          if (!name) return;
+          m[name] = p;
+          // Also index without hyphens (e.g. "Hye-Seong Kim" → "hyeseong kim")
+          const noHyphen = name.replace(/-/g, '');
+          if (noHyphen !== name) m[noHyphen] = p;
         });
         return m;
       };
@@ -11526,17 +11538,15 @@ function PTLivePage() {
 
     return (
       <div key={slot.key} style={{ borderBottom: `1px solid ${theme.border}`, position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '52px 36px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
 
-          {/* Slot label */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em' }}>{slot.label}</div>
-
-          {/* Stats button column */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Slot label + Stats button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: 32 }}>{slot.label}</div>
             {card && !isEditing && (
               <button
                 onClick={() => setPerfModal({ name: `${card.first_name} ${card.last_name}`, role: slot.role, cardOvr: card.card_value || 0 })}
-                style={{ fontSize: 9, fontWeight: 700, padding: '3px 5px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+                style={{ fontSize: 9, fontWeight: 700, padding: '3px 6px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
               >
                 Stats
               </button>
@@ -11686,9 +11696,8 @@ function PTLivePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}` }}>
               {/* Batters header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '52px 36px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
-                <div />
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
@@ -11697,9 +11706,8 @@ function PTLivePage() {
               {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
 
               {/* Pitchers header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '52px 36px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
-                <div />
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
