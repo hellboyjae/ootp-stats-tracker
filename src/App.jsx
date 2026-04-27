@@ -11160,6 +11160,140 @@ function LiveSpecPage() {
   );
 }
 
+// ==================== PERF INFO MODAL ====================
+
+function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose }) {
+  const normName = normalizeName(name);
+  const isBatter = role === 'batter';
+  const season = fgData ? (isBatter ? fgData.sBatMap[normName] : fgData.sPitMap[normName]) : null;
+  const proj   = fgData ? (isBatter ? fgData.zBatMap[normName] : fgData.zPitMap[normName]) : null;
+  const l14    = fgData ? (isBatter ? fgData.lBatMap[normName] : fgData.lPitMap[normName]) : null;
+
+  const f3 = v => (v != null && !isNaN(v)) ? Number(v).toFixed(3) : '—';
+  const f2 = v => (v != null && !isNaN(v)) ? Number(v).toFixed(2) : '—';
+  const fi = v => (v != null && !isNaN(v)) ? Math.round(Number(v)).toString() : '—';
+  const fp = v => (v != null && !isNaN(v)) ? (Number(v) * 100).toFixed(1) + '%' : '—';
+
+  const batDefs = [
+    { label: 'PA',    key: 'PA',    fmt: fi,  higher: null },
+    { label: 'AVG',   key: 'AVG',   fmt: f3,  higher: true },
+    { label: 'OBP',   key: 'OBP',   fmt: f3,  higher: true },
+    { label: 'SLG',   key: 'SLG',   fmt: f3,  higher: true },
+    { label: 'HR',    key: 'HR',    fmt: fi,  higher: true },
+    { label: 'wRC+',  key: 'wRCp',  fmt: fi,  higher: true },
+    { label: 'K%',    key: 'Kpct',  fmt: fp,  higher: false },
+    { label: 'BB%',   key: 'BBpct', fmt: fp,  higher: true },
+    { label: 'BABIP', key: 'BABIP', fmt: f3,  higher: true },
+  ];
+
+  const pitDefs = [
+    { label: 'IP',   key: 'IP',   fmt: f2,  higher: null },
+    { label: 'ERA',  key: 'ERA',  fmt: f2,  higher: false },
+    { label: 'FIP',  key: 'FIP',  fmt: f2,  higher: false },
+    { label: 'WHIP', key: 'WHIP', fmt: f2,  higher: false },
+    { label: 'K/9',  key: 'K9',   fmt: f2,  higher: true },
+    { label: 'BB/9', key: 'BB9',  fmt: f2,  higher: false },
+    { label: 'HR/9', key: 'HR9',  fmt: f2,  higher: false },
+  ];
+
+  const defs = isBatter ? batDefs : pitDefs;
+
+  const vsColor = pct => pct >= 10 ? '#22c55e' : pct >= 3 ? '#86efac' : pct >= -3 ? '#aaa' : pct >= -10 ? '#fca5a5' : '#ef4444';
+  const roleLabel = role === 'sp' ? 'Starting Pitcher' : role === 'rp' ? 'Relief Pitcher' : 'Batter';
+
+  const sectionLabel = txt => (
+    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: theme.accent, marginBottom: 10 }}>{txt}</div>
+  );
+
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: 24, width: 440, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.8)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{name}</div>
+            <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{roleLabel} · OVR {cardOvr}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, fontSize: 20, cursor: 'pointer', padding: 0, lineHeight: 1 }}>✕</button>
+        </div>
+
+        {fgLoading && (
+          <div style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>Loading FanGraphs data…</div>
+        )}
+
+        {!fgLoading && !season && (
+          <div style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No FanGraphs data found for this player.</div>
+        )}
+
+        {!fgLoading && season && (
+          <>
+            {/* Season stats */}
+            <div style={{ marginBottom: 20 }}>
+              {sectionLabel('2026 Season')}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 16px' }}>
+                {defs.map(s => {
+                  const v = fgGet(season, s.key);
+                  return (
+                    <div key={s.key}>
+                      <div style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{s.label}</div>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{v != null ? s.fmt(v) : '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* vs ZiPS */}
+            {proj && (
+              <div style={{ marginBottom: 20 }}>
+                {sectionLabel('vs ZiPS Projection')}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {defs.filter(s => s.higher !== null).map(s => {
+                    const actual    = fgGet(season, s.key);
+                    const projected = fgGet(proj, s.key);
+                    if (actual == null || projected == null || Math.abs(projected) < 0.0001) return null;
+                    const rawPct = ((actual - projected) / Math.abs(projected)) * 100;
+                    const adjPct = s.higher ? rawPct : -rawPct;
+                    const sign   = rawPct >= 0 ? '+' : '';
+                    return (
+                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '44px 60px 80px 1fr', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                        <span style={{ color: theme.textMuted }}>{s.label}</span>
+                        <span style={{ color: '#fff', fontWeight: 600 }}>{s.fmt(actual)}</span>
+                        <span style={{ color: '#555', fontSize: 11 }}>proj {s.fmt(projected)}</span>
+                        <span style={{ color: vsColor(adjPct), fontWeight: 700 }}>{sign}{rawPct.toFixed(1)}%</span>
+                      </div>
+                    );
+                  }).filter(Boolean)}
+                </div>
+              </div>
+            )}
+
+            {/* Last 14 days */}
+            {l14 && (
+              <div>
+                {sectionLabel('Last 14 Days')}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 16px' }}>
+                  {defs.map(s => {
+                    const v = fgGet(l14, s.key);
+                    return (
+                      <div key={s.key}>
+                        <div style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{s.label}</div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{v != null ? s.fmt(v) : '—'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ==================== PT LIVE PAGE ====================
 
 function PTLivePage() {
@@ -11180,6 +11314,9 @@ function PTLivePage() {
   const [activePicker, setActivePicker] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
   const pickerRef = useRef(null);
+  const [fgData, setFgData]       = useState(null);
+  const [fgLoading, setFgLoading] = useState(false);
+  const [perfModal, setPerfModal] = useState(null); // { name, role, cardOvr }
 
   useEffect(() => {
     localStorage.setItem('ptlive_team_v1', JSON.stringify(team));
@@ -11199,6 +11336,7 @@ function PTLivePage() {
   useEffect(() => {
     loadPTLiveCards();
     fetchMLBToday();
+    fetchFgData();
     const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -11300,6 +11438,41 @@ function PTLivePage() {
       setStatsError('Could not load MLB stats.');
     }
     setIsLoadingStats(false);
+  };
+
+  const fetchFgData = async () => {
+    setFgLoading(true);
+    try {
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+      const l14 = new Date(now);
+      l14.setDate(l14.getDate() - 14);
+      const l14Str = l14.toISOString().slice(0, 10);
+      const season = now.getFullYear();
+      const mkBase = (start, end) =>
+        `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${start}&enddate=${end}&month=0&pageItems=2000`;
+      const [zBat, zPit, sBat, sPit, lBat, lPit] = await Promise.all([
+        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
+        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
+        fetch(`${mkBase(`${season}-03-01`, todayStr)}&stats=bat`).then(r => r.json()),
+        fetch(`${mkBase(`${season}-03-01`, todayStr)}&stats=pit`).then(r => r.json()),
+        fetch(`${mkBase(l14Str, todayStr)}&stats=bat`).then(r => r.json()),
+        fetch(`${mkBase(l14Str, todayStr)}&stats=pit`).then(r => r.json()),
+      ]);
+      const toArr = x => Array.isArray(x) ? x : (x?.data || []);
+      const byName = arr => {
+        const m = {};
+        toArr(arr).forEach(p => {
+          const name = normalizeName(fgStripHtml(p.Name || p.name || ''));
+          if (name) m[name] = p;
+        });
+        return m;
+      };
+      setFgData({ zBatMap: byName(zBat), zPitMap: byName(zPit), sBatMap: byName(sBat), sPitMap: byName(sPit), lBatMap: byName(lBat), lPitMap: byName(lPit) });
+    } catch (e) {
+      console.error('FG perf data error:', e);
+    }
+    setFgLoading(false);
   };
 
   const slotResults = useMemo(() => PT_LIVE_SLOTS.map(slot => {
@@ -11444,10 +11617,20 @@ function PTLivePage() {
               )}
             </div>
           ) : (
-            <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {card
-                ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
-                : <span style={{ color: theme.textDim }}>—</span>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+              <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                {card
+                  ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
+                  : <span style={{ color: theme.textDim }}>—</span>}
+              </div>
+              {card && (
+                <button
+                  onClick={() => setPerfModal({ name: `${card.first_name} ${card.last_name}`, role: slot.role, cardOvr: card.card_value || 0 })}
+                  style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 7px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+                >
+                  Stats
+                </button>
+              )}
             </div>
           )}
 
@@ -11559,6 +11742,17 @@ function PTLivePage() {
         </div>
       </div>
     </Layout>
+    {perfModal && (
+      <PerfInfoModal
+        name={perfModal.name}
+        role={perfModal.role}
+        cardOvr={perfModal.cardOvr}
+        fgData={fgData}
+        fgLoading={fgLoading}
+        theme={theme}
+        onClose={() => setPerfModal(null)}
+      />
+    )}
   );
 }
 
