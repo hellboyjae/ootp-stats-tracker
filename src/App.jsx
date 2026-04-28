@@ -568,6 +568,7 @@ function StatsPage() {
   const [showPer9, setShowPer9] = useState(false);
   const [showTraditional, setShowTraditional] = useState(true);
   const [notification, setNotification] = useState(null);
+  const [friendlyToast, setFriendlyToast] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('tournaments');
   const [tournamentSearch, setTournamentSearch] = useState('');
@@ -1366,7 +1367,11 @@ function StatsPage() {
       <main style={styles.main}>
         <aside style={styles.sidebar}>
           <div style={styles.sidebarTabs}>
-            <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('tournaments')}>Tournaments</button>
+            <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => {
+              setSidebarTab('tournaments');
+              setFriendlyToast(true);
+              setTimeout(() => setFriendlyToast(false), 8000);
+            }}>Tournaments</button>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'drafts' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('drafts')}>Drafts</button>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'legacy' ? styles.sidebarTabActive : {})}} onClick={() => setSidebarTab('legacy')}>Legacy</button>
           </div>
@@ -1887,6 +1892,15 @@ function StatsPage() {
         document.body
       )}
     </Layout>
+    {friendlyToast && ReactDOM.createPortal(
+      <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 9999, background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '16px 22px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', maxWidth: 420 }}>
+        <div style={{ fontSize: 16, color: '#fff', fontWeight: 500, lineHeight: 1.5 }}>
+          Looking for data on a tournament we don't have? Check out our friends at{' '}
+          <a href="https://cwhitstats.com" target="_blank" rel="noopener" style={{ color: '#38bdf8', fontWeight: 700, textDecoration: 'underline', fontSize: 16 }}>cwhitstats.com</a>
+        </div>
+      </div>,
+      document.body
+    )}
   );
 }
 
