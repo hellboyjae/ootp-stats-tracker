@@ -11470,8 +11470,11 @@ function PTLivePage() {
         : [];
       const all = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
       const byOvr = (a, b) => (b.card_value || 0) - (a.card_value || 0);
+      // Two-way players whose cards are listed as batters but can also start as SP
+      const TWO_WAY_SP = ['shohei ohtani'];
+      const isTwoWaySP = c => TWO_WAY_SP.includes(normalizeName(`${c.first_name || ''} ${c.last_name || ''}`));
       const isBatter = c => !c.pitcher_role || Number(c.pitcher_role) === 0;
-      const isSP = c => Number(c.pitcher_role) === 11;
+      const isSP = c => Number(c.pitcher_role) === 11 || isTwoWaySP(c);
       const isRP = c => Number(c.pitcher_role) === 12 || Number(c.pitcher_role) === 13;
       setBatters(all.filter(isBatter).sort(byOvr));
       setSps(all.filter(isSP).sort(byOvr));
