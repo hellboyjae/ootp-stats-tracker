@@ -10647,7 +10647,7 @@ function PackSimulatorPage() {
 // PT LIVE — constants & scoring
 // ============================================================
 const normalizeName = (s) =>
-  (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, '').toLowerCase().trim();
 const PT_LIVE_SLOTS = [
   { key: 'C',   label: 'C',    role: 'batter', pos: 2    },
   { key: '1B',  label: '1B',   role: 'batter', pos: 3    },
@@ -11872,7 +11872,7 @@ function PTLivePage() {
               ? <span style={{ color: '#fff' }}>…</span>
               : card
                 ? (statsText || (pd?.gameStatus === 'Preview'
-                    ? <span style={{ color: theme.textMuted }}>Hasn't Started</span>
+                    ? <span style={{ color: theme.textMuted }}>Upcoming</span>
                     : <span style={{ color: theme.textDim }}>No game</span>))
                 : ''}
           </div>
