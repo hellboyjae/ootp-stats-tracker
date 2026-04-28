@@ -11316,7 +11316,8 @@ function PTLivePage() {
   const [globalLoading, setGlobalLoading]             = useState(false);
   const [individualRankings, setIndividualRankings]   = useState([]);
   const [individualLoading, setIndividualLoading]     = useState(false);
-  const [expandedUser, setExpandedUser]     = useState(null);
+  const [expandedUser, setExpandedUser]         = useState(null);
+  const [expandedGlobal, setExpandedGlobal]     = useState(null);
   const [updateConfirm, setUpdateConfirm]   = useState(false);
 
   const isLocked = lockTime && new Date() >= lockTime;
@@ -11371,7 +11372,7 @@ function PTLivePage() {
     setIndividualLoading(true);
     const { data } = await supabase
       .from('ptlive_groups')
-      .select('username, group_code, pp, submitted_at')
+      .select('username, group_code, pp, submitted_at, team')
       .eq('date', todayStr)
       .order('pp', { ascending: false });
     setIndividualRankings(data || []);
@@ -11497,10 +11498,12 @@ function PTLivePage() {
           .then();
       }
 
+      const previewGames = games.filter(g => g.status?.abstractGameState === 'Preview');
       const active = games.filter(g => g.status?.abstractGameState !== 'Preview');
-      if (active.length === 0) { setMlbStats({}); setIsLoadingStats(false); return; }
+      const allGames = [...active, ...previewGames];
+      if (allGames.length === 0) { setMlbStats({}); setIsLoadingStats(false); return; }
       const boxscores = await Promise.all(
-        active.map(g =>
+        allGames.map(g =>
           fetch(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`)
             .then(r => r.json()).catch(() => null)
         )
@@ -11532,7 +11535,7 @@ function PTLivePage() {
       const map = {};
       boxscores.forEach((bs, idx) => {
         if (!bs) return;
-        const gameStatus = active[idx]?.status?.abstractGameState || '';
+        const gameStatus = allGames[idx]?.status?.abstractGameState || '';
         ['home','away'].forEach(side => {
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
             const name = normalizeName(p.person?.fullName);
@@ -11868,7 +11871,9 @@ function PTLivePage() {
             {isLoadingStats
               ? <span style={{ color: '#fff' }}>…</span>
               : card
-                ? (statsText || <span style={{ color: '#fff' }}>No game</span>)
+                ? (statsText || (pd?.gameStatus === 'Preview'
+                    ? <span style={{ color: theme.textMuted }}>Hasn't Started</span>
+                    : <span style={{ color: theme.textDim }}>No game</span>))
                 : ''}
           </div>
 
@@ -12212,33 +12217,75 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
                 ) : individualRankings.length === 0 ? (
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No submissions yet today.</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 90px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                      {['#', 'Player', 'Group', 'PP'].map(h => (
-                        <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
-                      ))}
+                ) : (() => {
+                  const ranked = [...individualRankings]
+                    .map(e => ({ ...e, livePP: computeTeamPP(e.team) }))
+                    .sort((a, b) => b.livePP - a.livePP);
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['#', 'Player', 'Submitted', 'Live PP'].map(h => (
+                          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
+                        ))}
+                      </div>
+                      {ranked.map((entry, idx) => {
+                        const isMe = entry.username === username && entry.group_code === groupCode;
+                        const isLate = lockTime && entry.submitted_at && new Date(entry.submitted_at) > lockTime;
+                        const expandKey = `${entry.group_code}-${entry.username}`;
+                        const isExpanded = expandedGlobal === expandKey;
+                        return (
+                          <div key={expandKey}>
+                            <div onClick={() => setExpandedGlobal(isExpanded ? null : expandKey)}
+                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{entry.username}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                                {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
+                                {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
+                              </div>
+                              <div style={{ fontSize: 12, color: isLate ? '#ef4444' : theme.textMuted }}>
+                                {fmtTime(entry.submitted_at)}{isLate && ' · late'}
+                              </div>
+                              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
+                                {entry.livePP} PP
+                              </div>
+                            </div>
+                            {isExpanded && (
+                              <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {PT_LIVE_SLOTS.map(slot => {
+                                  const card = entry.team?.[slot.key];
+                                  if (!card) return (
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, color: '#374151' }}>
+                                      <span>{slot.label}</span><span>—</span><span />
+                                    </div>
+                                  );
+                                  const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+                                  const pd = mlbStats[name];
+                                  let slotPP = null;
+                                  if (pd) {
+                                    if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
+                                    else if (slot.role === 'sp' && pd.pitching) slotPP = ptLiveSpPP(pd.pitching);
+                                    else if (slot.role === 'rp' && pd.pitching) slotPP = ptLiveRpPP(pd.pitching);
+                                  }
+                                  return (
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
+                                      <span style={{ color: theme.textMuted, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
+                                      <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
+                                      <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : theme.textMuted }}>
+                                        {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    {individualRankings.map((entry, idx) => {
-                      const isMe = entry.username === username && entry.group_code === groupCode;
-                      const isLate = lockTime && entry.submitted_at && new Date(entry.submitted_at) > lockTime;
-                      return (
-                        <div key={`${entry.group_code}-${entry.username}`} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 90px 80px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{entry.username}</span>
-                            {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
-                            {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
-                          </div>
-                          <div>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, background: `${theme.border}`, borderRadius: 4, padding: '2px 7px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
-                          </div>
-                          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.pp >= 0 ? '#22c55e' : '#ef4444', textAlign: 'right' }}>{entry.pp} PP</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
