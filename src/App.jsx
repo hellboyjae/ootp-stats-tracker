@@ -11771,6 +11771,7 @@ function PTLivePage() {
   const statusDot = (status) => {
     if (status === 'Final') return { color: '#6b7280', label: 'Final' };
     if (status === 'Live')  return { color: '#22c55e', label: '● Live' };
+    if (status === 'Preview') return { color: '#f59e0b', label: 'Upcoming' };
     return { color: '#f59e0b', label: status || '' };
   };
 
