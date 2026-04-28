@@ -11483,8 +11483,8 @@ function PTLivePage() {
   const fetchMLBToday = async () => {
     setIsLoadingStats(true); setStatsError(null);
     try {
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+      const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
       const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
       const schedData = await schedRes.json();
       const games = schedData.dates?.[0]?.games || [];
