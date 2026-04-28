@@ -1354,6 +1354,7 @@ function StatsPage() {
   const totalData = selectedTournament ? (selectedTournament[activeTab]?.length || 0) : 0;
 
   return (
+    <>
     <Layout notification={notification}>
       {/* File input at root level - never unmounts, keeps ref stable across tournament switches */}
       <input 
@@ -1901,6 +1902,7 @@ function StatsPage() {
       </div>,
       document.body
     )}
+    </>
   );
 }
 
