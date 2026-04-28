@@ -11323,8 +11323,9 @@ function PTLivePage() {
   const isLocked = lockTime && new Date() >= lockTime;
 
   const todayStr = (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    // Pin to US Pacific time so all users share the same "day" boundary — avoids mid-game rollover
+    const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    return `${et.getFullYear()}-${String(et.getMonth()+1).padStart(2,'0')}-${String(et.getDate()).padStart(2,'0')}`;
   })();
 
   const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
