@@ -12106,13 +12106,17 @@ function PTLivePage() {
                       </div>
                     ) : (() => {
                       const ranked = [...groupEntries]
-                        .map(e => ({ ...e, livePP: computeTeamPP(e.team) }))
+                        .map(e => ({
+                          ...e,
+                          livePP:   computeTeamPP(e.team),
+                          teamCost: Object.values(e.team || {}).reduce((s, c) => s + (c?.last_10_price || 0), 0),
+                        }))
                         .sort((a, b) => b.livePP - a.livePP);
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {/* Header row */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                            {['#', 'Username', 'Submitted', 'Live PP'].map(h => (
+                          <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                            {['#', 'Username', 'L10 Cost', 'Submitted', 'Live PP'].map(h => (
                               <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                             ))}
                           </div>
@@ -12123,10 +12127,13 @@ function PTLivePage() {
                             return (
                               <div key={entry.username}>
                                 <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
-                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                                     {entry.username}{isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
+                                  </div>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
+                                    {entry.teamCost > 0 ? entry.teamCost.toLocaleString() : '—'}
                                   </div>
                                   <div style={{ fontSize: 12, color: isLate ? '#ef4444' : theme.textMuted }}>
                                     {fmtTime(entry.submitted_at)}{isLate && ' · late'}
