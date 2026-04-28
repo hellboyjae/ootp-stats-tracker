@@ -11312,8 +11312,10 @@ function PTLivePage() {
   const [submitError, setSubmitError]       = useState('');
   const [groupEntries, setGroupEntries]     = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
-  const [globalRankings, setGlobalRankings] = useState([]);
-  const [globalLoading, setGlobalLoading]   = useState(false);
+  const [globalRankings, setGlobalRankings]           = useState([]);
+  const [globalLoading, setGlobalLoading]             = useState(false);
+  const [individualRankings, setIndividualRankings]   = useState([]);
+  const [individualLoading, setIndividualLoading]     = useState(false);
   const [expandedUser, setExpandedUser]     = useState(null);
   const [updateConfirm, setUpdateConfirm]   = useState(false);
 
@@ -11365,6 +11367,17 @@ function PTLivePage() {
     setGlobalLoading(false);
   };
 
+  const loadIndividualRankings = async () => {
+    setIndividualLoading(true);
+    const { data } = await supabase
+      .from('ptlive_groups')
+      .select('username, group_code, pp, submitted_at')
+      .eq('date', todayStr)
+      .order('pp', { ascending: false });
+    setIndividualRankings(data || []);
+    setIndividualLoading(false);
+  };
+
   const handleSubmit = async () => {
     const uname = submitModalUsername.trim();
     const code  = submitModalCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
@@ -11390,10 +11403,10 @@ function PTLivePage() {
   // Direct update — uses already-stored username/groupCode, no modal needed
   const updateLeaderboardTeam = async () => {
     if (!username || !groupCode) return;
-    await supabase.from('ptlive_groups').upsert(
-      { group_code: groupCode, username, date: todayStr, team, pp: totalPP },
-      { onConflict: 'group_code,username,date' }
-    );
+    const payload = { group_code: groupCode, username, date: todayStr, team, pp: totalPP };
+    // After lock: explicitly stamp submitted_at so the global rankings filter excludes this update
+    if (isLocked) payload.submitted_at = new Date().toISOString();
+    await supabase.from('ptlive_groups').upsert(payload, { onConflict: 'group_code,username,date' });
     setHasSubmittedToday(true);
     setUpdateConfirm(false);
   };
@@ -11929,12 +11942,17 @@ function PTLivePage() {
               {clearConfirm ? 'Confirm Clear?' : 'Clear All'}
             </button>
           )}
-          {/* Update Leaderboard Team — only visible in non-edit mode when already in a group */}
-          {!isEditing && groupCode && (
-            updateConfirm ? (
+          {/* Update Leaderboard Team — always visible in non-edit mode */}
+          {!isEditing && (
+            !groupCode ? (
+              <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(''); setShowSubmitModal(true); }}
+                style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
+                Submit to Leaderboard
+              </button>
+            ) : updateConfirm ? (
               <>
-                <span style={{ fontSize: 12, color: '#fbbf24' }}>
-                  {isLocked ? 'After lock — won\'t count toward group average. Confirm?' : 'Update your submitted team?'}
+                <span style={{ fontSize: 12, color: isLocked ? '#fbbf24' : theme.textMuted }}>
+                  {isLocked ? "After lock — won't count toward group average. Confirm?" : 'Update your submitted team?'}
                 </span>
                 <button onClick={() => setUpdateConfirm(false)}
                   style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -11966,14 +11984,16 @@ function PTLivePage() {
           <div style={{ width: 160, flexShrink: 0 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {[
-                { id: 'team',        label: 'My Team' },
-                { id: 'leaderboard', label: 'My Group' },
-                { id: 'global',      label: 'Global Rankings' },
+                { id: 'team',           label: 'My Team' },
+                { id: 'leaderboard',    label: 'My Group' },
+                { id: 'group-rankings', label: 'Group Rankings' },
+                { id: 'global',         label: 'Global Rankings' },
               ].map(tab => (
                 <button key={tab.id} onClick={() => {
                   setActiveTab(tab.id);
                   if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode);
-                  if (tab.id === 'global') loadGlobalRankings();
+                  if (tab.id === 'group-rankings') loadGlobalRankings();
+                  if (tab.id === 'global') loadIndividualRankings();
                 }} style={{
                   textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
@@ -12145,11 +12165,11 @@ function PTLivePage() {
               </div>
             )}
 
-            {/* ── GLOBAL RANKINGS TAB ──────────────────────────────────────── */}
-            {activeTab === 'global' && (
+            {/* ── GROUP RANKINGS TAB ──────────────────────────────────────── */}
+            {activeTab === 'group-rankings' && (
               <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Group Rankings</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Group Rankings</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Average PP per member · today · min. 2 members · late submissions excluded from average</div>
                 </div>
                 {globalLoading ? (
@@ -12173,6 +12193,47 @@ function PTLivePage() {
                           </div>
                           <div style={{ fontSize: 13, color: theme.textMuted }}>{g.member_count} members</div>
                           <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── GLOBAL RANKINGS TAB (individuals) ────────────────────────── */}
+            {activeTab === 'global' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Rankings</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>All players today · ranked by PP · group tag shown</div>
+                </div>
+                {individualLoading ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                ) : individualRankings.length === 0 ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No submissions yet today.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 90px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {['#', 'Player', 'Group', 'PP'].map(h => (
+                        <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
+                      ))}
+                    </div>
+                    {individualRankings.map((entry, idx) => {
+                      const isMe = entry.username === username && entry.group_code === groupCode;
+                      const isLate = lockTime && entry.submitted_at && new Date(entry.submitted_at) > lockTime;
+                      return (
+                        <div key={`${entry.group_code}-${entry.username}`} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 90px 80px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{entry.username}</span>
+                            {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
+                            {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
+                          </div>
+                          <div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, background: `${theme.border}`, borderRadius: 4, padding: '2px 7px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.pp >= 0 ? '#22c55e' : '#ef4444', textAlign: 'right' }}>{entry.pp} PP</div>
                         </div>
                       );
                     })}
