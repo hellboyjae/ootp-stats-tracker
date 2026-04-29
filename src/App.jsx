@@ -11335,12 +11335,20 @@ function PTLivePage() {
   const [expandedUser, setExpandedUser]         = useState(null);
   const [expandedGlobal, setExpandedGlobal]     = useState(null);
   const [updateConfirm, setUpdateConfirm]   = useState(false);
+  const [showYesterday, setShowYesterday]   = useState(false);
+  const [yesterdayStats, setYesterdayStats] = useState({});
+  const [yesterdayLoading, setYesterdayLoading] = useState(false);
 
   const isLocked = lockTime && new Date() >= lockTime;
 
   const todayStr = (() => {
-    // Pin to US Pacific time so all users share the same "day" boundary — avoids mid-game rollover
     const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    return `${et.getFullYear()}-${String(et.getMonth()+1).padStart(2,'0')}-${String(et.getDate()).padStart(2,'0')}`;
+  })();
+
+  const yesterdayStr = (() => {
+    const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    et.setDate(et.getDate() - 1);
     return `${et.getFullYear()}-${String(et.getMonth()+1).padStart(2,'0')}-${String(et.getDate()).padStart(2,'0')}`;
   })();
 
@@ -11351,13 +11359,13 @@ function PTLivePage() {
     return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   };
 
-  const computeTeamPP = (teamObj) => {
+  const computeTeamPP = (teamObj, statsMap = mlbStats) => {
     let total = 0;
     PT_LIVE_SLOTS.forEach(slot => {
       const card = teamObj?.[slot.key];
       if (!card) return;
       const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
-      const pd = mlbStats[name] || null;
+      const pd = statsMap[name] || null;
       if (!pd) return;
       if (slot.role === 'batter' && pd.batting) total += ptLiveBatterPP(pd.batting);
       else if (slot.role === 'sp' && pd.pitching) total += ptLiveSpPP(pd.pitching);
@@ -11366,34 +11374,100 @@ function PTLivePage() {
     return total;
   };
 
-  const loadGroupLeaderboard = async (code) => {
+  const loadGroupLeaderboard = async (code, date = todayStr) => {
     if (!code) return;
     setLeaderboardLoading(true);
     const { data } = await supabase
       .from('ptlive_groups')
       .select('username, team, pp, submitted_at')
       .eq('group_code', code)
-      .eq('date', todayStr);
+      .eq('date', date);
     setGroupEntries(data || []);
     setLeaderboardLoading(false);
   };
 
-  const loadGlobalRankings = async () => {
+  const loadGlobalRankings = async (date = todayStr) => {
     setGlobalLoading(true);
-    const { data, error } = await supabase.rpc('ptlive_global_rankings', { p_date: todayStr });
+    const { data, error } = await supabase.rpc('ptlive_global_rankings', { p_date: date });
     if (!error) setGlobalRankings(data || []);
     setGlobalLoading(false);
   };
 
-  const loadIndividualRankings = async () => {
+  const loadIndividualRankings = async (date = todayStr) => {
     setIndividualLoading(true);
     const { data } = await supabase
       .from('ptlive_groups')
       .select('username, group_code, pp, submitted_at, team')
-      .eq('date', todayStr)
+      .eq('date', date)
       .order('pp', { ascending: false });
     setIndividualRankings(data || []);
     setIndividualLoading(false);
+  };
+
+  const fetchMLBForDate = async (dateStr) => {
+    try {
+      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
+      const schedData = await schedRes.json();
+      const games = schedData.dates?.[0]?.games || [];
+      if (games.length === 0) return {};
+      const boxscores = await Promise.all(
+        games.map(g =>
+          fetch(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`)
+            .then(r => r.json()).catch(() => null)
+        )
+      );
+      const mergeIP = (a, b) => {
+        const toOuts = s => { const [inn, frac] = String(s || '0').split('.'); return parseInt(inn) * 3 + parseInt(frac || 0); };
+        const outs = toOuts(a) + toOuts(b);
+        return `${Math.floor(outs / 3)}.${outs % 3}`;
+      };
+      const sumStats = (a, b) => {
+        if (!a && !b) return null; if (!a) return b; if (!b) return a;
+        const result = { ...a };
+        for (const k of Object.keys(b)) {
+          if (k === 'inningsPitched') { result[k] = mergeIP(a[k], b[k]); }
+          else if (typeof b[k] === 'number') { result[k] = (result[k] || 0) + b[k]; }
+        }
+        return result;
+      };
+      const map = {};
+      boxscores.forEach((bs) => {
+        if (!bs) return;
+        ['home','away'].forEach(side => {
+          Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
+            const name = normalizeName(p.person?.fullName);
+            if (!name) return;
+            const batting  = p.stats?.batting  || {};
+            const pitching = p.stats?.pitching || {};
+            const newBat   = Object.keys(batting).length  ? batting  : null;
+            const newPit   = Object.keys(pitching).length ? pitching : null;
+            if (map[name]) {
+              map[name] = { batting: sumStats(map[name].batting, newBat), pitching: sumStats(map[name].pitching, newPit), gameStatus: 'Final' };
+            } else {
+              map[name] = { batting: newBat, pitching: newPit, gameStatus: 'Final' };
+            }
+          });
+        });
+      });
+      return map;
+    } catch (e) { console.error('MLB historical fetch error:', e); return {}; }
+  };
+
+  const handleYesterdayToggle = async () => {
+    const next = !showYesterday;
+    setShowYesterday(next);
+    setExpandedUser(null);
+    setExpandedGlobal(null);
+    const date = next ? yesterdayStr : todayStr;
+    if (next && Object.keys(yesterdayStats).length === 0) {
+      setYesterdayLoading(true);
+      const map = await fetchMLBForDate(yesterdayStr);
+      setYesterdayStats(map);
+      setYesterdayLoading(false);
+    }
+    if (groupCode) loadGroupLeaderboard(groupCode, date);
+    if (activeTab === 'group-rankings') loadGlobalRankings(date);
+    if (activeTab === 'global') loadIndividualRankings(date);
   };
 
   const handleSubmit = async () => {
@@ -11911,10 +11985,10 @@ function PTLivePage() {
     <>
     <Layout>
       {/* Header */}
-      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: '4px solid #22c55e' }}>
+      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: `4px solid ${theme.accent}` }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#22c55e' }}>PT Live</h1>
+            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent }}>PT Live</h1>
             <div style={{ fontSize: 11, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -12017,9 +12091,10 @@ function PTLivePage() {
               ].map(tab => (
                 <button key={tab.id} onClick={() => {
                   setActiveTab(tab.id);
-                  if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode);
-                  if (tab.id === 'group-rankings') loadGlobalRankings();
-                  if (tab.id === 'global') loadIndividualRankings();
+                  const date = showYesterday ? yesterdayStr : todayStr;
+                  if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode, date);
+                  if (tab.id === 'group-rankings') loadGlobalRankings(date);
+                  if (tab.id === 'global') loadIndividualRankings(date);
                 }} style={{
                   textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
@@ -12034,6 +12109,12 @@ function PTLivePage() {
                 </button>
               ))}
             </div>
+            {activeTab !== 'team' && (
+              <button onClick={handleYesterdayToggle}
+                style={{ marginTop: 12, width: '100%', padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', border: `1px solid ${showYesterday ? '#f59e0b' : theme.border}`, background: showYesterday ? '#f59e0b22' : 'transparent', color: showYesterday ? '#f59e0b' : theme.textMuted, textAlign: 'center' }}>
+                {yesterdayLoading ? 'Loading…' : showYesterday ? '← Back to Today' : 'Yesterday'}
+              </button>
+            )}
           </div>
 
           {/* Center: content area */}
@@ -12121,10 +12202,11 @@ function PTLivePage() {
                         No submissions yet.{!hasSubmittedToday && !isLocked ? ' Be the first — submit your team above.' : ''}
                       </div>
                     ) : (() => {
+                      const activeStats = showYesterday ? yesterdayStats : mlbStats;
                       const ranked = [...groupEntries]
                         .map(e => ({
                           ...e,
-                          livePP:   computeTeamPP(e.team),
+                          livePP:   computeTeamPP(e.team, activeStats),
                           teamCost: Object.values(e.team || {}).reduce((s, c) => s + (c?.last_10_price || 0), 0),
                         }))
                         .sort((a, b) => b.livePP - a.livePP);
@@ -12168,7 +12250,7 @@ function PTLivePage() {
                                         </div>
                                       );
                                       const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
-                                      const pd = mlbStats[name];
+                                      const pd = activeStats[name];
                                       let slotPP = null;
                                       if (pd) {
                                         if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
@@ -12246,8 +12328,9 @@ function PTLivePage() {
                 ) : individualRankings.length === 0 ? (
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No submissions yet today.</div>
                 ) : (() => {
+                  const activeStats = showYesterday ? yesterdayStats : mlbStats;
                   const ranked = [...individualRankings]
-                    .map(e => ({ ...e, livePP: computeTeamPP(e.team) }))
+                    .map(e => ({ ...e, livePP: computeTeamPP(e.team, activeStats) }))
                     .sort((a, b) => b.livePP - a.livePP);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -12289,7 +12372,7 @@ function PTLivePage() {
                                     </div>
                                   );
                                   const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
-                                  const pd = mlbStats[name];
+                                  const pd = activeStats[name];
                                   let slotPP = null;
                                   if (pd) {
                                     if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
