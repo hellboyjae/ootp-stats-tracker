@@ -10733,6 +10733,15 @@ function ptLiveRpPP(s) {
   return pp;
 }
 
+// Routes pitching stats to SP or RP scoring.
+// RP-slot pitchers who actually started (gamesStarted > 0) use SP scoring
+// since they won't earn saves/holds and their outing reflects a starter's value.
+function ptLivePitcherPP(s, slotRole) {
+  if (!s) return 0;
+  if (slotRole === 'sp' || s.gamesStarted > 0) return ptLiveSpPP(s);
+  return ptLiveRpPP(s);
+}
+
 function PTLiveScoringKey({ theme }) {
   const row = ([k, v]) => (
     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 6 }}>
@@ -11368,8 +11377,7 @@ function PTLivePage() {
       const pd = statsMap[name] || null;
       if (!pd) return;
       if (slot.role === 'batter' && pd.batting) total += ptLiveBatterPP(pd.batting);
-      else if (slot.role === 'sp' && pd.pitching) total += ptLiveSpPP(pd.pitching);
-      else if (slot.role === 'rp' && pd.pitching) total += ptLiveRpPP(pd.pitching);
+      else if (pd.pitching) total += ptLivePitcherPP(pd.pitching, slot.role);
     });
     return total;
   };
@@ -11787,8 +11795,7 @@ function PTLivePage() {
       let pp = null;
       if (pd) {
         if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
-        else if (slot.role === 'sp' && pd.pitching) pp = ptLiveSpPP(pd.pitching);
-        else if (slot.role === 'rp' && pd.pitching) pp = ptLiveRpPP(pd.pitching);
+        else if (pd.pitching) pp = ptLivePitcherPP(pd.pitching, slot.role);
         else pp = 0;
       }
       return { ...slot, card, playerData: pd, pp };
@@ -12257,8 +12264,7 @@ function PTLivePage() {
                                       let slotPP = null;
                                       if (pd) {
                                         if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
-                                        else if (slot.role === 'sp' && pd.pitching) slotPP = ptLiveSpPP(pd.pitching);
-                                        else if (slot.role === 'rp' && pd.pitching) slotPP = ptLiveRpPP(pd.pitching);
+                                        else if (pd.pitching) slotPP = ptLivePitcherPP(pd.pitching, slot.role);
                                       }
                                       return (
                                         <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
@@ -12379,8 +12385,7 @@ function PTLivePage() {
                                   let slotPP = null;
                                   if (pd) {
                                     if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
-                                    else if (slot.role === 'sp' && pd.pitching) slotPP = ptLiveSpPP(pd.pitching);
-                                    else if (slot.role === 'rp' && pd.pitching) slotPP = ptLiveRpPP(pd.pitching);
+                                    else if (pd.pitching) slotPP = ptLivePitcherPP(pd.pitching, slot.role);
                                   }
                                   return (
                                     <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
