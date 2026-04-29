@@ -12044,37 +12044,37 @@ function PTLivePage() {
           )}
           {/* Update Leaderboard Team — always visible in non-edit mode */}
           {!isEditing && (
-            !groupCode ? (
-              <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(''); setShowSubmitModal(true); }}
-                style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
-                Submit to Leaderboard
+            <>
+              <button onClick={handleYesterdayToggle}
+                style={{ padding: '7px 18px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, letterSpacing: '0.02em', border: `1px solid ${showYesterday ? '#f59e0b' : theme.border}`, background: showYesterday ? '#f59e0b22' : 'transparent', color: showYesterday ? '#f59e0b' : theme.textMuted }}>
+                {yesterdayLoading ? 'Loading…' : showYesterday ? '← Today' : 'Yesterday'}
               </button>
-            ) : updateConfirm ? (
-              <>
-                <span style={{ fontSize: 12, color: isLocked ? '#fbbf24' : theme.textMuted }}>
-                  {isLocked ? "After lock — won't count toward group average. Confirm?" : 'Update your submitted team?'}
-                </span>
-                <button onClick={() => setUpdateConfirm(false)}
-                  style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  Cancel
+              {!groupCode ? (
+                <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(''); setShowSubmitModal(true); }}
+                  style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
+                  Submit to Leaderboard
                 </button>
-                <button onClick={updateLeaderboardTeam}
-                  style={{ background: isLocked ? '#fbbf24' : theme.accent, color: isLocked ? '#000' : '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  Confirm Update
+              ) : updateConfirm ? (
+                <>
+                  <span style={{ fontSize: 12, color: isLocked ? '#fbbf24' : theme.textMuted }}>
+                    {isLocked ? "After lock — won't count toward group average. Confirm?" : 'Update your submitted team?'}
+                  </span>
+                  <button onClick={() => setUpdateConfirm(false)}
+                    style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={updateLeaderboardTeam}
+                    style={{ background: isLocked ? '#fbbf24' : theme.accent, color: isLocked ? '#000' : '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    Confirm Update
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setUpdateConfirm(true)}
+                  style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
+                  Update Leaderboard Team
                 </button>
-              </>
-            ) : (
-              <button onClick={() => setUpdateConfirm(true)}
-                style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
-                Update Leaderboard Team
-              </button>
-            )
-          )}
-          {!isEditing && (
-            <button onClick={handleYesterdayToggle}
-              style={{ padding: '7px 18px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, letterSpacing: '0.02em', border: `1px solid ${showYesterday ? '#f59e0b' : theme.border}`, background: showYesterday ? '#f59e0b22' : 'transparent', color: showYesterday ? '#f59e0b' : theme.textMuted }}>
-              {yesterdayLoading ? 'Loading…' : showYesterday ? '← Today' : 'Yesterday'}
-            </button>
+              )}
+            </>
           )}
           <button
             onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setUpdateConfirm(false); setActivePicker(null); setPickerSearch(''); }}
