@@ -54,7 +54,7 @@ const teamColors = {
   twins: { primary: '#D63550', secondary: '#1a3a5c', name: 'Twins' },          // TC crimson
   whitesox: { primary: '#A0A8B4', secondary: '#2a2a2a', name: 'White Sox' },   // Silver
   tigers: { primary: '#F76A2B', secondary: '#1a3a5c', name: 'Tigers' },        // Old English D orange
-  royals: { primary: '#4A90D9', secondary: '#BD9B60', name: 'Royals' },        // Crown blue
+  royals: { primary: '#004687', secondary: '#BD9B60', name: 'Royals' },        // Official royal blue
   // AL West
   astros: { primary: '#EB6E1F', secondary: '#1a3a5c', name: 'Astros' },        // Star orange (warmer/darker)
   rangers: { primary: '#4878C8', secondary: '#C0111F', name: 'Rangers' },      // Texas blue
@@ -68,13 +68,13 @@ const teamColors = {
   marlins: { primary: '#38C8E8', secondary: '#EF3340', name: 'Marlins' },      // Miami cyan
   nationals: { primary: '#C93535', secondary: '#1a3050', name: 'Nationals' },   // Curly W red
   // NL Central
-  brewers: { primary: '#DBA520', secondary: '#1a3050', name: 'Brewers' },      // Barrel gold (amber)
-  cardinals: { primary: '#E03050', secondary: '#1a3050', name: 'Cardinals' },   // Bird-on-bat red
-  cubs: { primary: '#5080E0', secondary: '#CC3433', name: 'Cubs' },            // Wrigley blue
+  brewers: { primary: '#FFC52F', secondary: '#1a3050', name: 'Brewers' },      // Official gold
+  cardinals: { primary: '#C41E3A', secondary: '#1a3050', name: 'Cardinals' },   // Official Cardinal red
+  cubs: { primary: '#0E3386', secondary: '#CC3433', name: 'Cubs' },            // Official Wrigley blue
   reds: { primary: '#E02828', secondary: '#2a2a2a', name: 'Reds' },            // Cincy red
-  pirates: { primary: '#F5D030', secondary: '#2a2a2a', name: 'Pirates' },      // Jolly Roger yellow
+  pirates: { primary: '#FDB827', secondary: '#2a2a2a', name: 'Pirates' },      // Official gold
   // NL West
-  dodgers: { primary: '#3880D0', secondary: '#EF3E42', name: 'Dodgers' },      // Dodger blue
+  dodgers: { primary: '#005A9C', secondary: '#EF3E42', name: 'Dodgers' },      // Official Dodger blue
   padres: { primary: '#C8A04C', secondary: '#3a2a1a', name: 'Padres' },        // Friar brown-gold
   giants: { primary: '#F06030', secondary: '#2a2a2a', name: 'Giants' },        // Bay orange
   dbacks: { primary: '#C83848', secondary: '#E3D4AD', name: 'D-backs' },       // Sedona red
