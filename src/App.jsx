@@ -11777,20 +11777,23 @@ function PTLivePage() {
     setFgLoading(false);
   };
 
-  const slotResults = useMemo(() => PT_LIVE_SLOTS.map(slot => {
-    const card = team[slot.key] || null;
-    if (!card) return { ...slot, card: null, playerData: null, pp: null };
-    const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
-    const pd = mlbStats[name] || null;
-    let pp = null;
-    if (pd) {
-      if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
-      else if (slot.role === 'sp' && pd.pitching) pp = ptLiveSpPP(pd.pitching);
-      else if (slot.role === 'rp' && pd.pitching) pp = ptLiveRpPP(pd.pitching);
-      else pp = 0;
-    }
-    return { ...slot, card, playerData: pd, pp };
-  }), [team, mlbStats]);
+  const slotResults = useMemo(() => {
+    const statsMap = showYesterday ? yesterdayStats : mlbStats;
+    return PT_LIVE_SLOTS.map(slot => {
+      const card = team[slot.key] || null;
+      if (!card) return { ...slot, card: null, playerData: null, pp: null };
+      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+      const pd = statsMap[name] || null;
+      let pp = null;
+      if (pd) {
+        if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
+        else if (slot.role === 'sp' && pd.pitching) pp = ptLiveSpPP(pd.pitching);
+        else if (slot.role === 'rp' && pd.pitching) pp = ptLiveRpPP(pd.pitching);
+        else pp = 0;
+      }
+      return { ...slot, card, playerData: pd, pp };
+    });
+  }, [team, mlbStats, showYesterday, yesterdayStats]);
 
   const totalPP   = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
   const totalCost = useMemo(() => Object.values(team).reduce((s, c) => s + (c?.last_10_price || 0), 0), [team]);
