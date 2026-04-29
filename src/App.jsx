@@ -10708,7 +10708,7 @@ function ptLiveSpPP(s) {
   const fullIP = parseInt(parts[0]) || 0;
   const extraOuts = parseInt(parts[1]) || 0;
   const totalOuts = fullIP * 3 + extraOuts;
-  pp += fullIP * 4;
+  pp += Math.floor(totalOuts * 4 / 3);
   const ks = s.strikeOuts || 0;
   pp += ks * 2;
   if (ks >= 10) pp += 40;
@@ -10724,8 +10724,10 @@ function ptLiveRpPP(s) {
   pp += (s.wins || 0) * 12;
   pp += (s.saves || 0) * 35;
   pp += (s.holds || 0) * 20;
-  const fullIP = parseInt(String(s.inningsPitched || '0').split('.')[0]) || 0;
-  pp += fullIP * 4;
+  const ipParts = String(s.inningsPitched || '0').split('.');
+  const fullIP = parseInt(ipParts[0]) || 0;
+  const extraOuts = parseInt(ipParts[1]) || 0;
+  pp += Math.floor((fullIP * 3 + extraOuts) * 4 / 3);
   pp += (s.strikeOuts || 0) * 3;
   pp += (s.earnedRuns || 0) * -2;
   pp += (s.blownSaves || 0) * -1;
