@@ -12070,6 +12070,12 @@ function PTLivePage() {
               </button>
             )
           )}
+          {!isEditing && (
+            <button onClick={handleYesterdayToggle}
+              style={{ padding: '7px 18px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, letterSpacing: '0.02em', border: `1px solid ${showYesterday ? '#f59e0b' : theme.border}`, background: showYesterday ? '#f59e0b22' : 'transparent', color: showYesterday ? '#f59e0b' : theme.textMuted }}>
+              {yesterdayLoading ? 'Loading…' : showYesterday ? '← Today' : 'Yesterday'}
+            </button>
+          )}
           <button
             onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setUpdateConfirm(false); setActivePicker(null); setPickerSearch(''); }}
             style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
@@ -12109,12 +12115,6 @@ function PTLivePage() {
                 </button>
               ))}
             </div>
-            {activeTab !== 'team' && (
-              <button onClick={handleYesterdayToggle}
-                style={{ marginTop: 12, width: '100%', padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', border: `1px solid ${showYesterday ? '#f59e0b' : theme.border}`, background: showYesterday ? '#f59e0b22' : 'transparent', color: showYesterday ? '#f59e0b' : theme.textMuted, textAlign: 'center' }}>
-                {yesterdayLoading ? 'Loading…' : showYesterday ? '← Back to Today' : 'Yesterday'}
-              </button>
-            )}
           </div>
 
           {/* Center: content area */}
