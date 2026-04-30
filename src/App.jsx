@@ -10684,6 +10684,7 @@ const PT_LIVE_SLOTS = [
 
 function ptLiveBatterPP(s) {
   if (!s) return 0;
+  if (Array.isArray(s)) return s.reduce((sum, g) => sum + ptLiveBatterPP(g), 0);
   const h = s.hits || 0, d = s.doubles || 0, t = s.triples || 0, hr = s.homeRuns || 0;
   const singles = Math.max(0, h - d - t - hr);
   let pp = singles * 4 + d * 6 + t * 10 + hr * 15;
@@ -10740,6 +10741,7 @@ function ptLiveRpPP(s) {
 // since they won't earn saves/holds and their outing reflects a starter's value.
 function ptLivePitcherPP(s, slotRole) {
   if (!s) return 0;
+  if (Array.isArray(s)) return s.reduce((sum, g) => sum + ptLivePitcherPP(g, slotRole), 0);
   if (slotRole === 'sp' || s.gamesStarted > 0) return ptLiveSpPP(s);
   return ptLiveRpPP(s);
 }
@@ -11379,8 +11381,8 @@ function PTLivePage() {
       const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
       const pd = statsMap[name] || null;
       if (!pd) return;
-      if (slot.role === 'batter' && pd.batting) total += ptLiveBatterPP(pd.batting);
-      else if (pd.pitching) total += ptLivePitcherPP(pd.pitching, slot.role);
+      if (slot.role === 'batter' && pd.battingGames?.length) total += ptLiveBatterPP(pd.battingGames);
+      else if (pd.pitchingGames?.length) total += ptLivePitcherPP(pd.pitchingGames, slot.role);
     });
     return total;
   };
@@ -11658,13 +11660,20 @@ function PTLivePage() {
             );
             if (map[name]) {
               map[name] = {
-                batting:    sumStats(map[name].batting,  newBat),
-                pitching:   sumStats(map[name].pitching, newPit),
-                gameStatus: mergeStatus(map[name].gameStatus, gameStatus),
-                subbed:     map[name].subbed || newSubbed,
+                batting:      sumStats(map[name].batting,  newBat),
+                pitching:     sumStats(map[name].pitching, newPit),
+                battingGames: newBat ? [...map[name].battingGames, newBat] : map[name].battingGames,
+                pitchingGames: newPit ? [...map[name].pitchingGames, newPit] : map[name].pitchingGames,
+                gameStatus:   mergeStatus(map[name].gameStatus, gameStatus),
+                subbed:       map[name].subbed || newSubbed,
               };
             } else {
-              map[name] = { batting: newBat, pitching: newPit, gameStatus, subbed: newSubbed };
+              map[name] = {
+                batting: newBat, pitching: newPit,
+                battingGames: newBat ? [newBat] : [],
+                pitchingGames: newPit ? [newPit] : [],
+                gameStatus, subbed: newSubbed,
+              };
             }
           });
         });
@@ -11806,8 +11815,8 @@ function PTLivePage() {
       const pd = statsMap[name] || null;
       let pp = null;
       if (pd) {
-        if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
-        else if (pd.pitching) pp = ptLivePitcherPP(pd.pitching, slot.role);
+        if (slot.role === 'batter' && pd.battingGames?.length) pp = ptLiveBatterPP(pd.battingGames);
+        else if (pd.pitchingGames?.length) pp = ptLivePitcherPP(pd.pitchingGames, slot.role);
         else pp = 0;
       }
       return { ...slot, card, playerData: pd, pp };
@@ -12276,8 +12285,8 @@ function PTLivePage() {
                                       const pd = activeStats[name];
                                       let slotPP = null;
                                       if (pd) {
-                                        if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
-                                        else if (pd.pitching) slotPP = ptLivePitcherPP(pd.pitching, slot.role);
+                                        if (slot.role === 'batter' && pd.battingGames?.length) slotPP = ptLiveBatterPP(pd.battingGames);
+                                        else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                       }
                                       return (
                                         <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
@@ -12397,8 +12406,8 @@ function PTLivePage() {
                                   const pd = activeStats[name];
                                   let slotPP = null;
                                   if (pd) {
-                                    if (slot.role === 'batter' && pd.batting) slotPP = ptLiveBatterPP(pd.batting);
-                                    else if (pd.pitching) slotPP = ptLivePitcherPP(pd.pitching, slot.role);
+                                    if (slot.role === 'batter' && pd.battingGames?.length) slotPP = ptLiveBatterPP(pd.battingGames);
+                                    else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                   }
                                   return (
                                     <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
@@ -12445,8 +12454,8 @@ function PTLivePage() {
                         const pd = activeStats[name];
                         let pp = null;
                         if (pd) {
-                          if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
-                          else if (pd.pitching) pp = ptLivePitcherPP(pd.pitching, slot.role);
+                          if (slot.role === 'batter' && pd.battingGames?.length) pp = ptLiveBatterPP(pd.battingGames);
+                          else if (pd.pitchingGames?.length) pp = ptLivePitcherPP(pd.pitchingGames, slot.role);
                         }
                         playerMap[name] = { displayName: `${card.first_name} ${card.last_name}`, pos: slot.label, role: slot.role, count: 0, pp };
                       }
