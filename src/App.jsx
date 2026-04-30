@@ -11452,9 +11452,9 @@ function PTLivePage() {
             const newBat   = Object.keys(batting).length  ? batting  : null;
             const newPit   = Object.keys(pitching).length ? pitching : null;
             if (map[name]) {
-              map[name] = { batting: sumStats(map[name].batting, newBat), pitching: sumStats(map[name].pitching, newPit), gameStatus: 'Final' };
+              map[name] = { batting: sumStats(map[name].batting, newBat), pitching: sumStats(map[name].pitching, newPit), gameStatus: 'Final', subbed: false };
             } else {
-              map[name] = { batting: newBat, pitching: newPit, gameStatus: 'Final' };
+              map[name] = { batting: newBat, pitching: newPit, gameStatus: 'Final', subbed: false };
             }
           });
         });
@@ -11477,7 +11477,7 @@ function PTLivePage() {
     }
     if (groupCode) loadGroupLeaderboard(groupCode, date);
     if (activeTab === 'group-rankings') loadGlobalRankings(date);
-    if (activeTab === 'global') loadIndividualRankings(date);
+    if (activeTab === 'global' || activeTab === 'most-used') loadIndividualRankings(date);
   };
 
   const handleSubmit = async () => {
@@ -11641,6 +11641,7 @@ function PTLivePage() {
         if (!bs) return;
         const gameStatus = allGames[idx]?.status?.abstractGameState || '';
         ['home','away'].forEach(side => {
+          const currentBatterIds = new Set(bs.teams?.[side]?.battingOrder || []);
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
             const name = normalizeName(p.person?.fullName);
             if (!name) return;
@@ -11648,14 +11649,21 @@ function PTLivePage() {
             const pitching = p.stats?.pitching || {};
             const newBat   = Object.keys(batting).length  ? batting  : null;
             const newPit   = Object.keys(pitching).length ? pitching : null;
+            const gs = p.gameStatus || {};
+            const playerId = p.person?.id;
+            const newSubbed = gameStatus === 'Live' && (
+              (newPit && !gs.isCurrentPitcher) ||
+              (newBat && playerId && currentBatterIds.size > 0 && !currentBatterIds.has(playerId))
+            );
             if (map[name]) {
               map[name] = {
                 batting:    sumStats(map[name].batting,  newBat),
                 pitching:   sumStats(map[name].pitching, newPit),
                 gameStatus: mergeStatus(map[name].gameStatus, gameStatus),
+                subbed:     map[name].subbed || newSubbed,
               };
             } else {
-              map[name] = { batting: newBat, pitching: newPit, gameStatus };
+              map[name] = { batting: newBat, pitching: newPit, gameStatus, subbed: newSubbed };
             }
           });
         });
@@ -11888,7 +11896,7 @@ function PTLivePage() {
     const pp = result?.pp;
     const isOpen = activePicker === slot.key;
     const pickerCards = isOpen ? getPickerCards(slot) : [];
-    const dotInfo = pd ? statusDot(pd.gameStatus) : null;
+    const dotInfo = pd ? (pd.subbed ? { color: '#ef4444', label: 'Subbed' } : statusDot(pd.gameStatus)) : null;
     const statsText = card && pd
       ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching))
       : null;
@@ -12106,13 +12114,14 @@ function PTLivePage() {
                 { id: 'leaderboard',    label: 'My Group' },
                 { id: 'group-rankings', label: 'Group Rankings' },
                 { id: 'global',         label: 'Global Rankings' },
+                { id: 'most-used',      label: 'Most Used' },
               ].map(tab => (
                 <button key={tab.id} onClick={() => {
                   setActiveTab(tab.id);
                   const date = showYesterday ? yesterdayStr : todayStr;
                   if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode, date);
                   if (tab.id === 'group-rankings') loadGlobalRankings(date);
-                  if (tab.id === 'global') loadIndividualRankings(date);
+                  if (tab.id === 'global' || tab.id === 'most-used') loadIndividualRankings(date);
                 }} style={{
                   textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
@@ -12404,6 +12413,66 @@ function PTLivePage() {
                           </div>
                         );
                       })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* ── MOST USED TAB ───────────────────────────────────────────── */}
+            {activeTab === 'most-used' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Most Used Players</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>{showYesterday ? 'Yesterday' : 'Today'} · ranked by roster usage</div>
+                </div>
+                {individualLoading ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                ) : individualRankings.length === 0 ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No submissions yet.</div>
+                ) : (() => {
+                  const activeStats = showYesterday ? yesterdayStats : mlbStats;
+                  const total = individualRankings.length;
+                  const playerMap = {};
+                  individualRankings.forEach(entry => {
+                    PT_LIVE_SLOTS.forEach(slot => {
+                      const card = entry.team?.[slot.key];
+                      if (!card) return;
+                      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+                      if (!playerMap[name]) {
+                        const pd = activeStats[name];
+                        let pp = null;
+                        if (pd) {
+                          if (slot.role === 'batter' && pd.batting) pp = ptLiveBatterPP(pd.batting);
+                          else if (pd.pitching) pp = ptLivePitcherPP(pd.pitching, slot.role);
+                        }
+                        playerMap[name] = { displayName: `${card.first_name} ${card.last_name}`, pos: slot.label, role: slot.role, count: 0, pp };
+                      }
+                      playerMap[name].count++;
+                    });
+                  });
+                  const sorted = Object.values(playerMap).sort((a, b) => b.count - a.count);
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['#', 'POS', 'Player', 'Usage', 'PP'].map(h => (
+                          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
+                        ))}
+                      </div>
+                      {sorted.map((p, idx) => (
+                        <div key={p.displayName} style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: theme.textDim, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{p.displayName}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: theme.accent, fontFamily: "'Oswald',sans-serif" }}>
+                            {Math.round(p.count / total * 100)}%
+                            <span style={{ fontSize: 10, fontWeight: 400, color: theme.textMuted, marginLeft: 4 }}>{p.count}/{total}</span>
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: p.pp > 0 ? '#22c55e' : p.pp < 0 ? '#ef4444' : theme.textMuted }}>
+                            {p.pp !== null ? `${p.pp >= 0 ? '+' : ''}${p.pp}` : '—'}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   );
                 })()}
