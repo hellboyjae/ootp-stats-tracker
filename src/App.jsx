@@ -10910,12 +10910,13 @@ function LiveSpecPage() {
       const { startdate, enddate } = evalWindow;
       const season = new Date().getFullYear();
       const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=0&pageItems=2000`;
+      const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
 
       const [zBat, zPit, aBat, aPit] = await Promise.all([
-        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0').then(r => r.json()),
-        fetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0').then(r => r.json()),
-        fetch(`${fgBase}&stats=bat`).then(r => r.json()),
-        fetch(`${fgBase}&stats=pit`).then(r => r.json()),
+        fetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0')).then(r => r.json()),
+        fetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0')).then(r => r.json()),
+        fetch(fgProxy(`${fgBase}&stats=bat`)).then(r => r.json()),
+        fetch(fgProxy(`${fgBase}&stats=pit`)).then(r => r.json()),
       ]);
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
       const zBatArr = toArr(zBat), zPitArr = toArr(zPit);
@@ -11699,12 +11700,13 @@ function PTLivePage() {
       };
 
       // Season + ZiPS from FanGraphs (month=0 = full season; date params are ignored by FG)
+      const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
       const fgSeasonBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&month=0&pageItems=2000`;
       const [zBat, zPit, sBat, sPit] = await Promise.all([
-        safeFetch('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0'),
-        safeFetch('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0'),
-        safeFetch(`${fgSeasonBase}&stats=bat`),
-        safeFetch(`${fgSeasonBase}&stats=pit`),
+        safeFetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0')),
+        safeFetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0')),
+        safeFetch(fgProxy(`${fgSeasonBase}&stats=bat`)),
+        safeFetch(fgProxy(`${fgSeasonBase}&stats=pit`)),
       ]);
 
       // L14 from MLB Stats API — FanGraphs ignores startdate/enddate, MLB API actually honors them
