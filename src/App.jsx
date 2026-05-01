@@ -254,81 +254,57 @@ function useTheme() { return useContext(ThemeContext); }
 
 const AuthContext = createContext();
 
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 function AuthProvider({ children }) {
   const { theme } = useTheme();
-  const [authLevel, setAuthLevel] = useState('none');
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
+  const [session, setSession] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
-  const [requiredLevel, setRequiredLevel] = useState('upload');
   const [authError, setAuthError] = useState('');
 
-  useEffect(() => { 
-    const saved = sessionStorage.getItem('authLevel');
-    if (saved === 'master' || saved === 'upload') setAuthLevel(saved);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    return () => subscription.unsubscribe();
   }, []);
 
-  const hasAccess = (required) => {
-    if (authLevel === 'master') return true;
-    if (authLevel === 'upload' && required === 'upload') return true;
-    return false;
+  const isAdmin = !!session;
+
+  const requestAuth = (onSuccess) => {
+    if (isAdmin) { onSuccess(); return; }
+    setPendingAction(() => onSuccess);
+    setShowLoginModal(true);
+    setAuthError('');
   };
 
-  const requestAuth = (onSuccess, level = 'upload') => {
-    if (hasAccess(level)) { onSuccess(); } 
-    else { setPendingAction(() => onSuccess); setRequiredLevel(level); setShowPasswordModal(true); setAuthError(''); }
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setAuthError(error.message); return; }
+    setShowLoginModal(false);
+    setEmail(''); setPassword('');
+    if (pendingAction) { pendingAction(); setPendingAction(null); }
   };
 
-  const handlePasswordSubmit = async () => {
-    try {
-      const hashedInput = await hashPassword(passwordInput);
-      const { data, error } = await supabase.from('site_content').select('content').eq('id', 'auth').single();
-      if (error || !data?.content) { setAuthError('Auth not configured'); setPasswordInput(''); return; }
-      const { passwordHash, uploadPasswordHash } = data.content;
-      if (passwordHash && hashedInput === passwordHash) {
-        setAuthLevel('master'); sessionStorage.setItem('authLevel', 'master');
-        setShowPasswordModal(false); setPasswordInput(''); setAuthError('');
-        if (pendingAction) { pendingAction(); setPendingAction(null); }
-        return;
-      }
-      if (uploadPasswordHash && hashedInput === uploadPasswordHash) {
-        if (requiredLevel === 'upload') {
-          setAuthLevel('upload'); sessionStorage.setItem('authLevel', 'upload');
-          setShowPasswordModal(false); setPasswordInput(''); setAuthError('');
-          if (pendingAction) { pendingAction(); setPendingAction(null); }
-        } else { setAuthError('This action requires master password'); setPasswordInput(''); }
-        return;
-      }
-      setAuthError('Incorrect password'); setPasswordInput('');
-    } catch (e) { setAuthError('Authentication failed'); setPasswordInput(''); }
-  };
-
-  const logout = () => {
-    setAuthLevel('none');
-    sessionStorage.removeItem('authLevel');
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
   };
 
   const styles = getStyles(theme);
   return (
-    <AuthContext.Provider value={{ authLevel, hasAccess, requestAuth, logout }}>
+    <AuthContext.Provider value={{ isAdmin, requestAuth, logout }}>
       {children}
-      {showPasswordModal && (
+      {showLoginModal && (
         <div style={styles.modalOverlay}><div style={styles.modal}>
-          <h3 style={styles.modalTitle}>Enter Password</h3>
-          <p style={styles.modalText}>{requiredLevel === 'master' ? 'Master password required.' : 'Enter password to continue.'}</p>
+          <h3 style={styles.modalTitle}>Admin Login</h3>
+          <p style={styles.modalText}>Log in to access admin features.</p>
           {authError && <p style={styles.authError}>{authError}</p>}
-          <input type="password" placeholder="Password..." value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()} style={styles.input} autoFocus />
+          <input type="email" placeholder="Email..." value={email} onChange={(e) => setEmail(e.target.value)} style={{...styles.input, marginBottom: 8}} autoFocus />
+          <input type="password" placeholder="Password..." value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} style={styles.input} />
           <div style={styles.modalBtns}>
-            <button onClick={handlePasswordSubmit} style={styles.saveBtn}>Submit</button>
-            <button onClick={() => { setShowPasswordModal(false); setPasswordInput(''); setPendingAction(null); setAuthError(''); }} style={styles.cancelBtn}>Cancel</button>
+            <button onClick={handleLogin} style={styles.saveBtn}>Log In</button>
+            <button onClick={() => { setShowLoginModal(false); setEmail(''); setPassword(''); setPendingAction(null); setAuthError(''); }} style={styles.cancelBtn}>Cancel</button>
           </div>
         </div></div>
       )}
@@ -418,7 +394,7 @@ function BannerProvider({ children }) {
 
 function NewsBanner() {
   const { theme } = useTheme();
-  const { hasAccess, requestAuth } = useAuth();
+  const { isAdmin, requestAuth } = useAuth();
   const { bannerText, setBannerText } = useContext(BannerContext);
   const styles = getStyles(theme);
   const [isEditing, setIsEditing] = useState(false);
@@ -438,7 +414,7 @@ function NewsBanner() {
     requestAuth(() => {
       setEditText(bannerText);
       setIsEditing(true);
-    }, 'master');
+    });
   };
 
   return (
@@ -465,7 +441,7 @@ function NewsBanner() {
               </React.Fragment>
             ))}
           </div>
-          {hasAccess('master') && (
+          {isAdmin && (
             <button onClick={startEditing} style={styles.newsBannerEditBtn}>✎</button>
           )}
         </div>
@@ -476,9 +452,9 @@ function NewsBanner() {
 
 function Layout({ children, notification, pendingCount = 0 }) {
   const { theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
-  const { hasAccess } = useAuth();
+  const { isAdmin } = useAuth();
   const styles = getStyles(theme);
-  
+
   // Group teams by division for the dropdown
   const teamGroups = {
     'AL East': ['yankees', 'redsox', 'rays', 'bluejays', 'orioles'],
@@ -507,7 +483,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
             <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
             <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
-            {hasAccess('master') && (
+            {isAdmin && (
               <NavLink to="/review" style={({isActive}) => ({...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})})}>
                 Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
               </NavLink>
@@ -542,7 +518,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
 function StatsPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth } = useAuth();
+  const { isAdmin, requestAuth } = useAuth();
   const fileInputRef = React.useRef(null);
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournament, setSelectedTournament] = useState(null);
@@ -762,7 +738,7 @@ function StatsPage() {
         if (selectedTournament?.id === id) { setSelectedTournament(null); localStorage.removeItem('selectedTournamentId'); }
         showNotif('Deleted');
       } catch (e) { showNotif('Delete failed', 'error'); }
-    }, 'master');
+    });
   };
 
   const toggleLegacy = (tournament) => {
@@ -782,7 +758,7 @@ function StatsPage() {
       }
       setSidebarTab(originalCategory);
       showNotif(isCurrentlyLegacy ? 'Restored from Legacy' : 'Moved to Legacy');
-    }, 'master');
+    });
   };
 
   const moveCategory = (tournament) => {
@@ -796,7 +772,7 @@ function StatsPage() {
       }
       setSidebarTab(newCategory);
       showNotif(`Moved to ${newCategory === 'tournaments' ? 'Tournaments' : 'Drafts'}`);
-    }, 'master');
+    });
   };
 
   const startRename = (tournament) => {
@@ -1144,7 +1120,7 @@ function StatsPage() {
 
   // Admin function to toggle date status
   const toggleDateStatus = async (dateStr) => {
-    if (!hasAccess('master')) return;
+    if (!isAdmin) return;
     
     let currentTournament = { ...selectedTournament };
     let uploadedDates = [...(currentTournament.uploadedDates || [])];
@@ -1424,7 +1400,7 @@ function StatsPage() {
                         <button style={styles.legacyBtn} onClick={(e) => { e.stopPropagation(); setRenamingTournament(null); }} title="Cancel">✕</button>
                       </>
                     ) : (
-                      hasAccess('master') && (
+                      isAdmin && (
                         <div style={{ position: 'relative' }}>
                           <button
                             style={styles.legacyBtn}
@@ -1494,7 +1470,7 @@ function StatsPage() {
                 </div>);
               })}
           </div>
-          {sidebarTab !== 'legacy' && hasAccess('upload') && (
+          {sidebarTab !== 'legacy' && isAdmin && (
             <button style={styles.newTournamentBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
           )}
         </aside>
@@ -1557,7 +1533,7 @@ function StatsPage() {
               </div>
               <div style={styles.headerActions}>
                 <button style={styles.missingDataBtn} onClick={() => setShowMissingData(true)} title="View missing data calendar">📅 Missing Data</button>
-                {hasAccess('upload') && (
+                {isAdmin && (
                   <button style={styles.uploadBtn} onClick={triggerFileUpload}>↑ Upload CSV</button>
                 )}
               </div>
@@ -1614,9 +1590,9 @@ function StatsPage() {
                   <h3 style={styles.modalTitle}>📅 Missing Data Calendar</h3>
                   <p style={styles.modalText}>
                     {selectedTournament.eventType === 'weekly' ? 'Weekly event - one upload covers entire week' : 'Daily event - one upload per day'}
-                    {hasAccess('master') && <span style={styles.adminHint}> • Click dates to toggle status</span>}
+                    {isAdmin && <span style={styles.adminHint}> • Click dates to toggle status</span>}
                   </p>
-                  {hasAccess('master') && (
+                  {isAdmin && (
                     <label style={{ 
                       display: 'flex', alignItems: 'center', gap: 8, 
                       marginBottom: 12, padding: '8px 12px', 
@@ -1677,10 +1653,10 @@ function StatsPage() {
                                     ...styles.calendarDay,
                                     ...(isUploaded ? styles.calendarDayComplete : styles.calendarDayMissing),
                                     ...(day.isToday ? styles.calendarDayToday : {}),
-                                    ...(hasAccess('master') ? styles.calendarDayClickable : {})
+                                    ...(isAdmin ? styles.calendarDayClickable : {})
                                   }}
-                                  title={isUploaded ? 'Data uploaded' + (hasAccess('master') ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (hasAccess('master') ? ' - Click to mark as uploaded' : '')}
-                                  onClick={() => hasAccess('master') && toggleDateStatus(day.dateStr)}
+                                  title={isUploaded ? 'Data uploaded' + (isAdmin ? ' - Click to mark as missing' : '') : "Missing this day's data. Please submit a CSV if you have history for this event." + (isAdmin ? ' - Click to mark as uploaded' : '')}
+                                  onClick={() => isAdmin && toggleDateStatus(day.dateStr)}
                                 >
                                   <span style={styles.calendarDayNum}>{day.dayOfMonth}</span>
                                   <span style={{...styles.calendarDayStatus, color: isUploaded ? theme.success : theme.warning}}>{isUploaded ? '✓' : '??'}</span>
@@ -1916,7 +1892,7 @@ function parseMarkdown(text) {
 function InfoPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth, logout } = useAuth();
+  const { isAdmin, requestAuth, logout } = useAuth();
   const [content, setContent] = useState({ title: 'Info & FAQ', sections: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -2042,7 +2018,7 @@ function InfoPage() {
   const loadContent = async () => { setIsLoading(true); try { const { data } = await supabase.from('site_content').select('*').eq('id', 'info').single(); if (data?.content) setContent(data.content); } catch (e) {} setIsLoading(false); };
   const saveContent = async () => { try { await supabase.from('site_content').upsert({ id: 'info', content: editContent, updated_at: new Date().toISOString() }); setContent(editContent); setIsEditing(false); showNotif('Saved!'); } catch (e) { showNotif('Failed', 'error'); } };
   const showNotif = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
-  const startEditing = () => { requestAuth(() => { setEditContent(JSON.parse(JSON.stringify(content))); setIsEditing(true); }, 'master'); };
+  const startEditing = () => { requestAuth(() => { setEditContent(JSON.parse(JSON.stringify(content))); setIsEditing(true); }); };
   const addSection = () => { setEditContent(c => ({ ...c, sections: [...c.sections, { heading: 'New Section', body: 'Content...' }] })); };
   const updateSection = (i, field, value) => { setEditContent(c => { const s = [...c.sections]; s[i] = { ...s[i], [field]: value }; return { ...c, sections: s }; }); };
   const removeSection = (i) => { setEditContent(c => ({ ...c, sections: c.sections.filter((_, idx) => idx !== i) })); };
@@ -2266,7 +2242,7 @@ function InfoPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>{isEditing ? 'Edit Info' : content.title}</h2>
-          {!isEditing && hasAccess('master') && <button onClick={startEditing} style={styles.editBtn}>Edit</button>}
+          {!isEditing && isAdmin && <button onClick={startEditing} style={styles.editBtn}>Edit</button>}
         </div>
         {isEditing ? (<div style={styles.editContainer}>
           <div style={styles.editField}><label style={styles.editLabel}>Title</label><input type="text" value={editContent.title} onChange={(e) => setEditContent(c => ({ ...c, title: e.target.value }))} style={styles.input} /></div>
@@ -2287,13 +2263,13 @@ function InfoPage() {
         {/* Admin Login Section */}
         <div style={styles.adminLoginSection}>
           <h3 style={styles.adminLoginTitle}>🔐 Admin Access</h3>
-          {hasAccess('master') ? (
+          {isAdmin ? (
             <div>
               <div style={styles.adminLoginStatus}>
                 <span style={styles.adminLoginBadge}>✓ Logged in as Admin</span>
                 <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
                 <button
-                  onClick={() => requestAuth(rebuildAllStats, 'master')}
+                  onClick={() => requestAuth(rebuildAllStats)}
                   disabled={isRebuilding}
                   style={{...styles.adminLogoutBtn, background: '#f59e0b', marginLeft: 8}}
                 >
@@ -2319,16 +2295,10 @@ function InfoPage() {
                 {cardUploadStatus && <div style={{ marginTop: 8, fontSize: 12, color: cardUploadStatus.startsWith('Error') ? theme.danger : theme.success }}>{cardUploadStatus}</div>}
               </div>
             </div>
-          ) : hasAccess('upload') ? (
-            <div style={styles.adminLoginStatus}>
-              <span style={{...styles.adminLoginBadge, background: theme.warning}}>✓ Upload Access</span>
-              <button onClick={() => requestAuth(() => {}, 'master')} style={styles.adminUpgradeBtn}>Upgrade to Admin</button>
-              <button onClick={logout} style={styles.adminLogoutBtn}>Logout</button>
-            </div>
           ) : (
             <div style={styles.adminLoginPrompt}>
               <p style={styles.adminLoginText}>Admins can log in here to access additional features.</p>
-              <button onClick={() => requestAuth(() => {}, 'master')} style={styles.adminLoginBtn}>Admin Login</button>
+              <button onClick={() => requestAuth(() => {})} style={styles.adminLoginBtn}>Admin Login</button>
             </div>
           )}
         </div>
@@ -2340,7 +2310,7 @@ function InfoPage() {
 function VideosPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth } = useAuth();
+  const { isAdmin, requestAuth } = useAuth();
   const [videos, setVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -2364,8 +2334,8 @@ function VideosPage() {
   };
   const getThumbnail = (v) => v.platform === 'youtube' ? `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` : null;
   const getEmbedUrl = (v) => v.platform === 'youtube' ? `https://www.youtube.com/embed/${v.id}` : v.platform === 'twitch-clip' ? `https://clips.twitch.tv/embed?clip=${v.id}&parent=${window.location.hostname}` : `https://player.twitch.tv/?video=${v.id}&parent=${window.location.hostname}`;
-  const addVideo = () => { requestAuth(() => { const info = extractVideoId(newVideoUrl); if (!info) { showNotif('Invalid URL', 'error'); return; } saveVideos([{ ...info, title: newVideoTitle || 'Untitled', addedAt: new Date().toISOString() }, ...videos]); setNewVideoUrl(''); setNewVideoTitle(''); setShowAddForm(false); showNotif('Added!'); }, 'master'); };
-  const removeVideo = (i) => { requestAuth(() => { if (!confirm('Remove?')) return; saveVideos(videos.filter((_, idx) => idx !== i)); showNotif('Removed'); }, 'master'); };
+  const addVideo = () => { requestAuth(() => { const info = extractVideoId(newVideoUrl); if (!info) { showNotif('Invalid URL', 'error'); return; } saveVideos([{ ...info, title: newVideoTitle || 'Untitled', addedAt: new Date().toISOString() }, ...videos]); setNewVideoUrl(''); setNewVideoTitle(''); setShowAddForm(false); showNotif('Added!'); }); };
+  const removeVideo = (i) => { requestAuth(() => { if (!confirm('Remove?')) return; saveVideos(videos.filter((_, idx) => idx !== i)); showNotif('Removed'); }); };
 
   if (isLoading) return <Layout notification={notification}><div style={styles.loading}><div className="loading-spinner"></div><p>Loading...</p></div></Layout>;
 
@@ -2374,7 +2344,7 @@ function VideosPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>Videos</h2>
-          {hasAccess('master') && <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add</button>}
+          {isAdmin && <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add</button>}
         </div>
         {showAddForm && (<div style={styles.addVideoForm}>
           <input type="text" placeholder="Title" value={newVideoTitle} onChange={(e) => setNewVideoTitle(e.target.value)} style={styles.input} />
@@ -2394,7 +2364,7 @@ function VideosPage() {
                 {getThumbnail(v) ? <img src={getThumbnail(v)} alt={v.title} style={styles.thumbnail} /> : <div style={styles.thumbnailPlaceholder}>▶</div>}
               </div>
               <div style={styles.videoInfo}><span style={styles.videoTitle}>{v.title}</span><span style={styles.videoPlatform}>{v.platform === 'youtube' ? 'YouTube' : 'Twitch'}</span></div>
-              {hasAccess('master') && <button onClick={() => removeVideo(i)} style={styles.removeVideoBtn}>✕</button>}
+              {isAdmin && <button onClick={() => removeVideo(i)} style={styles.removeVideoBtn}>✕</button>}
             </div>))}
           </div>
         )}
@@ -2406,7 +2376,7 @@ function VideosPage() {
 function ArticlesPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth } = useAuth();
+  const { isAdmin, requestAuth } = useAuth();
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -2486,7 +2456,7 @@ function ArticlesPage() {
         showNotif('Failed to upload PDF', 'error');
       }
       setUploading(false);
-    }, 'master');
+    });
   };
 
   const removeArticle = (articleId) => {
@@ -2499,7 +2469,7 @@ function ArticlesPage() {
       }
       await saveArticles(articles.filter(a => a.id !== articleId));
       showNotif('Article removed');
-    }, 'master');
+    });
   };
 
   const formatDate = (dateStr) => {
@@ -2514,7 +2484,7 @@ function ArticlesPage() {
       <div style={styles.pageContent}>
         <div style={styles.pageHeader}>
           <h2 style={styles.pageTitle}>📄 Articles</h2>
-          {hasAccess('master') && <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add Article</button>}
+          {isAdmin && <button onClick={() => setShowAddForm(true)} style={styles.addBtn}>+ Add Article</button>}
         </div>
 
         {showAddForm && (
@@ -2596,7 +2566,7 @@ function ArticlesPage() {
                   >
                     📖 Read
                   </button>
-                  {hasAccess('master') && <button onClick={() => removeArticle(article.id)} style={styles.articleRemoveBtn}>✕</button>}
+                  {isAdmin && <button onClick={() => removeArticle(article.id)} style={styles.articleRemoveBtn}>✕</button>}
                 </div>
               </div>
             ))}
@@ -4114,7 +4084,7 @@ function UploadTutorial({ theme }) {
 function SubmitDataPage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth } = useAuth();
+  const { isAdmin, requestAuth } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState('');
   const [suggestNewEvent, setSuggestNewEvent] = useState(false);
@@ -4172,7 +4142,7 @@ function SubmitDataPage() {
     requestAuth(() => {
       setEditInfoContent(JSON.parse(JSON.stringify(infoContent)));
       setIsEditingInfo(true);
-    }, 'master');
+    });
   };
 
   const showNotif = (message, type = 'success') => {
@@ -4643,7 +4613,7 @@ function SubmitDataPage() {
       }
 
       // If admin, show confirmation dialog instead of submitting to pending
-      if (hasAccess('master') && selectedTournament && selectedTournamentId) {
+      if (isAdmin && selectedTournament && selectedTournamentId) {
         setAdminConfirmData({
           tournament: selectedTournament,
           tournamentId: selectedTournamentId,
@@ -5136,7 +5106,7 @@ function SubmitDataPage() {
               {/* Submit Buttons */}
               {bulkFiles.length > 0 && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {hasAccess('master') ? (
+                  {isAdmin ? (
                     <button
                       onClick={handleAdminBulkUpload}
                       disabled={isSubmitting || bulkFiles.filter(f => f.date).length === 0}
@@ -5377,7 +5347,7 @@ function SubmitDataPage() {
 function ReviewQueuePage() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { hasAccess, requestAuth } = useAuth();
+  const { isAdmin, requestAuth } = useAuth();
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingUploads, setPendingUploads] = useState([]);
   const [criticalUploads, setCriticalUploads] = useState([]);
@@ -5399,10 +5369,10 @@ function ReviewQueuePage() {
   const [newEventRotating, setNewEventRotating] = useState(false);
 
   useEffect(() => {
-    if (hasAccess('master')) {
+    if (isAdmin) {
       loadData();
     }
-  }, [hasAccess]);
+  }, [isAdmin]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -5901,14 +5871,14 @@ function ReviewQueuePage() {
     }
   };
 
-  if (!hasAccess('master')) {
+  if (!isAdmin) {
     return (
       <Layout notification={notification}>
         <div style={styles.submitPage}>
           <div style={styles.submitContainer}>
             <h2 style={styles.submitTitle}>🔒 Admin Access Required</h2>
-            <p style={styles.submitSubtitle}>You need master access to view the review queue.</p>
-            <button style={styles.submitBtn} onClick={() => requestAuth(() => loadData(), 'master')}>Enter Password</button>
+            <p style={styles.submitSubtitle}>You need admin access to view the review queue.</p>
+            <button style={styles.submitBtn} onClick={() => requestAuth(() => loadData())}>Admin Login</button>
           </div>
         </div>
       </Layout>
