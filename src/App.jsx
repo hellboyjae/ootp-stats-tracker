@@ -11524,9 +11524,20 @@ function PTLivePage() {
             const newBat   = Object.keys(batting).length  ? batting  : null;
             const newPit   = Object.keys(pitching).length ? pitching : null;
             if (map[name]) {
-              map[name] = { batting: sumStats(map[name].batting, newBat), pitching: sumStats(map[name].pitching, newPit), gameStatus: 'Final', subbed: false };
+              map[name] = {
+                batting: sumStats(map[name].batting, newBat),
+                pitching: sumStats(map[name].pitching, newPit),
+                battingGames: newBat ? [...map[name].battingGames, newBat] : map[name].battingGames,
+                pitchingGames: newPit ? [...map[name].pitchingGames, newPit] : map[name].pitchingGames,
+                gameStatus: 'Final', subbed: false,
+              };
             } else {
-              map[name] = { batting: newBat, pitching: newPit, gameStatus: 'Final', subbed: false };
+              map[name] = {
+                batting: newBat, pitching: newPit,
+                battingGames: newBat ? [newBat] : [],
+                pitchingGames: newPit ? [newPit] : [],
+                gameStatus: 'Final', subbed: false,
+              };
             }
           });
         });
