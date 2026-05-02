@@ -11421,6 +11421,7 @@ function PTLivePage() {
   const [showYesterday, setShowYesterday]   = useState(false);
   const [yesterdayStats, setYesterdayStats] = useState({});
   const [yesterdayLoading, setYesterdayLoading] = useState(false);
+  const [yesterdayTeam, setYesterdayTeam]   = useState(null);
 
   const isLocked = lockTime && new Date() >= lockTime;
 
@@ -11557,6 +11558,15 @@ function PTLivePage() {
       const map = await fetchMLBForDate(yesterdayStr);
       setYesterdayStats(map);
       setYesterdayLoading(false);
+    }
+    // Fetch the user's submitted team for yesterday
+    if (next && !yesterdayTeam && username && groupCode) {
+      const { data } = await supabase
+        .from('ptlive_groups')
+        .select('team')
+        .eq('group_code', groupCode).eq('username', username).eq('date', yesterdayStr)
+        .single();
+      if (data?.team) setYesterdayTeam(data.team);
     }
     if (groupCode) loadGroupLeaderboard(groupCode, date);
     if (activeTab === 'group-rankings') loadGlobalRankings(date);
@@ -11888,8 +11898,9 @@ function PTLivePage() {
 
   const slotResults = useMemo(() => {
     const statsMap = showYesterday ? yesterdayStats : mlbStats;
+    const activeTeam = (showYesterday && yesterdayTeam) ? yesterdayTeam : team;
     return PT_LIVE_SLOTS.map(slot => {
-      const card = team[slot.key] || null;
+      const card = activeTeam[slot.key] || null;
       if (!card) return { ...slot, card: null, playerData: null, pp: null };
       const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
       const pd = statsMap[name] || null;
@@ -11901,7 +11912,7 @@ function PTLivePage() {
       }
       return { ...slot, card, playerData: pd, pp };
     });
-  }, [team, mlbStats, showYesterday, yesterdayStats]);
+  }, [team, mlbStats, showYesterday, yesterdayStats, yesterdayTeam]);
 
   const totalPP   = useMemo(() => slotResults.reduce((s, r) => s + (r.pp ?? 0), 0), [slotResults]);
   const totalCost = useMemo(() => Object.values(team).reduce((s, c) => s + (c?.last_10_price || 0), 0), [team]);
