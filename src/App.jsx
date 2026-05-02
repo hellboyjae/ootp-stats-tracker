@@ -7051,141 +7051,240 @@ function DraftAssistantPage() {
 
     return (
       <Layout notification={notification}>
-        <div style={{ maxWidth: 600, margin: '40px auto', padding: 20 }}>
-          <h1 style={{ color: theme.textPrimary, marginBottom: 8 }}>🎯 Draft Assistant</h1>
-          <p style={{ color: theme.textMuted, marginBottom: 32 }}>Set up your draft to get position recommendations and track picks.</p>
+        <div style={{ maxWidth: 1100, margin: '40px auto', padding: 20 }}>
+          <h1 style={{ color: theme.textPrimary, marginBottom: 8 }}>Draft Assistant</h1>
+          <p style={{ color: theme.textMuted, marginBottom: 32 }}>Choose how you want to draft — use the web assistant or download the desktop overlay.</p>
 
-          <div style={{ background: theme.cardBg, borderRadius: 12, padding: 24, border: `1px solid ${theme.border}` }}>
-            {/* Tournament Selection */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
-                Select Tournament
-              </label>
-              <select 
-                value={selectedTournamentId} 
-                onChange={(e) => setSelectedTournamentId(e.target.value)}
-                style={{ 
-                  width: '100%', padding: 12, borderRadius: 8, 
-                  background: theme.inputBg, color: theme.textPrimary, 
-                  border: `1px solid ${theme.border}`, fontSize: 14 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
+            {/* Left: Web Draft Assistant */}
+            <div style={{ background: theme.cardBg, borderRadius: 12, padding: 24, border: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <span style={{ fontSize: 22 }}>🌐</span>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 18 }}>Web Draft Assistant</h2>
+              </div>
+              <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 20 }}>
+                Use the browser-based draft tool to track picks, view recommendations, and manage your roster in real time.
+              </p>
+
+              {/* Tournament Selection */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600, fontSize: 13 }}>
+                  Select Tournament
+                </label>
+                <select
+                  value={selectedTournamentId}
+                  onChange={(e) => setSelectedTournamentId(e.target.value)}
+                  style={{
+                    width: '100%', padding: 10, borderRadius: 8,
+                    background: theme.inputBg, color: theme.textPrimary,
+                    border: `1px solid ${theme.border}`, fontSize: 13
+                  }}
+                >
+                  <option value="">Choose a tournament...</option>
+                  {groupedTournaments.tournaments.length > 0 && (
+                    <optgroup label="Tournaments">
+                      {groupedTournaments.tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </optgroup>
+                  )}
+                  {groupedTournaments.drafts.length > 0 && (
+                    <optgroup label="Drafts">
+                      {groupedTournaments.drafts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              {/* Draft Size & DH */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                    Draft Size
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => setDraftSize(26)}
+                      style={{
+                        flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${theme.border}`,
+                        background: draftSize === 26 ? theme.accent : theme.inputBg,
+                        color: draftSize === 26 ? '#fff' : theme.textPrimary,
+                        cursor: 'pointer', fontWeight: 600, fontSize: 13
+                      }}
+                    >26</button>
+                    <button
+                      onClick={() => setDraftSize(32)}
+                      style={{
+                        flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${theme.border}`,
+                        background: draftSize === 32 ? theme.accent : theme.inputBg,
+                        color: draftSize === 32 ? '#fff' : theme.textPrimary,
+                        cursor: 'pointer', fontWeight: 600, fontSize: 13
+                      }}
+                    >32</button>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                    League Type
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => setHasDH(true)}
+                      style={{
+                        flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${theme.border}`,
+                        background: hasDH ? theme.accent : theme.inputBg,
+                        color: hasDH ? '#fff' : theme.textPrimary,
+                        cursor: 'pointer', fontWeight: 600, fontSize: 13
+                      }}
+                    >DH</button>
+                    <button
+                      onClick={() => setHasDH(false)}
+                      style={{
+                        flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${theme.border}`,
+                        background: !hasDH ? theme.accent : theme.inputBg,
+                        color: !hasDH ? '#fff' : theme.textPrimary,
+                        cursor: 'pointer', fontWeight: 600, fontSize: 13
+                      }}
+                    >No DH</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Pool */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                  Card Pool Available
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {[
+                    { key: 'perfect', label: 'Perfect (100+)', color: '#a855f7' },
+                    { key: 'diamond', label: 'Diamond (90-99)', color: '#32EBFC' },
+                    { key: 'gold', label: 'Gold (80-89)', color: '#FFE61F' },
+                    { key: 'silver', label: 'Silver (70-79)', color: '#E0E0E0' },
+                    { key: 'bronze', label: 'Bronze (60-69)', color: '#664300' },
+                    { key: 'iron', label: 'Iron (<60)', color: '#4a4a4a' },
+                  ].map(tier => (
+                    <label
+                      key={tier.key}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                        background: cardPool[tier.key] ? tier.color + '22' : theme.inputBg,
+                        border: `1px solid ${cardPool[tier.key] ? tier.color : theme.border}`,
+                        color: cardPool[tier.key] ? tier.color : theme.textMuted
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={cardPool[tier.key]}
+                        onChange={(e) => setCardPool(prev => ({ ...prev, [tier.key]: e.target.checked }))}
+                      />
+                      {tier.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Start Button */}
+              <button
+                onClick={startDraft}
+                disabled={!selectedTournamentId}
+                style={{
+                  width: '100%', padding: 14, borderRadius: 8, border: 'none',
+                  background: selectedTournamentId ? theme.accent : theme.inputBg,
+                  color: selectedTournamentId ? '#fff' : theme.textMuted,
+                  fontSize: 15, fontWeight: 600, cursor: selectedTournamentId ? 'pointer' : 'not-allowed'
                 }}
               >
-                <option value="">Choose a tournament...</option>
-                {groupedTournaments.tournaments.length > 0 && (
-                  <optgroup label="Tournaments">
-                    {groupedTournaments.tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </optgroup>
-                )}
-                {groupedTournaments.drafts.length > 0 && (
-                  <optgroup label="Drafts">
-                    {groupedTournaments.drafts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </optgroup>
-                )}
-              </select>
+                Start Draft
+              </button>
             </div>
 
-            {/* Draft Size & DH */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
-              <div>
-                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
-                  Draft Size
-                </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button 
-                    onClick={() => setDraftSize(26)}
-                    style={{
-                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
-                      background: draftSize === 26 ? theme.accent : theme.inputBg,
-                      color: draftSize === 26 ? '#fff' : theme.textPrimary,
-                      cursor: 'pointer', fontWeight: 600
-                    }}
-                  >26</button>
-                  <button 
-                    onClick={() => setDraftSize(32)}
-                    style={{
-                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
-                      background: draftSize === 32 ? theme.accent : theme.inputBg,
-                      color: draftSize === 32 ? '#fff' : theme.textPrimary,
-                      cursor: 'pointer', fontWeight: 600
-                    }}
-                  >32</button>
+            {/* Right: Desktop Overlay Download */}
+            <div style={{ background: theme.cardBg, borderRadius: 12, padding: 24, border: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <span style={{ fontSize: 22 }}>🖥️</span>
+                <h2 style={{ color: theme.textPrimary, margin: 0, fontSize: 18 }}>BeaneScout Overlay</h2>
+              </div>
+              <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 20 }}>
+                A Windows desktop overlay that reads your OOTP draft screen in real time using OCR and displays player stats directly over the game.
+              </p>
+
+              <div style={{ background: theme.inputBg, borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <h3 style={{ color: theme.textPrimary, fontSize: 14, margin: '0 0 12px 0' }}>How it works</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    { num: '1', text: 'Download and extract the zip file' },
+                    { num: '2', text: 'Run BeaneScout.exe — wait for OCR to initialize' },
+                    { num: '3', text: 'Select a draft and click Load Players' },
+                    { num: '4', text: 'Set your capture region over the OOTP draft screen' },
+                    { num: '5', text: 'Press Start Scanning — player stats appear as an overlay' },
+                  ].map(step => (
+                    <div key={step.num} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{
+                        width: 22, height: 22, borderRadius: '50%', background: theme.accent,
+                        color: '#fff', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                      }}>{step.num}</span>
+                      <span style={{ color: theme.textSecondary, fontSize: 13 }}>{step.text}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div>
-                <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
-                  League Type
-                </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button 
-                    onClick={() => setHasDH(true)}
-                    style={{
-                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
-                      background: hasDH ? theme.accent : theme.inputBg,
-                      color: hasDH ? '#fff' : theme.textPrimary,
-                      cursor: 'pointer', fontWeight: 600
-                    }}
-                  >DH</button>
-                  <button 
-                    onClick={() => setHasDH(false)}
-                    style={{
-                      flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${theme.border}`,
-                      background: !hasDH ? theme.accent : theme.inputBg,
-                      color: !hasDH ? '#fff' : theme.textPrimary,
-                      cursor: 'pointer', fontWeight: 600
-                    }}
-                  >No DH</button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: theme.textMuted, fontSize: 12 }}>Platform:</span>
+                  <span style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600 }}>Windows 10/11 only</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: theme.textMuted, fontSize: 12 }}>OCR Engine:</span>
+                  <span style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600 }}>PaddleOCR (included)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: theme.textMuted, fontSize: 12 }}>Size:</span>
+                  <span style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600 }}>~150 MB (self-contained)</span>
                 </div>
               </div>
-            </div>
 
-            {/* Card Pool */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: 'block', color: theme.textSecondary, marginBottom: 8, fontWeight: 600 }}>
-                Card Pool Available
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {[
-                  { key: 'perfect', label: 'Perfect (100+)', color: '#a855f7' },
-                  { key: 'diamond', label: 'Diamond (90-99)', color: '#32EBFC' },
-                  { key: 'gold', label: 'Gold (80-89)', color: '#FFE61F' },
-                  { key: 'silver', label: 'Silver (70-79)', color: '#E0E0E0' },
-                  { key: 'bronze', label: 'Bronze (60-69)', color: '#664300' },
-                  { key: 'iron', label: 'Iron (<60)', color: '#4a4a4a' },
-                ].map(tier => (
-                  <label 
-                    key={tier.key}
-                    style={{ 
-                      display: 'flex', alignItems: 'center', gap: 6, 
-                      padding: '8px 12px', borderRadius: 6, cursor: 'pointer',
-                      background: cardPool[tier.key] ? tier.color + '22' : theme.inputBg,
-                      border: `1px solid ${cardPool[tier.key] ? tier.color : theme.border}`,
-                      color: cardPool[tier.key] ? tier.color : theme.textMuted
-                    }}
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={cardPool[tier.key]}
-                      onChange={(e) => setCardPool(prev => ({ ...prev, [tier.key]: e.target.checked }))}
-                    />
-                    {tier.label}
-                  </label>
-                ))}
+              <a
+                href="https://mega.nz/folder/kr4zCBpC#Bw0yRmV1bg60ykJyRns3cQ"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block', width: '100%', padding: 14, borderRadius: 8, border: 'none',
+                  background: '#22C55E', color: '#fff', fontSize: 15, fontWeight: 600,
+                  textAlign: 'center', textDecoration: 'none', cursor: 'pointer', boxSizing: 'border-box'
+                }}
+              >
+                Download BeaneScout
+              </a>
+
+              <div style={{
+                marginTop: 12, padding: 12, borderRadius: 8,
+                background: theme.cardBg, border: `1px solid ${theme.border}`
+              }}>
+                <p style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 600, margin: '0 0 6px 0' }}>
+                  Installation Instructions
+                </p>
+                <ol style={{ color: theme.textMuted, fontSize: 11, margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+                  <li>Click the download button above and download as a <strong style={{ color: theme.textSecondary }}>ZIP file</strong></li>
+                  <li>Extract the ZIP to any folder on your PC</li>
+                  <li>Run <strong style={{ color: theme.textSecondary }}>BeaneScout.exe</strong> from the extracted folder</li>
+                </ol>
+                <div style={{
+                  marginTop: 10, padding: 8, borderRadius: 6,
+                  background: `${theme.warning || '#F59E0B'}15`,
+                  border: `1px solid ${theme.warning || '#F59E0B'}40`
+                }}>
+                  <p style={{ color: theme.warning || '#F59E0B', fontSize: 11, margin: 0, lineHeight: 1.5 }}>
+                    <strong>Antivirus Notice:</strong> BeaneScout is not commercially signed, so your antivirus may flag it as unknown. This is a false positive. We recommend scanning the file with your antivirus for your own peace of mind before running.
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Start Button */}
-            <button 
-              onClick={startDraft}
-              disabled={!selectedTournamentId}
-              style={{
-                width: '100%', padding: 16, borderRadius: 8, border: 'none',
-                background: selectedTournamentId ? theme.accent : theme.inputBg,
-                color: selectedTournamentId ? '#fff' : theme.textMuted,
-                fontSize: 16, fontWeight: 600, cursor: selectedTournamentId ? 'pointer' : 'not-allowed'
-              }}
-            >
-              Start Draft
-            </button>
+              <p style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
+                For issues or questions, contact <strong style={{ color: theme.textSecondary }}>hellboyjae98</strong> on Discord
+              </p>
+            </div>
           </div>
         </div>
       </Layout>
