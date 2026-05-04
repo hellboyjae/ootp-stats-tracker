@@ -6,6 +6,7 @@ import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP, IMG_COMBINED_COLS_TOP, IMG_COMBINED_COLS_BOTTOM, IMG_ALL_PLAYERS_FILTER } from './tutorialImages.js';
 import { LIVE_CARD_COLORS, LIVE_CARD_OVR } from './liveCardColors.js';
+import { UZIPS_BAT, UZIPS_PIT, UZIPS_SNAPSHOT_DATE } from './uzipsSnapshot.js';
 
 const ThemeContext = createContext();
 const BannerContext = createContext();
@@ -10983,20 +10984,15 @@ function LiveSpecPage() {
       const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=0&pageItems=2000`;
       const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
 
-      const [zBat, zPit, aBat, aPit] = await Promise.all([
-        fetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0')).then(r => r.json()),
-        fetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0')).then(r => r.json()),
+      // Actual stats from FanGraphs (live); uZIPS from static snapshot
+      const [aBat, aPit] = await Promise.all([
         fetch(fgProxy(`${fgBase}&stats=bat`)).then(r => r.json()),
         fetch(fgProxy(`${fgBase}&stats=pit`)).then(r => r.json()),
       ]);
       const toArr = x => Array.isArray(x) ? x : (x?.data || []);
-      const zBatArr = toArr(zBat), zPitArr = toArr(zPit);
       const aBatArr = toArr(aBat), aPitArr = toArr(aPit);
-      const zBatMap = {}, zPitMap = {};
-      zBatArr.forEach(p => { if (p.playerid) zBatMap[String(p.playerid)] = p; });
-      zPitArr.forEach(p => { if (p.playerid) zPitMap[String(p.playerid)] = p; });
-      setRawHitters({ actualArr: aBatArr, projMap: zBatMap });
-      setRawPitchers({ actualArr: aPitArr, projMap: zPitMap });
+      setRawHitters({ actualArr: aBatArr, projMap: UZIPS_BAT });
+      setRawPitchers({ actualArr: aPitArr, projMap: UZIPS_PIT });
     } catch (e) {
       setError(`Failed to load data. FanGraphs may be blocking browser requests (CORS). Error: ${e.message}`);
     }
@@ -11061,7 +11057,7 @@ function LiveSpecPage() {
 
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
-            <div style={{ fontSize: 14, color: '#fff', lineHeight: 1.5 }}>% overperformance<br />vs ZiPS · 2026 · FanGraphs</div>
+            <div style={{ fontSize: 14, color: '#fff', lineHeight: 1.5 }}>% overperformance<br />vs uZIPS (snapped {UZIPS_SNAPSHOT_DATE}) · FanGraphs</div>
           </div>
 
           <div style={{ height: 1, background: theme.border }} />
@@ -11159,9 +11155,9 @@ function LiveSpecPage() {
                 {/* Group header row */}
                 <tr style={{ background: theme.sidebarBg }}>
                   <th colSpan={6} style={{ ...thBase, borderBottom: sectionBorder, color: theme.textMuted }} />
-                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs ZiPS %</th>
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs uZIPS %</th>
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1e3a5f', padding: '10px 8px' }}>2026 Actual</th>
-                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1a2e1a', padding: '10px 8px' }}>ZiPS Projection</th>
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1a2e1a', padding: '10px 8px' }}>uZIPS Projection</th>
                 </tr>
                 {/* Stat label row */}
                 <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
@@ -11186,7 +11182,7 @@ function LiveSpecPage() {
                   {currentStats.map(s => (
                     <th key={`a_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#131e2e', width: 88 }}>{s.label}</th>
                   ))}
-                  {/* ZiPS columns */}
+                  {/* uZIPS columns */}
                   {currentStats.map(s => (
                     <th key={`z_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#121e12', width: 88 }}>{s.label}</th>
                   ))}
@@ -11230,7 +11226,7 @@ function LiveSpecPage() {
                         </td>
                       );
                     })}
-                    {/* ZiPS projection values */}
+                    {/* uZIPS projection values */}
                     {currentStats.map((s, si) => {
                       const st = row.stats[s.key];
                       return (
@@ -11335,7 +11331,7 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
                 {isBatter && fgGet(season, 'PA') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Math.round(fgGet(season, 'PA'))} PA</div>}
                 {!isBatter && fgGet(season, 'IP') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Number(fgGet(season, 'IP')).toFixed(1)} IP</div>}
               </div>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280' }}>ZiPS Proj</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280' }}>uZIPS Proj</div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#60a5fa' }}>Last 14 Days</div>
                 {l14 && isBatter && fgGet(l14, 'PA') != null && <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>{Math.round(fgGet(l14, 'PA'))} PA</div>}
@@ -11361,10 +11357,10 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
             })}
 
             {!proj && (
-              <div style={{ marginTop: 12, fontSize: 12, color: '#4b5563' }}>ZiPS projections not available for this player.</div>
+              <div style={{ marginTop: 12, fontSize: 12, color: '#4b5563' }}>uZIPS projections not available for this player.</div>
             )}
             <div style={{ marginTop: 14, fontSize: 10, color: '#374151', borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
-              Season + ZiPS via FanGraphs · Last 14 Days via MLB Stats API{isBatter ? ' · wRC+ not available for L14' : ' · FIP not available for L14'}
+              Season + uZIPS via FanGraphs · Last 14 Days via MLB Stats API{isBatter ? ' · wRC+ not available for L14' : ' · FIP not available for L14'}
             </div>
           </>
         )}
@@ -11798,12 +11794,11 @@ function PTLivePage() {
         } catch (e) { console.warn('[Stats] Fetch failed:', url.slice(0, 100), e.message); return null; }
       };
 
-      // Season + ZiPS from FanGraphs (month=0 = full season; date params are ignored by FG)
+      // Season + uZIPS from FanGraphs (month=0 = full season; date params are ignored by FG)
       const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
       const fgSeasonBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&month=0&pageItems=2000`;
-      const [zBat, zPit, sBat, sPit] = await Promise.all([
-        safeFetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=bat&pos=all&team=0&players=0')),
-        safeFetch(fgProxy('https://www.fangraphs.com/api/projections?type=zips&stats=pit&pos=all&team=0&players=0')),
+      // Season stats from FanGraphs (live); uZIPS from static snapshot
+      const [sBat, sPit] = await Promise.all([
         safeFetch(fgProxy(`${fgSeasonBase}&stats=bat`)),
         safeFetch(fgProxy(`${fgSeasonBase}&stats=pit`)),
       ]);
@@ -11885,10 +11880,24 @@ function PTLivePage() {
       const lBatArr = l14BatSplits.map(normMlbBatter);
       const lPitArr = l14PitSplits.map(normMlbPitcher);
 
+      // uZIPS from static snapshot — convert playerid-keyed to name-keyed
+      const snapshotByName = (map) => {
+        const m = {};
+        Object.values(map).forEach(p => {
+          const raw = p.Name || p.name || p.PlayerName || p.playerName || '';
+          const name = normalizeName(fgStripHtml(raw));
+          if (!name) return;
+          m[name] = p;
+          const noHyphen = name.replace(/-/g, '');
+          if (noHyphen !== name) m[noHyphen] = p;
+        });
+        return m;
+      };
+
       setFgData({
-        zBatMap: byName(zBat),     zPitMap: byName(zPit),
-        sBatMap: byName(sBat),     sPitMap: byName(sPit),
-        lBatMap: byName(lBatArr),  lPitMap: byName(lPitArr),
+        zBatMap: snapshotByName(UZIPS_BAT), zPitMap: snapshotByName(UZIPS_PIT),
+        sBatMap: byName(sBat),              sPitMap: byName(sPit),
+        lBatMap: byName(lBatArr),           lPitMap: byName(lPitArr),
       });
     } catch (e) {
       console.error('FG perf data error:', e);
