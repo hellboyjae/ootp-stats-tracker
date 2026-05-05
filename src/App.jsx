@@ -10923,20 +10923,42 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
     });
     if (validCount < 1) return;
 
-    // Regression-based OVR delta prediction
+    // Regression-based OVR delta prediction (uses % vs uZIPS as features)
     const isPitcher = stats === LIVESPEC_PITCHER_STATS;
     const reg = isPitcher ? PIT_REGRESSION : BAT_REGRESSION;
     const oldOvr = LIVE_CARD_OVR[playerName];
     let predictedDelta = null;
     let allFeatsAvail = true;
     let regSum = reg.intercept;
+
+    // Build feature values: % vs uZIPS (positive = outperforming)
+    const vsFeats = {};
+    if (isPitcher) {
+      // Pitcher features come directly from already-computed statResults pct values
+      vsFeats['K9_vs'] = statResults['K9']?.pct ?? null;
+      vsFeats['HR9_vs'] = statResults['HR9']?.pct ?? null;
+      vsFeats['BB9_vs'] = statResults['BB9']?.pct ?? null;
+      vsFeats['BABIP_vs'] = statResults['BABIP']?.pct ?? null;
+    } else {
+      // Batter: compute % vs uZIPS for wRC+, OPS, ISO + use already-computed BABIP, K%, BB%
+      const pctVs = (aKey, pKey, higherBetter) => {
+        const a = fgGet(player, aKey);
+        const p = fgGet(proj, pKey || aKey);
+        if (a === null || p === null || Math.abs(p) < 0.0001) return null;
+        const pct = ((a - p) / Math.abs(p)) * 100;
+        return higherBetter ? pct : -pct;
+      };
+      vsFeats['wRCp_vs'] = pctVs('wRCp', 'wRCp', true);
+      vsFeats['OPS_vs'] = pctVs('OPS', 'OPS', true);
+      vsFeats['ISO_vs'] = pctVs('ISO', 'ISO', true);
+      vsFeats['BABIP_vs'] = statResults['BABIP']?.pct ?? null;
+      vsFeats['Kpct_vs'] = statResults['Kpct']?.pct ?? null;
+      vsFeats['BBpct_vs'] = statResults['BBpct']?.pct ?? null;
+      vsFeats['old_ovr'] = oldOvr;
+    }
+
     for (const f of reg.features) {
-      let val;
-      if (f.key === 'old_ovr') {
-        val = oldOvr;
-      } else {
-        val = fgGet(player, f.key);
-      }
+      const val = vsFeats[f.key];
       if (val === null || val === undefined || isNaN(val)) {
         allFeatsAvail = false;
         break;
@@ -10945,25 +10967,18 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
     }
     if (allFeatsAvail) predictedDelta = regSum;
 
-    // Weighted % from stat diffs (weighted by regression coefficient importance)
+    // Weighted % from regression feature values (regression-weighted overperformance)
     let weightedPct = totalPct / validCount; // fallback to simple average
     if (allFeatsAvail) {
-      // Use absolute regression coefficients as weights for the stat % diffs
-      const statKeyToRegWeight = {};
-      for (const f of reg.features) {
-        statKeyToRegWeight[f.key] = Math.abs(f.coeff * f.std); // importance = |std_coeff|
-      }
       let wSum = 0, wTotal = 0;
-      stats.forEach(s => {
-        if (s.excludeFromComposite) return;
-        const excludeHR9 = s.key === 'HR9' && playerIP !== null && playerIP < 30;
-        if (excludeHR9) return;
-        const pct = statResults[s.key]?.pct;
-        if (pct === null || pct === undefined) return;
-        const w = statKeyToRegWeight[s.key] || 1;
-        wSum += pct * w;
+      for (const f of reg.features) {
+        if (f.key === 'old_ovr') continue; // skip OVR from weighted %
+        const val = vsFeats[f.key];
+        if (val === null || val === undefined) continue;
+        const w = Math.abs(f.coeff * f.std); // importance = |standardized coeff|
+        wSum += val * w;
         wTotal += w;
-      });
+      }
       if (wTotal > 0) weightedPct = wSum / wTotal;
     }
 
@@ -11124,10 +11139,15 @@ function LiveSpecPage() {
               <div style={{ marginTop: 10, fontSize: 12, color: '#d1d5db', lineHeight: 1.6, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: 12 }}>
                 <strong style={{ color: '#fff' }}>Pred Δ</strong> predicts the expected OVR change at the next Live roster update, based on a regression model trained on the April→May 2026 update.
                 <br /><br />
-                The model uses current eval window stats (wRC+, OPS, ISO, BABIP, K%, BB% for hitters; FIP, ERA, WHIP, K/9, BB/9, HR/9, BABIP, K%, BB% for pitchers) combined with the player's current card OVR.
+                The model measures how much each player over/underperforms their uZIPS projection, then weights those differences by how predictive each stat is of actual OVR changes.
                 <br /><br />
-                <strong style={{ color: '#fff' }}>Accuracy:</strong> R=0.66 for hitters, R=0.70 for pitchers.
-                <br />The % in parentheses shows weighted over/underperformance vs uZIPS.
+                <strong style={{ color: '#fff' }}>Hitters:</strong> wRC+, OPS, ISO, BABIP, K%, BB% vs uZIPS + current OVR (R=0.70)
+                <br /><strong style={{ color: '#fff' }}>Pitchers:</strong> K/9, HR/9, BB/9, BABIP vs uZIPS (R=0.75)
+                <br /><br />
+                <strong style={{ color: '#fff' }}>Pitcher weights:</strong> HR/9 (2.4x) &gt; BB/9 (1.6x) &gt; BABIP (1.2x) &gt; K/9 (1x)
+                <br />Suppressing HRs and walks matters far more than racking up strikeouts for OVR upgrades.
+                <br /><br />
+                The % in parentheses shows regression-weighted over/underperformance vs uZIPS.
                 <br /><br />
                 <strong style={{ color: '#fff' }}>Color scale:</strong>
                 <br />• ≥ +3: strong upgrade expected
