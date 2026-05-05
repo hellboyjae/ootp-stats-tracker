@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BATTING_COLS_BOTTOM, IMG_EXPORT_CSV, IMG_TOURNAMENT_NAV, IMG_STATISTICS_PAGE, IMG_VIEW_DROPDOWN, IMG_PITCHING_POSITION_TOP, IMG_COMBINED_COLS_TOP, IMG_COMBINED_COLS_BOTTOM, IMG_ALL_PLAYERS_FILTER } from './tutorialImages.js';
 import { LIVE_CARD_COLORS, LIVE_CARD_OVR } from './liveCardColors.js';
 import { UZIPS_BAT, UZIPS_PIT, UZIPS_SNAPSHOT_DATE } from './uzipsSnapshot.js';
+import { BAT_REGRESSION, PIT_REGRESSION } from './regressionCoeffs.js';
 
 const ThemeContext = createContext();
 const BannerContext = createContext();
@@ -10863,9 +10864,11 @@ const fgStripHtml = s => typeof s === 'string' ? s.replace(/<[^>]*>/g, '').trim(
 
 function fgGet(obj, key) {
   const aliases = {
+    'OPS':   ['OPS'],
     'OBP':   ['OBP'],
     'SLG':   ['SLG'],
     'ISO':   ['ISO'],
+    'WHIP':  ['WHIP'],
     'HR':    ['HR'],
     'BBpct': ['BB%', 'BBperc', 'BBpct', 'bb_pct'],
     'Kpct':  ['K%',  'Kperc',  'Kpct',  'k_pct', 'SO%'],
@@ -10919,13 +10922,60 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       if (!s.excludeFromComposite && !excludeHR9) { validCount++; totalPct += pct; }
     });
     if (validCount < 1) return;
+
+    // Regression-based OVR delta prediction
+    const isPitcher = stats === LIVESPEC_PITCHER_STATS;
+    const reg = isPitcher ? PIT_REGRESSION : BAT_REGRESSION;
+    const oldOvr = LIVE_CARD_OVR[playerName];
+    let predictedDelta = null;
+    let allFeatsAvail = true;
+    let regSum = reg.intercept;
+    for (const f of reg.features) {
+      let val;
+      if (f.key === 'old_ovr') {
+        val = oldOvr;
+      } else {
+        val = fgGet(player, f.key);
+      }
+      if (val === null || val === undefined || isNaN(val)) {
+        allFeatsAvail = false;
+        break;
+      }
+      regSum += f.coeff * val;
+    }
+    if (allFeatsAvail) predictedDelta = regSum;
+
+    // Weighted % from stat diffs (weighted by regression coefficient importance)
+    let weightedPct = totalPct / validCount; // fallback to simple average
+    if (allFeatsAvail) {
+      // Use absolute regression coefficients as weights for the stat % diffs
+      const statKeyToRegWeight = {};
+      for (const f of reg.features) {
+        statKeyToRegWeight[f.key] = Math.abs(f.coeff * f.std); // importance = |std_coeff|
+      }
+      let wSum = 0, wTotal = 0;
+      stats.forEach(s => {
+        if (s.excludeFromComposite) return;
+        const excludeHR9 = s.key === 'HR9' && playerIP !== null && playerIP < 30;
+        if (excludeHR9) return;
+        const pct = statResults[s.key]?.pct;
+        if (pct === null || pct === undefined) return;
+        const w = statKeyToRegWeight[s.key] || 1;
+        wSum += pct * w;
+        wTotal += w;
+      });
+      if (wTotal > 0) weightedPct = wSum / wTotal;
+    }
+
     rows.push({
       playerid: String(pid),
       name: fgStripHtml(player.Name || player.name || '—'),
       team: fgStripHtml(player.Team || player.team || ''),
       vol,
       stats: statResults,
-      composite: totalPct / validCount,
+      composite: predictedDelta !== null ? predictedDelta : totalPct / validCount,
+      predictedDelta,
+      weightedPct,
     });
   });
   return rows.sort((a, b) => b.composite - a.composite);
@@ -11048,6 +11098,14 @@ function LiveSpecPage() {
     if (pct >= -5) return '#fca5a5';
     return '#ef4444';
   };
+  const deltaColor = d => {
+    if (d === null) return '#fff';
+    if (d >= 3) return '#22c55e';
+    if (d >= 1) return '#86efac';
+    if (d >= 0) return '#fff';
+    if (d >= -1) return '#fca5a5';
+    return '#ef4444';
+  };
 
   const thBase = { padding: '8px 8px', textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' };
   const sectionBorder = `2px solid ${theme.border}`;
@@ -11064,16 +11122,20 @@ function LiveSpecPage() {
             <button onClick={() => setShowInfo(!showInfo)} style={{ fontSize: 13, color: theme.accent, background: 'none', border: `1px solid ${theme.accent}`, borderRadius: 4, padding: '6px 10px', cursor: 'pointer', fontWeight: 600 }}>How Accurate Is This?</button>
             {showInfo && (
               <div style={{ marginTop: 10, fontSize: 12, color: '#d1d5db', lineHeight: 1.6, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: 12 }}>
-                <strong style={{ color: '#fff' }}>COMP%</strong> measures how much a player is over/underperforming their uZIPS projection (snapped {UZIPS_SNAPSHOT_DATE}).
+                <strong style={{ color: '#fff' }}>Pred Δ</strong> predicts the expected OVR change at the next Live roster update, based on a regression model trained on the April→May 2026 update.
                 <br /><br />
-                For each stat (K%, HR%, BB%, BABIP for hitters; K/9, HR/9, BB/9, BABIP for pitchers), we calculate the % difference between actual and projected, then average them into one composite score.
+                The model uses current eval window stats (wRC+, OPS, ISO, BABIP, K%, BB% for hitters; FIP, ERA, WHIP, K/9, BB/9, HR/9, BABIP, K%, BB% for pitchers) combined with the player's current card OVR.
                 <br /><br />
-                <strong style={{ color: '#fff' }}>Key details:</strong>
-                <br />• FIP and wOBA are shown but excluded from COMP% (they're derivative stats)
-                <br />• HR/9 is excluded from pitcher COMP% until 30+ IP (too volatile in small samples)
-                <br />• Positive = outperforming projection, negative = underperforming
+                <strong style={{ color: '#fff' }}>Accuracy:</strong> R=0.66 for hitters, R=0.70 for pitchers.
+                <br />The % in parentheses shows weighted over/underperformance vs uZIPS.
                 <br /><br />
-                <span style={{ color: '#9ca3af' }}>uZIPS projections via FanGraphs · Actuals from current eval window</span>
+                <strong style={{ color: '#fff' }}>Color scale:</strong>
+                <br />• ≥ +3: strong upgrade expected
+                <br />• +1 to +3: modest upgrade
+                <br />• -1 to +1: likely stable
+                <br />• ≤ -1: downgrade risk
+                <br /><br />
+                <span style={{ color: '#9ca3af' }}>Model will be retrained after each monthly update · uZIPS snapped {UZIPS_SNAPSHOT_DATE}</span>
               </div>
             )}
           </div>
@@ -11184,8 +11246,8 @@ function LiveSpecPage() {
                   <th style={{ ...thBase, color: theme.textMuted, textAlign: 'left', minWidth: 150, paddingLeft: 12 }}>Name</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 48 }}>TM</th>
                   <th style={{ ...thBase, color: theme.textMuted, width: 52 }}>{volLabel}</th>
-                  <th onClick={() => handleSort('composite')} style={{ ...thBase, color: theme.accent, width: 80, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
-                    COMP%{sortKey === 'composite' || sortKey === null ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                  <th onClick={() => handleSort('composite')} style={{ ...thBase, color: theme.accent, width: 90, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+                    Pred Δ{sortKey === 'composite' || sortKey === null ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
                   </th>
                   {/* % diff columns — clickable for sort */}
                   {currentStats.map(s => {
@@ -11217,9 +11279,20 @@ function LiveSpecPage() {
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{row.team}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center', color: '#fff', fontSize: 14 }}>{Math.round(row.vol)}</td>
                     <td style={{ padding: '9px 8px', textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 15, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
-                        {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
-                      </span>
+                      {row.predictedDelta !== null ? (
+                        <>
+                          <span style={{ fontWeight: 700, fontSize: 15, color: deltaColor(row.predictedDelta) }}>
+                            {row.predictedDelta >= 0 ? '+' : ''}{row.predictedDelta.toFixed(1)}
+                          </span>
+                          <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 3, color: deltaColor(row.predictedDelta) }}>
+                            ({row.weightedPct >= 0 ? '+' : ''}{row.weightedPct.toFixed(0)}%)
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontWeight: 700, fontSize: 15, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
+                          {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
+                        </span>
+                      )}
                     </td>
                     {/* % diff values */}
                     {currentStats.map((s, si) => {
