@@ -10903,6 +10903,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
     const statResults = {};
     let validCount = 0, totalPct = 0;
     const getVal = (obj, s) => s.derive ? s.derive(obj) : fgGet(obj, s.key);
+    const playerIP = fgGet(player, 'IP');
     stats.forEach(s => {
       const a = getVal(player, s);
       let p   = getVal(proj,   s);
@@ -10913,7 +10914,9 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       let pct = ((a - p) / Math.abs(p)) * 100;
       if (!s.higherBetter) pct = -pct;
       statResults[s.key] = { actual: a, proj: p, pct };
-      if (!s.excludeFromComposite) { validCount++; totalPct += pct; }
+      // Exclude HR/9 from composite until pitcher has 30+ IP (too volatile in small samples)
+      const excludeHR9 = s.key === 'HR9' && playerIP !== null && playerIP < 30;
+      if (!s.excludeFromComposite && !excludeHR9) { validCount++; totalPct += pct; }
     });
     if (validCount < 1) return;
     rows.push({
@@ -10941,6 +10944,7 @@ function LiveSpecPage() {
   const [minOvr, setMinOvr]           = useState(0);
   const [sortKey, setSortKey]         = useState(null);
   const [sortDir, setSortDir]         = useState('desc');
+  const [showInfo, setShowInfo]       = useState(false);
 
   // 2026 season evaluation windows.
   // Each entry: [cutoff date string, window start date string].
@@ -11057,7 +11061,21 @@ function LiveSpecPage() {
 
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
-            <div style={{ fontSize: 14, color: '#fff', lineHeight: 1.5 }}>% overperformance<br />vs uZIPS (snapped {UZIPS_SNAPSHOT_DATE}) · FanGraphs</div>
+            <button onClick={() => setShowInfo(!showInfo)} style={{ fontSize: 13, color: theme.accent, background: 'none', border: `1px solid ${theme.accent}`, borderRadius: 4, padding: '6px 10px', cursor: 'pointer', fontWeight: 600 }}>How Accurate Is This?</button>
+            {showInfo && (
+              <div style={{ marginTop: 10, fontSize: 12, color: '#d1d5db', lineHeight: 1.6, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: 12 }}>
+                <strong style={{ color: '#fff' }}>COMP%</strong> measures how much a player is over/underperforming their uZIPS projection (snapped {UZIPS_SNAPSHOT_DATE}).
+                <br /><br />
+                For each stat (K%, HR%, BB%, BABIP for hitters; K/9, HR/9, BB/9, BABIP for pitchers), we calculate the % difference between actual and projected, then average them into one composite score.
+                <br /><br />
+                <strong style={{ color: '#fff' }}>Key details:</strong>
+                <br />• FIP and wOBA are shown but excluded from COMP% (they're derivative stats)
+                <br />• HR/9 is excluded from pitcher COMP% until 30+ IP (too volatile in small samples)
+                <br />• Positive = outperforming projection, negative = underperforming
+                <br /><br />
+                <span style={{ color: '#9ca3af' }}>uZIPS projections via FanGraphs · Actuals from current eval window</span>
+              </div>
+            )}
           </div>
 
           <div style={{ height: 1, background: theme.border }} />
@@ -11731,6 +11749,8 @@ function PTLivePage() {
         const gameStatus = allGames[idx]?.status?.abstractGameState || '';
         ['home','away'].forEach(side => {
           const currentBatterIds = new Set(bs.teams?.[side]?.battingOrder || []);
+          const pitcherIds = bs.teams?.[side]?.pitchers || [];
+          const currentPitcherId = pitcherIds.length > 0 ? pitcherIds[pitcherIds.length - 1] : null;
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
             const name = normalizeName(p.person?.fullName);
             if (!name) return;
@@ -11738,10 +11758,9 @@ function PTLivePage() {
             const pitching = p.stats?.pitching || {};
             const newBat   = Object.keys(batting).length  ? batting  : null;
             const newPit   = Object.keys(pitching).length ? pitching : null;
-            const gs = p.gameStatus || {};
             const playerId = p.person?.id;
             const newSubbed = gameStatus === 'Live' && (
-              (newPit && !gs.isCurrentPitcher) ||
+              (newPit && playerId !== currentPitcherId) ||
               (newBat && playerId && currentBatterIds.size > 0 && !currentBatterIds.has(playerId))
             );
             if (map[name]) {
