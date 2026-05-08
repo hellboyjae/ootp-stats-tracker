@@ -12799,8 +12799,8 @@ function PTLivePage() {
   );
 }
 
-export default function App() {
-  return (<BrowserRouter><ThemeProvider><AuthProvider><BannerProvider><Routes>
+export function AppContent() {
+  return (<ThemeProvider><AuthProvider><BannerProvider><Routes>
     <Route path="/" element={<WelcomePage />} />
     <Route path="/stats" element={<StatsPage />} />
     <Route path="/info" element={<InfoPage />} />
@@ -12814,7 +12814,11 @@ export default function App() {
     <Route path="/pack-simulator" element={<PackSimulatorPage />} />
     <Route path="/pt-live" element={<PTLivePage />} />
     <Route path="/live-spec" element={<LiveSpecPage />} />
-  </Routes></BannerProvider></AuthProvider></ThemeProvider></BrowserRouter>);
+  </Routes></BannerProvider></AuthProvider></ThemeProvider>);
+}
+
+export default function App() {
+  return (<BrowserRouter><AppContent /></BrowserRouter>);
 }
 
 const darkTheme = {
