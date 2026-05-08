@@ -57,7 +57,10 @@ function prerenderPlugin() {
         removeItem: (k) => { delete store[k] },
         clear: () => { for (const k in store) delete store[k] },
       }
-      if (typeof globalThis.window === 'undefined') globalThis.window = globalThis
+      if (typeof globalThis.window === 'undefined') {
+        globalThis.window = globalThis
+        globalThis.window.location = { search: '', pathname: '/', hash: '', href: 'http://localhost/' }
+      }
 
       // Load the SSR bundle
       const { render } = await import(path.join(ssrOutDir, 'entry-server.js'))
