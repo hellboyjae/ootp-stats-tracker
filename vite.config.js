@@ -32,7 +32,8 @@ function prerenderPlugin() {
         : path.join(config.root, config.build.outDir)
     },
     async closeBundle() {
-      const puppeteer = await import('puppeteer')
+      const chromium = await import('@sparticuz/chromium')
+      const puppeteer = await import('puppeteer-core')
 
       console.log(`\n[prerender] Starting static server...`)
 
@@ -80,7 +81,11 @@ function prerenderPlugin() {
       console.log(`[prerender] Static server on port ${port}`)
       console.log(`[prerender] Prerendering ${ROUTES.length} routes...`)
 
-      const browser = await puppeteer.default.launch({ headless: true })
+      const browser = await puppeteer.default.launch({
+        args: chromium.default.args,
+        executablePath: await chromium.default.executablePath(),
+        headless: 'shell',
+      })
       const results = []
 
       try {
