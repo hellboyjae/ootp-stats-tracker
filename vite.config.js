@@ -49,6 +49,16 @@ function prerenderPlugin() {
         },
       })
 
+      // Polyfill browser globals before loading SSR bundle
+      const store = {}
+      globalThis.localStorage = {
+        getItem: (k) => store[k] ?? null,
+        setItem: (k, v) => { store[k] = String(v) },
+        removeItem: (k) => { delete store[k] },
+        clear: () => { for (const k in store) delete store[k] },
+      }
+      if (typeof globalThis.window === 'undefined') globalThis.window = globalThis
+
       // Load the SSR bundle
       const { render } = await import(path.join(ssrOutDir, 'entry-server.js'))
 
