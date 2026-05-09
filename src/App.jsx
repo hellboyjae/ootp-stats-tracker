@@ -7248,7 +7248,7 @@ function DraftAssistantPage() {
               </div>
 
               <a
-                href="https://mega.nz/folder/kr4zCBpC#Bw0yRmV1bg60ykJyRns3cQ"
+                href="https://mega.nz/folder/pyIElCRA#AoRlgMqyDl_j4CDp2OEIvA"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
