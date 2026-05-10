@@ -7248,7 +7248,7 @@ function DraftAssistantPage() {
               </div>
 
               <a
-                href="https://mega.nz/folder/pyIElCRA#AoRlgMqyDl_j4CDp2OEIvA"
+                href="https://mega.nz/folder/kr4zCBpC#Bw0yRmV1bg60ykJyRns3cQ"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -11050,7 +11050,7 @@ function LiveSpecPage() {
       if (!evalWindow) { setLoading(false); return; } // off-season
       const { startdate, enddate } = evalWindow;
       const season = new Date().getFullYear();
-      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=0&pageItems=2000`;
+      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=1000&pageItems=2000`;
       const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
 
       // Actual stats from FanGraphs (live); uZIPS from static snapshot
