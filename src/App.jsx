@@ -477,7 +477,8 @@ function Layout({ children, notification, pendingCount = 0 }) {
             <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
             <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
             <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
-            <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink>
+            {/* Database tab hidden — archiving feature */}
+            {/* <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink> */}
             <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
             <NavLink to="/pt-live" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>PT Live</NavLink>
             <NavLink to="/live-spec" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Live Spec</NavLink>
@@ -1598,7 +1599,7 @@ function StatsPage() {
                     <label style={{ 
                       display: 'flex', alignItems: 'center', gap: 8, 
                       marginBottom: 12, padding: '8px 12px', 
-                      background: selectedTournament.rotatingFormat ? theme.warning + '22' : theme.bgSecondary,
+                      background: selectedTournament.rotatingFormat ? theme.warning + '22' : theme.panelBg,
                       borderRadius: 6, cursor: 'pointer', fontSize: 12, color: theme.textPrimary
                     }}>
                       <input 
@@ -1786,8 +1787,8 @@ function StatsPage() {
                   ))}
                 </div>
                 
-                {/* Variant Filter */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                {/* Variant Filter — hidden for draft events */}
+                {selectedTournament?.category !== 'drafts' && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                   <span style={{ color: theme.textMuted, fontSize: 12 }}>Variants:</span>
                   {[
                     { value: 'all', label: 'All' },
@@ -1811,20 +1812,20 @@ function StatsPage() {
                       {opt.label}
                     </button>
                   ))}
-                </div>
+                </div>}
               </div>
             )}
             <div style={styles.tableContainer}>
               {activeTab === 'pitching' 
-                ? <PitchingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} onPlayerHover={handlePlayerHover} onPlayerHoverEnd={handlePlayerHoverEnd} />
-                : <BattingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} onPlayerHover={handlePlayerHover} onPlayerHoverEnd={handlePlayerHoverEnd} />}
+                ? <PitchingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} onPlayerHover={handlePlayerHover} onPlayerHoverEnd={handlePlayerHoverEnd} isDraft={selectedTournament?.category === 'drafts'} />
+                : <BattingTable data={filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)} sortBy={filters.sortBy} sortDir={filters.sortDir} onSort={toggleSort} theme={theme} showPer9={showPer9} showTraditional={showTraditional} onPlayerClick={handlePlayerClick} onPlayerHover={handlePlayerHover} onPlayerHoverEnd={handlePlayerHoverEnd} isDraft={selectedTournament?.category === 'drafts'} />}
             </div>
             {filteredData.length > ROWS_PER_PAGE && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: `1px solid ${theme.border}` }}>
                 <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: currentPage === 1 ? theme.bgSecondary : theme.cardBg, color: currentPage === 1 ? theme.textMuted : theme.textPrimary, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: currentPage === 1 ? theme.panelBg : theme.cardBg, color: currentPage === 1 ? theme.textMuted : theme.textPrimary, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
                 >
                   ← Prev
                 </button>
@@ -1834,7 +1835,7 @@ function StatsPage() {
                 <button 
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredData.length / ROWS_PER_PAGE), p + 1))}
                   disabled={currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE)}
-                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? theme.bgSecondary : theme.cardBg, color: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? theme.textMuted : theme.textPrimary, cursor: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? 'not-allowed' : 'pointer' }}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? theme.panelBg : theme.cardBg, color: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? theme.textMuted : theme.textPrimary, cursor: currentPage >= Math.ceil(filteredData.length / ROWS_PER_PAGE) ? 'not-allowed' : 'pointer' }}
                 >
                   Next →
                 </button>
@@ -2294,7 +2295,7 @@ function InfoPage() {
                     {isUploadingCards ? 'Uploading...' : 'Upload pt_card_list.csv'}
                   </button>
                 </div>
-                {cardUploadStatus && <div style={{ marginTop: 8, fontSize: 12, color: cardUploadStatus.startsWith('Error') ? theme.danger : theme.success }}>{cardUploadStatus}</div>}
+                {cardUploadStatus && <div style={{ marginTop: 8, fontSize: 12, color: cardUploadStatus.startsWith('Error') ? theme.error : theme.success }}>{cardUploadStatus}</div>}
               </div>
             </div>
           ) : (
@@ -3347,7 +3348,7 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
       return { background: bg + '22', color: bg, border: `1px solid ${bg}44`, fontWeight: 700 };
     }
     if (priority === 'Inverted') return { background: '#ef444422', color: '#ef4444', border: '1px solid #ef444444', fontWeight: 600 };
-    return { background: theme.bgSecondary, color: theme.textMuted, border: `1px solid ${theme.border}`, fontWeight: 500 };
+    return { background: theme.panelBg, color: theme.textMuted, border: `1px solid ${theme.border}`, fontWeight: 500 };
   };
 
   const btnBase = { padding: '6px 14px', borderRadius: 6, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', transition: 'all 0.15s ease' };
@@ -3449,7 +3450,7 @@ function CorrelationTab({ battingData, pitchingData, cardData, theme }) {
           </div>
 
           {/* How to read this */}
-          <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: '14px 16px', border: `1px solid ${theme.border}` }}>
+          <div style={{ background: theme.panelBg, borderRadius: 8, padding: '14px 16px', border: `1px solid ${theme.border}` }}>
             <div style={{ color: theme.textPrimary, fontWeight: 700, fontSize: 12, marginBottom: 8, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>How to read this</div>
             <div style={{ color: theme.textMuted, fontSize: 12, lineHeight: 1.7 }}>
               <div style={{ marginBottom: 4 }}>
@@ -3667,7 +3668,7 @@ function PlayerRatingCard({ card, position, theme, isPitcher, embedded }) {
   );
 }
 
-function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick, onPlayerHover, onPlayerHoverEnd }) {
+function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick, onPlayerHover, onPlayerHoverEnd, isDraft }) {
   const styles = getStyles(theme);
   const { isColorblind } = useTheme();
   const SortHeader = ({ field, children, isRate }) => (
@@ -3682,7 +3683,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   const neg = isColorblind ? CB_NEGATIVE : '#EF4444';
   if (data.length === 0) return <div style={styles.emptyTable}>No pitching data</div>;
   return (<div style={styles.tableWrapper}><table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="throws">T</SortHeader><SortHeader field="ovr">OVR</SortHeader>{!isDraft && <SortHeader field="vari">VAR</SortHeader>}
     {showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="ip">IP</SortHeader><SortHeader field="ipPerG">IP/G</SortHeader>
     {showTraditional && <SortHeader field="bf">BF</SortHeader>}{showTraditional && <SortHeader field="era">ERA</SortHeader>}{showTraditional && <SortHeader field="avg">AVG</SortHeader>}{showTraditional && <SortHeader field="obp">OBP</SortHeader>}
     <SortHeader field="babip">BABIP</SortHeader>{showTraditional && <SortHeader field="whip">WHIP</SortHeader>}<SortHeader field="braPer9">BRA/9</SortHeader><SortHeader field="hrPer9">HR/9</SortHeader>
@@ -3694,7 +3695,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
       <td style={styles.td}>{p.pos}</td>
       <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: getOvrColor(p.ovr, isColorblind)}} onClick={() => onPlayerClick && onPlayerClick(p, 'pitching')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'pitching')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
       <td style={styles.td}>{p.throws}</td>
-      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
+      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td>{!isDraft && <td style={styles.td}>{p.vari}</td>}
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.ip}</td><td style={styles.td}>{calcIPperG(p.ip, p.g)}</td>
       {showTraditional && <td style={styles.td}>{p.bf}</td>}{showTraditional && <td style={styles.td}>{p.era}</td>}{showTraditional && <td style={styles.td}>{p.avg}</td>}{showTraditional && <td style={styles.td}>{p.obp}</td>}
       <td style={styles.td}>{p.babip}</td>{showTraditional && <td style={styles.td}>{p.whip}</td>}<td style={styles.td}>{p.braPer9}</td><td style={styles.td}>{p.hrPer9}</td>
@@ -3707,7 +3708,7 @@ function PitchingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTra
   </tbody></table></div>);
 }
 
-function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick, onPlayerHover, onPlayerHoverEnd }) {
+function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTraditional, onPlayerClick, onPlayerHover, onPlayerHoverEnd, isDraft }) {
   const styles = getStyles(theme);
   const { isColorblind } = useTheme();
   const SortHeader = ({ field, children, isRate }) => (
@@ -3720,7 +3721,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
   const neg = isColorblind ? CB_NEGATIVE : '#EF4444';
   if (data.length === 0) return <div style={styles.emptyTable}>No batting data</div>;
   return (<div style={styles.tableWrapper}><table style={styles.table}><thead><tr>
-    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader><SortHeader field="vari">VAR</SortHeader>
+    <SortHeader field="pos">POS</SortHeader><SortHeader field="name">Name</SortHeader><SortHeader field="bats">B</SortHeader><SortHeader field="ovr">OVR</SortHeader>{!isDraft && <SortHeader field="vari">VAR</SortHeader>}
     {showTraditional && <SortHeader field="g">G</SortHeader>}{showTraditional && <SortHeader field="gs">GS</SortHeader>}<SortHeader field="pa">PA</SortHeader>
     {showTraditional && <SortHeader field="ab">AB</SortHeader>}{showTraditional && <SortHeader field="h">H</SortHeader>}{showTraditional && <SortHeader field="doubles">2B</SortHeader>}
     {showTraditional && <SortHeader field="triples">3B</SortHeader>}{showTraditional && <SortHeader field="hr">HR</SortHeader>}<SortHeader field="bbPct">BB%</SortHeader>
@@ -3734,7 +3735,7 @@ function BattingTable({ data, sortBy, sortDir, onSort, theme, showPer9, showTrad
       <td style={styles.td}>{p.pos}</td>
       <td className={onPlayerClick ? 'player-name-link' : ''} style={{...styles.tdName, cursor: onPlayerClick ? 'pointer' : 'default', color: getOvrColor(p.ovr, isColorblind)}} onClick={() => onPlayerClick && onPlayerClick(p, 'batting')} onMouseEnter={(e) => onPlayerHover && onPlayerHover(e, p, 'batting')} onMouseLeave={() => onPlayerHoverEnd && onPlayerHoverEnd()}>{p.name}</td>
       <td style={styles.td}>{p.bats}</td>
-      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td><td style={styles.td}>{p.vari}</td>
+      <td style={{...styles.tdOvr, color: getOvrColor(p.ovr, isColorblind)}}>{p.ovr}</td>{!isDraft && <td style={styles.td}>{p.vari}</td>}
       {showTraditional && <td style={styles.td}>{p.g}</td>}{showTraditional && <td style={styles.td}>{p.gs}</td>}<td style={styles.td}>{p.pa}</td>
       {showTraditional && <td style={styles.td}>{p.ab}</td>}{showTraditional && <td style={styles.td}>{p.h}</td>}{showTraditional && <td style={styles.td}>{p.doubles}</td>}
       {showTraditional && <td style={styles.td}>{p.triples}</td>}{showTraditional && <td style={styles.td}>{p.hr}</td>}<td style={styles.td}>{p.bbPct}</td>
@@ -5007,7 +5008,7 @@ function SubmitDataPage() {
                     borderRadius: 12,
                     padding: 40,
                     textAlign: 'center',
-                    background: theme.bgSecondary,
+                    background: theme.panelBg,
                     cursor: 'pointer',
                     marginBottom: 16
                   }}
@@ -5040,7 +5041,7 @@ function SubmitDataPage() {
                       <span style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>📄 Files ({bulkFiles.length})</span>
                     </div>
                     <div style={{
-                      background: theme.bgSecondary, borderRadius: '0 0 8px 8px',
+                      background: theme.panelBg, borderRadius: '0 0 8px 8px',
                       border: `1px solid ${theme.border}`, borderTop: 'none',
                       maxHeight: 400, overflowY: 'auto'
                     }}>
@@ -5069,7 +5070,7 @@ function SubmitDataPage() {
                           </div>
                           <button
                             onClick={() => removeBulkFile(item.id)}
-                            style={{ background: 'transparent', border: 'none', color: theme.danger, cursor: 'pointer', padding: 4 }}
+                            style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', padding: 4 }}
                           >✕</button>
                         </div>
                       ))}
@@ -5267,7 +5268,7 @@ function SubmitDataPage() {
           }}>
             <h3 style={{ color: theme.textPrimary, margin: '0 0 16px 0' }}>⚡ Admin Direct Upload</h3>
             
-            <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+            <div style={{ background: theme.panelBg, borderRadius: 8, padding: 12, marginBottom: 16 }}>
               <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Tournament</div>
               <div style={{ color: theme.textPrimary, fontWeight: 600 }}>{adminConfirmData.tournament?.name}</div>
               <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8, marginBottom: 4 }}>Date</div>
@@ -5278,12 +5279,12 @@ function SubmitDataPage() {
             </div>
             
             {adminConfirmData.pitching && (
-              <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <div style={{ background: theme.panelBg, borderRadius: 8, padding: 12, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: theme.textPrimary, fontWeight: 600 }}>⚾ Pitching</span>
                   <span style={{ 
                     color: adminConfirmData.pitching.matchPercent >= 70 ? theme.success : 
-                           adminConfirmData.pitching.matchPercent >= 40 ? theme.warning : theme.danger,
+                           adminConfirmData.pitching.matchPercent >= 40 ? theme.warning : theme.error,
                     fontWeight: 600
                   }}>
                     {adminConfirmData.pitching.matchPercent}% match
@@ -5298,12 +5299,12 @@ function SubmitDataPage() {
             )}
             
             {adminConfirmData.batting && (
-              <div style={{ background: theme.bgSecondary, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <div style={{ background: theme.panelBg, borderRadius: 8, padding: 12, marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: theme.textPrimary, fontWeight: 600 }}>🏏 Batting</span>
                   <span style={{ 
                     color: adminConfirmData.batting.matchPercent >= 70 ? theme.success : 
-                           adminConfirmData.batting.matchPercent >= 40 ? theme.warning : theme.danger,
+                           adminConfirmData.batting.matchPercent >= 40 ? theme.warning : theme.error,
                     fontWeight: 600
                   }}>
                     {adminConfirmData.batting.matchPercent}% match
@@ -6835,7 +6836,7 @@ function DraftAssistantPage() {
       ...batting.map(p => ({ ...p, type: 'batting', _confidence: getSampleConfidence(p, false) })),
       ...pitching.map(p => ({ ...p, type: 'pitching', _confidence: getSampleConfidence(p, true) }))
     ].slice(0, 15));
-  }, [searchQuery, tournamentData, roster, cardPool]);
+  }, [searchQuery, tournamentData, roster, cardPool, lowDataMode]);
 
   // Get empty slots for a player type
   const getEmptySlots = (playerType) => {
@@ -6913,7 +6914,7 @@ function DraftAssistantPage() {
       const positionPlayers = players.filter(p => {
         if (isPitching) return true; // All pitchers for SP
         const positions = p.positions || [p.pos];
-        return positions.some(pp => pp === pos || pp === pos);
+        return positions.some(pp => pp === pos || pp.toUpperCase() === pos);
       });
       
       if (positionPlayers.length === 0) continue;
@@ -7058,7 +7059,13 @@ function DraftAssistantPage() {
           <p style={{ color: theme.textMuted, marginBottom: 32 }}>Choose how you want to draft — use the web assistant or download the desktop overlay.</p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
-            {/* Left: Web Draft Assistant */}
+            {/* Left: Web Draft Assistant — under construction */}
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
+                <span style={{ fontSize: 40, marginBottom: 12 }}>🚧</span>
+                <span style={{ color: '#fff', fontSize: 20, fontWeight: 700, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>Under Construction</span>
+                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 6 }}>This feature is being rebuilt</span>
+              </div>
             <div style={{ background: theme.cardBg, borderRadius: 12, padding: 24, border: `1px solid ${theme.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <span style={{ fontSize: 22 }}>🌐</span>
@@ -7198,6 +7205,7 @@ function DraftAssistantPage() {
               >
                 Start Draft
               </button>
+            </div>
             </div>
 
             {/* Right: Desktop Overlay Download */}
@@ -7605,7 +7613,7 @@ function DraftAssistantPage() {
                     <div><span style={{ color: theme.textMuted }}>FIP-:</span> <span style={{ color: theme.accent }}>{showPlayerModal.fipMinus || '—'}</span></div>
                     <div><span style={{ color: theme.textMuted }}>WHIP:</span> {showPlayerModal.whip || '—'}</div>
                     <div><span style={{ color: theme.textMuted }}>IP:</span> {showPlayerModal.ip || '—'}</div>
-                    <div><span style={{ color: theme.textMuted }}>K/9:</span> {showPlayerModal.k9 || '—'}</div>
+                    <div><span style={{ color: theme.textMuted }}>K/9:</span> {showPlayerModal.kPer9 || '—'}</div>
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -10410,7 +10418,7 @@ function PackSimulatorPage() {
     if (isOpening) return;
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
-    const activePool = selectedPack.group === 'Historical' ? histCardPool : cardPool;
+    const activePool = selectedPack.key.startsWith('hist') ? histCardPool : cardPool;
     const cards = openSimPack(selectedPack, activePool);
     setDrawnCards(cards);
     setFlipped(new Set());
@@ -10425,7 +10433,7 @@ function PackSimulatorPage() {
           setIsOpening(false);
           setHasOpened(true);
           const packTotal = cards.reduce((s, e) => s + (e?.card?.last_10_price || 0), 0);
-          const packEV = Math.round(calcSimPackEV(selectedPack, selectedPack.group === 'Historical' ? histAvgByTier : avgByTier));
+          const packEV = Math.round(calcSimPackEV(selectedPack, selectedPack.key.startsWith('hist') ? histAvgByTier : avgByTier));
           setSessionPnL(prev => (prev ?? 0) + (packTotal - packEV));
         }
       }, 350 + i * 280);
@@ -10443,7 +10451,7 @@ function PackSimulatorPage() {
   };
 
   const totalCards  = useMemo(() => Object.values(cardPool).reduce((n, a) => n + a.length, 0), [cardPool]);
-  const packEVs     = useMemo(() => Object.fromEntries(PACK_DEFINITIONS_SIM.map(p => [p.key, Math.round(calcSimPackEV(p, p.group === 'Historical' ? histAvgByTier : avgByTier))])), [avgByTier, histAvgByTier]);
+  const packEVs     = useMemo(() => Object.fromEntries(PACK_DEFINITIONS_SIM.map(p => [p.key, Math.round(calcSimPackEV(p, p.key.startsWith('hist') ? histAvgByTier : avgByTier))])), [avgByTier, histAvgByTier]);
   const selectedEV  = selectedPack ? (packEVs[selectedPack.key] ?? 0) : 0;
   const drawnTotal  = useMemo(() => drawnCards.reduce((s, dc) => s + (dc?.card?.last_10_price || 0), 0), [drawnCards]);
   const topTier     = useMemo(() => selectedPack ? getSimTopTier(selectedPack) : 'Bronze', [selectedPack]);
