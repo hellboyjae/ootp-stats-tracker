@@ -11557,6 +11557,7 @@ function PTLivePage() {
   const [expandedUser, setExpandedUser]         = useState(null);
   const [expandedGlobal, setExpandedGlobal]     = useState(null);
   const [updateConfirm, setUpdateConfirm]   = useState(false);
+  const [altConfirm, setAltConfirm]         = useState(false);
   const [showYesterday, setShowYesterday]   = useState(false);
   const [yesterdayStats, setYesterdayStats] = useState({});
   const [yesterdayLoading, setYesterdayLoading] = useState(false);
@@ -11743,6 +11744,15 @@ function PTLivePage() {
     await supabase.from('ptlive_groups').upsert(payload, { onConflict: 'group_code,username,date' });
     setHasSubmittedToday(true);
     setUpdateConfirm(false);
+  };
+
+  const updateAltTeam = async () => {
+    if (!username || !groupCode) return;
+    const altName = `${username} - alt`;
+    const payload = { group_code: groupCode, username: altName, date: todayStr, team, pp: totalPP };
+    if (isLocked) payload.submitted_at = new Date().toISOString();
+    await supabase.from('ptlive_groups').upsert(payload, { onConflict: 'group_code,username,date' });
+    setAltConfirm(false);
   };
 
   useEffect(() => {
@@ -12343,16 +12353,34 @@ function PTLivePage() {
                     Confirm Update
                   </button>
                 </>
+              ) : altConfirm ? (
+                <>
+                  <span style={{ fontSize: 12, color: theme.textMuted }}>Submit current team as alt roster?</span>
+                  <button onClick={() => setAltConfirm(false)}
+                    style={{ background: theme.inputBg, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={updateAltTeam}
+                    style={{ background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    Confirm Alt
+                  </button>
+                </>
               ) : (
-                <button onClick={() => setUpdateConfirm(true)}
-                  style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
-                  Update Leaderboard Team
-                </button>
+                <>
+                  <button onClick={() => setUpdateConfirm(true)}
+                    style={{ background: theme.inputBg, color: theme.accent, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
+                    Update Leaderboard Team
+                  </button>
+                  <button onClick={() => setAltConfirm(true)}
+                    style={{ background: theme.inputBg, color: '#8b5cf6', border: '1px solid #8b5cf666', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}>
+                    Upload as Alt Roster
+                  </button>
+                </>
               )}
             </>
           )}
           <button
-            onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setUpdateConfirm(false); setActivePicker(null); setPickerSearch(''); }}
+            onClick={() => { setIsEditing(e => !e); setClearConfirm(false); setUpdateConfirm(false); setAltConfirm(false); setActivePicker(null); setPickerSearch(''); }}
             style={{ background: isEditing ? theme.error : theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em' }}
           >
             {isEditing ? 'Done Editing' : 'Edit Team'}
@@ -12504,7 +12532,14 @@ function PTLivePage() {
                                   style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                                    {entry.username}{isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
+                                    {entry.username}
+                                    {isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
+                                    {!entry.username.endsWith(' - alt') && ranked.some(e => e.username === entry.username + ' - alt') && (
+                                      <span onClick={(e) => { e.stopPropagation(); setExpandedUser(expandedUser === entry.username + ' - alt' ? entry.username : entry.username + ' - alt'); }}
+                                        style={{ marginLeft: 8, fontSize: 10, color: '#8b5cf6', cursor: 'pointer', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                        {expandedUser === entry.username + ' - alt' ? '← Main' : 'Alt'}
+                                      </span>
+                                    )}
                                   </div>
                                   <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
                                     {entry.teamCost > 0 ? entry.teamCost.toLocaleString() : '—'}
