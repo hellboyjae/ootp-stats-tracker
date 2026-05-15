@@ -4094,6 +4094,7 @@ function SubmitDataPage() {
   const [newEventName, setNewEventName] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [userNotes, setUserNotes] = useState('');
+  const [uploaderName, setUploaderName] = useState(() => localStorage.getItem('uploaderName') || '');
   const [uploadFile, setUploadFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -4304,6 +4305,7 @@ function SubmitDataPage() {
               suggested_tournament_name: selectedTournament.name,
               suggested_date: item.date,
               user_notes: `Bulk upload: ${item.file.name}`,
+              uploader_name: uploaderName.trim() || null,
               file_type: 'pitching',
               file_name: item.file.name,
               raw_data: pitchingRows,
@@ -4325,6 +4327,7 @@ function SubmitDataPage() {
               suggested_tournament_name: selectedTournament.name,
               suggested_date: item.date,
               user_notes: `Bulk upload: ${item.file.name}`,
+              uploader_name: uploaderName.trim() || null,
               file_type: 'batting',
               file_name: item.file.name,
               raw_data: battingRows,
@@ -4348,6 +4351,7 @@ function SubmitDataPage() {
             suggested_tournament_name: selectedTournament.name,
             suggested_date: item.date,
             user_notes: `Bulk upload: ${item.file.name}`,
+            uploader_name: uploaderName.trim() || null,
             file_type: fileType,
             file_name: item.file.name,
             raw_data: validation.rawRows,
@@ -4639,6 +4643,7 @@ function SubmitDataPage() {
           suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
           suggested_date: selectedDate,
           user_notes: userNotes.trim() || null,
+          uploader_name: uploaderName.trim() || null,
           file_type: 'pitching',
           file_name: fileName,
           raw_data: val.rawRows,
@@ -4661,6 +4666,7 @@ function SubmitDataPage() {
           suggested_tournament_name: suggestNewEvent ? newEventName.trim() : (selectedTournament?.name || ''),
           suggested_date: selectedDate,
           user_notes: userNotes.trim() || null,
+          uploader_name: uploaderName.trim() || null,
           file_type: 'batting',
           file_name: fileName,
           raw_data: val.rawRows,
@@ -5226,6 +5232,24 @@ function SubmitDataPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Uploader Name */}
+              <div style={styles.formSection}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <label style={styles.formLabel}>Set Uploader Name</label>
+                  <span
+                    title="Setting an uploader name will get you first access to all new features and tools."
+                    style={{ cursor: 'help', fontSize: 13, color: theme.textMuted, lineHeight: 1 }}
+                  >ⓘ</span>
+                </div>
+                <input
+                  type="text"
+                  value={uploaderName}
+                  onChange={(e) => { setUploaderName(e.target.value); localStorage.setItem('uploaderName', e.target.value); }}
+                  placeholder="Your name (optional)"
+                  style={styles.formInput}
+                />
               </div>
 
               {/* Notes */}
@@ -6033,9 +6057,9 @@ function ReviewQueuePage() {
                         <div style={{ flex: 1 }}>
                       <div style={styles.reviewCardHeader}>
                         <span style={styles.reviewCardFile}>📄 {upload.file_name}</span>
-                        <span style={styles.reviewCardTime}>{timeAgo(upload.created_at)}</span>
+                        <span style={styles.reviewCardTime}>{upload.uploader_name ? `${upload.uploader_name} · ` : ''}{timeAgo(upload.created_at)}</span>
                       </div>
-                      
+
                       <div style={styles.reviewCardBody}>
                         <div style={styles.reviewCardRow}>
                           <span style={styles.reviewCardLabel}>Type:</span>
@@ -6189,7 +6213,7 @@ function ReviewQueuePage() {
                     <div key={upload.id} className="hover-card" style={{...styles.reviewCard, borderColor: theme.error}}>
                       <div style={styles.reviewCardHeader}>
                         <span style={styles.reviewCardFile}>🚨 {upload.file_name}</span>
-                        <span style={styles.reviewCardTime}>{timeAgo(upload.created_at)}</span>
+                        <span style={styles.reviewCardTime}>{upload.uploader_name ? `${upload.uploader_name} · ` : ''}{timeAgo(upload.created_at)}</span>
                       </div>
                       
                       <div style={styles.criticalIssues}>
