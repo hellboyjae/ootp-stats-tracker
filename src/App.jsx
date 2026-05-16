@@ -10770,6 +10770,14 @@ const normalizeName = (s) => {
   const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, '').toLowerCase().trim();
   return NAME_ALIASES[n] || n;
 };
+// MLB player IDs that need disambiguation (same name, different player)
+const MLB_ID_OVERRIDES = { 695825: 'max muncy oak' }; // A's Muncy
+// Card-side: resolve the correct stats key for a card
+const cardStatsKey = (card) => {
+  const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+  if (name === 'max muncy' && (card.card_value || 0) < 70) return 'max muncy oak';
+  return name;
+};
 const PT_LIVE_SLOTS = [
   { key: 'C',   label: 'C',    role: 'batter', pos: 2    },
   { key: '1B',  label: '1B',   role: 'batter', pos: 3    },
@@ -11602,7 +11610,7 @@ function PTLivePage() {
     PT_LIVE_SLOTS.forEach(slot => {
       const card = teamObj?.[slot.key];
       if (!card) return;
-      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+      const name = cardStatsKey(card);
       const pd = statsMap[name] || null;
       if (!pd) return;
       if (slot.role === 'batter' && pd.battingGames?.length) total += ptLiveBatterPP(pd.battingGames);
@@ -11672,8 +11680,9 @@ function PTLivePage() {
         if (!bs) return;
         ['home','away'].forEach(side => {
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
-            const name = normalizeName(p.person?.fullName);
+            let name = normalizeName(p.person?.fullName);
             if (!name) return;
+            if (MLB_ID_OVERRIDES[p.person?.id]) name = MLB_ID_OVERRIDES[p.person.id];
             const batting  = p.stats?.batting  || {};
             const pitching = p.stats?.pitching || {};
             const newBat   = Object.keys(batting).length  ? batting  : null;
@@ -11725,7 +11734,7 @@ function PTLivePage() {
 
     // Score all cards against today's stats
     const scoreCard = (card, role) => {
-      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+      const name = cardStatsKey(card);
       const pd = statsMap[name];
       if (!pd) return { card, name, pp: 0 };
       let pp = 0;
@@ -12026,8 +12035,9 @@ function PTLivePage() {
           const pitcherIds = bs.teams?.[side]?.pitchers || [];
           const currentPitcherId = pitcherIds.length > 0 ? pitcherIds[pitcherIds.length - 1] : null;
           Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
-            const name = normalizeName(p.person?.fullName);
+            let name = normalizeName(p.person?.fullName);
             if (!name) return;
+            if (MLB_ID_OVERRIDES[p.person?.id]) name = MLB_ID_OVERRIDES[p.person.id];
             const batting  = p.stats?.batting  || {};
             const pitching = p.stats?.pitching || {};
             const newBat   = Object.keys(batting).length  ? batting  : null;
@@ -12204,7 +12214,7 @@ function PTLivePage() {
     return PT_LIVE_SLOTS.map(slot => {
       const card = activeTeam[slot.key] || null;
       if (!card) return { ...slot, card: null, playerData: null, pp: null };
-      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+      const name = cardStatsKey(card);
       const pd = statsMap[name] || null;
       let pp = null;
       if (pd) {
@@ -12698,7 +12708,7 @@ function PTLivePage() {
                                           <span>{slot.label}</span><span>—</span><span />
                                         </div>
                                       );
-                                      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+                                      const name = cardStatsKey(card);
                                       const pd = activeStats[name];
                                       let slotPP = null;
                                       if (pd) {
@@ -12819,7 +12829,7 @@ function PTLivePage() {
                                       <span>{slot.label}</span><span>—</span><span />
                                     </div>
                                   );
-                                  const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+                                  const name = cardStatsKey(card);
                                   const pd = activeStats[name];
                                   let slotPP = null;
                                   if (pd) {
@@ -12866,7 +12876,7 @@ function PTLivePage() {
                     PT_LIVE_SLOTS.forEach(slot => {
                       const card = entry.team?.[slot.key];
                       if (!card) return;
-                      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+                      const name = cardStatsKey(card);
                       if (!playerMap[name]) {
                         const pd = activeStats[name];
                         let pp = null;
