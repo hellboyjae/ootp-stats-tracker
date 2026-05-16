@@ -11567,7 +11567,7 @@ function PTLivePage() {
   const [yesterdayTeam, setYesterdayTeam]   = useState(null);
 
   // ── Best Possible Roster state ──────────────────────────────────────────────
-  const [bestRosterDate, setBestRosterDate] = useState(null); // set after todayStr is computed
+  const [bestRosterDate, setBestRosterDate] = useState(null); // defaults to yesterdayStr on first load
   const [bestRosterStats, setBestRosterStats] = useState(null);
   const [bestRosterLoading, setBestRosterLoading] = useState(false);
   const [bestRoster, setBestRoster] = useState([]);
@@ -11808,14 +11808,8 @@ function PTLivePage() {
 
   const loadBestRoster = async (dateStr) => {
     setBestRosterLoading(true);
-    let stats;
-    if (dateStr === todayStr) {
-      stats = mlbStats;
-    } else if (dateStr === yesterdayStr && Object.keys(yesterdayStats).length > 0) {
-      stats = yesterdayStats;
-    } else {
-      stats = await fetchMLBForDate(dateStr);
-    }
+    // Always fetch fresh stats for best roster — mlbStats may have preview/empty data for today
+    const stats = await fetchMLBForDate(dateStr);
     setBestRosterStats(stats);
     setBestRoster(computeBestRoster(stats, batters, sps, rps));
     setBestRosterLoading(false);
@@ -12552,7 +12546,7 @@ function PTLivePage() {
                   if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode, date);
                   if (tab.id === 'group-rankings') loadGlobalRankings(date);
                   if (tab.id === 'global' || tab.id === 'most-used') loadIndividualRankings(date);
-                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || todayStr);
+                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || yesterdayStr);
                   if (tab.id === 'alltime') loadAlltimeRankings();
                 }} style={{
                   textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
@@ -12679,7 +12673,7 @@ function PTLivePage() {
                               <div key={entry.username}>
                                 <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
                                   style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                                     {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
                                     {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
@@ -12688,7 +12682,7 @@ function PTLivePage() {
                                   <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
                                     {entry.teamCost > 0 ? entry.teamCost.toLocaleString() : '—'}
                                   </div>
-                                  <div style={{ fontSize: 12, color: isLate ? '#ef4444' : theme.textMuted }}>
+                                  <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                     {fmtTime(entry.submitted_at)}{isLate && ' · late'}
                                   </div>
                                   <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
@@ -12713,9 +12707,9 @@ function PTLivePage() {
                                       }
                                       return (
                                         <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
-                                          <span style={{ color: theme.textMuted, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
+                                          <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
                                           <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
-                                          <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : theme.textMuted }}>
+                                          <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                             {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                           </span>
                                         </div>
@@ -12756,11 +12750,11 @@ function PTLivePage() {
                       const isMyGroup = g.group_code === groupCode;
                       return (
                         <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em' }}>
                             {g.group_code}{isMyGroup && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11, fontFamily: 'inherit' }}>you</span>}
                           </div>
-                          <div style={{ fontSize: 13, color: theme.textMuted }}>{g.member_count} members</div>
+                          <div style={{ fontSize: 13, color: '#fff' }}>{g.member_count} members</div>
                           <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
                         </div>
                       );
@@ -12802,14 +12796,14 @@ function PTLivePage() {
                           <div key={expandKey}>
                             <div onClick={() => setExpandedGlobal(isExpanded ? null : expandKey)}
                               style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : theme.textMuted, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{entry.username}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
                                 {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
                                 {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
                               </div>
-                              <div style={{ fontSize: 12, color: isLate ? '#ef4444' : theme.textMuted }}>
+                              <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                 {fmtTime(entry.submitted_at)}{isLate && ' · late'}
                               </div>
                               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
@@ -12834,9 +12828,9 @@ function PTLivePage() {
                                   }
                                   return (
                                     <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
-                                      <span style={{ color: theme.textMuted, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
+                                      <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
                                       <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
-                                      <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : theme.textMuted }}>
+                                      <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                         {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                       </span>
                                     </div>
@@ -12895,14 +12889,14 @@ function PTLivePage() {
                       </div>
                       {sorted.map((p, idx) => (
                         <div key={p.displayName} style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: theme.textDim, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>
                           <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{p.displayName}</div>
                           <div style={{ fontSize: 13, fontWeight: 700, color: theme.accent, fontFamily: "'Oswald',sans-serif" }}>
                             {Math.round(p.count / total * 100)}%
-                            <span style={{ fontSize: 10, fontWeight: 400, color: theme.textMuted, marginLeft: 4 }}>{p.count}/{total}</span>
+                            <span style={{ fontSize: 10, fontWeight: 400, color: '#fff', marginLeft: 4 }}>{p.count}/{total}</span>
                           </div>
-                          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: p.pp > 0 ? '#22c55e' : p.pp < 0 ? '#ef4444' : theme.textMuted }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: p.pp > 0 ? '#22c55e' : p.pp < 0 ? '#ef4444' : '#fff' }}>
                             {p.pp !== null ? `${p.pp >= 0 ? '+' : ''}${p.pp}` : '—'}
                           </div>
                         </div>
@@ -12925,7 +12919,7 @@ function PTLivePage() {
                     type="date"
                     min={SEASON_START}
                     max={todayStr}
-                    value={bestRosterDate || todayStr}
+                    value={bestRosterDate || yesterdayStr}
                     onChange={e => {
                       const d = e.target.value;
                       setBestRosterDate(d);
@@ -12955,7 +12949,7 @@ function PTLivePage() {
                           <React.Fragment key={r.slotKey}>
                             {isSep && <div style={{ borderTop: `1px solid ${theme.border}`, margin: '4px 0' }} />}
                             <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot}</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                                 {r.card ? `${r.card.first_name} ${r.card.last_name}` : '—'}
                               </div>
@@ -12964,7 +12958,7 @@ function PTLivePage() {
                                   <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
                                 ) : '—'}
                               </div>
-                              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : theme.textMuted }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : '#fff' }}>
                                 {r.pp !== null && r.pp !== undefined ? `${r.pp >= 0 ? '+' : ''}${r.pp}` : '—'}
                               </div>
                             </div>
@@ -12975,7 +12969,7 @@ function PTLivePage() {
                         <div />
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total</div>
                         <div />
-                        <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: totalBestPP > 0 ? '#22c55e' : totalBestPP < 0 ? '#ef4444' : theme.textMuted }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: totalBestPP > 0 ? '#22c55e' : totalBestPP < 0 ? '#ef4444' : '#fff' }}>
                           {totalBestPP >= 0 ? '+' : ''}{totalBestPP}
                         </div>
                       </div>
@@ -13008,14 +13002,14 @@ function PTLivePage() {
                       const tc = tierColor(ovr);
                       return (
                         <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: idx < 3 ? '#fbbf24' : theme.textDim, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: idx < 3 ? '#fbbf24' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                           <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
                           <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
                           </div>
-                          <div style={{ fontSize: 12, color: theme.textMuted }}>{r.date}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : theme.textMuted }}>
+                          <div style={{ fontSize: 12, color: '#fff' }}>{r.date}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : '#fff' }}>
                             {r.pp >= 0 ? '+' : ''}{Number(r.pp)}
                           </div>
                         </div>
