@@ -12808,8 +12808,11 @@ function PTLivePage() {
                               style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                               <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{entry.username}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                  {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
+                                </span>
+                                {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
                                 {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
                                 {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
                               </div>
