@@ -7280,7 +7280,7 @@ function DraftAssistantPage() {
               </div>
 
               <a
-                href="https://mega.nz/folder/5iwD0TLQ#fSswkylBZy7E_Hx-0OcovQ"
+                href="https://mega.nz/file/grglHTiA#Vz-9unE51B0AaTfch-V0zLZImO0IVKGWYKFFUjF2oSM"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -11585,6 +11585,14 @@ function PTLivePage() {
   const [alltimeRankings, setAlltimeRankings] = useState([]);
   const [alltimeLoading, setAlltimeLoading] = useState(false);
 
+  // ── Cumulative PP state ───────────────────────────────────────────────────
+  const [cumulativeData, setCumulativeData] = useState([]);
+  const [cumulativeLoading, setCumulativeLoading] = useState(false);
+  const [cumulativeSearch, setCumulativeSearch] = useState('');
+  const [cumulativeSearchResults, setCumulativeSearchResults] = useState(null);
+  const [cumulativeSearchLoading, setCumulativeSearchLoading] = useState(false);
+  const cumulativeSearchTimer = useRef(null);
+
   const isLocked = lockTime && new Date() >= lockTime;
 
   const todayStr = (() => {
@@ -11833,6 +11841,38 @@ function PTLivePage() {
       .limit(25);
     setAlltimeRankings(data || []);
     setAlltimeLoading(false);
+  };
+
+  const loadCumulativePP = async () => {
+    setCumulativeLoading(true);
+    const { data } = await supabase
+      .from('ptlive_cumulative_pp')
+      .select('*')
+      .order('total_pp', { ascending: false })
+      .limit(25);
+    setCumulativeData(data || []);
+    setCumulativeLoading(false);
+  };
+
+  const searchCumulativePP = (query) => {
+    setCumulativeSearch(query);
+    if (cumulativeSearchTimer.current) clearTimeout(cumulativeSearchTimer.current);
+    if (!query.trim()) {
+      setCumulativeSearchResults(null);
+      setCumulativeSearchLoading(false);
+      return;
+    }
+    setCumulativeSearchLoading(true);
+    cumulativeSearchTimer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('ptlive_cumulative_pp')
+        .select('*')
+        .ilike('player_name', `%${query.trim()}%`)
+        .order('total_pp', { ascending: false })
+        .limit(25);
+      setCumulativeSearchResults(data || []);
+      setCumulativeSearchLoading(false);
+    }, 300);
   };
 
   const handleYesterdayToggle = async () => {
@@ -12549,6 +12589,7 @@ function PTLivePage() {
                 { id: 'most-used',      label: 'Most Used' },
                 { id: 'best-roster',    label: 'Best Roster' },
                 { id: 'alltime',        label: 'All-Time Top 25' },
+                { id: 'cumulative-pp',  label: 'Points Earned' },
               ].map(tab => (
                 <button key={tab.id} onClick={() => {
                   setActiveTab(tab.id);
@@ -12558,6 +12599,7 @@ function PTLivePage() {
                   if (tab.id === 'global' || tab.id === 'most-used') loadIndividualRankings(date);
                   if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || yesterdayStr);
                   if (tab.id === 'alltime') loadAlltimeRankings();
+                  if (tab.id === 'cumulative-pp') loadCumulativePP();
                 }} style={{
                   textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
@@ -13030,6 +13072,74 @@ function PTLivePage() {
                     })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── CUMULATIVE PP TAB ───────────────────────────────────────── */}
+            {activeTab === 'cumulative-pp' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Points Earned</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>Cumulative PP earned across the 2026 season</div>
+                </div>
+
+                {/* Search box */}
+                <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={cumulativeSearch}
+                    onChange={e => searchCumulativePP(e.target.value)}
+                    placeholder="Search player..."
+                    style={{ flex: 1, background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#fff', outline: 'none' }}
+                  />
+                  {cumulativeSearch && (
+                    <button onClick={() => { setCumulativeSearch(''); setCumulativeSearchResults(null); }} style={{ background: theme.border, border: 'none', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Clear</button>
+                  )}
+                </div>
+
+                <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 10, fontWeight: 600, letterSpacing: '0.04em' }}>
+                  {cumulativeSearchResults !== null ? 'SEARCH RESULTS' : 'TOP 25'}
+                </div>
+
+                {(cumulativeLoading || cumulativeSearchLoading) ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                ) : (() => {
+                  const displayData = cumulativeSearchResults !== null ? cumulativeSearchResults : cumulativeData;
+                  if (displayData.length === 0) return (
+                    <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>
+                      {cumulativeSearchResults !== null ? 'No results found.' : 'No data yet.'}
+                    </div>
+                  );
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['#', 'Player', 'OVR', 'Pos', 'Games', 'PP'].map(h => (
+                          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' || h === 'Games' ? 'right' : 'left' }}>{h}</div>
+                        ))}
+                      </div>
+                      {displayData.map((r, idx) => {
+                        const ovr = r.card_value || 0;
+                        const tc = tierColor(ovr);
+                        const isTop3 = cumulativeSearchResults === null && idx < 3;
+                        const pp = Number(r.total_pp);
+                        return (
+                          <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: isTop3 ? '#fbbf24' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
+                            </div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
+                            <div style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{r.days_played}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: pp > 0 ? '#22c55e' : pp < 0 ? '#ef4444' : '#fff' }}>
+                              {pp >= 0 ? '+' : ''}{pp}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
