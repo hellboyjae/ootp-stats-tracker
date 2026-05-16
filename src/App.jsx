@@ -10765,8 +10765,11 @@ function PackSimulatorPage() {
 // ============================================================
 // PT LIVE — constants & scoring
 // ============================================================
-const normalizeName = (s) =>
-  (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, '').toLowerCase().trim();
+const NAME_ALIASES = { 'louis varland': 'louie varland' };
+const normalizeName = (s) => {
+  const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, '').toLowerCase().trim();
+  return NAME_ALIASES[n] || n;
+};
 const PT_LIVE_SLOTS = [
   { key: 'C',   label: 'C',    role: 'batter', pos: 2    },
   { key: '1B',  label: '1B',   role: 'batter', pos: 3    },
@@ -11563,6 +11566,17 @@ function PTLivePage() {
   const [yesterdayLoading, setYesterdayLoading] = useState(false);
   const [yesterdayTeam, setYesterdayTeam]   = useState(null);
 
+  // ── Best Possible Roster state ──────────────────────────────────────────────
+  const [bestRosterDate, setBestRosterDate] = useState(null); // set after todayStr is computed
+  const [bestRosterStats, setBestRosterStats] = useState(null);
+  const [bestRosterLoading, setBestRosterLoading] = useState(false);
+  const [bestRoster, setBestRoster] = useState([]);
+  const SEASON_START = '2026-03-27';
+
+  // ── All-Time Rankings state ─────────────────────────────────────────────────
+  const [alltimeRankings, setAlltimeRankings] = useState([]);
+  const [alltimeLoading, setAlltimeLoading] = useState(false);
+
   const isLocked = lockTime && new Date() >= lockTime;
 
   const todayStr = (() => {
@@ -11685,6 +11699,137 @@ function PTLivePage() {
       });
       return map;
     } catch (e) { console.error('MLB historical fetch error:', e); return {}; }
+  };
+
+  // ── Best Possible Roster computation ────────────────────────────────────────
+  // Greedy slot assignment respecting roster tier limits (max 2 Perfect, 5 Diamond+, 9 Gold+)
+  const computeBestRoster = (statsMap, allBatters, allSps, allRps) => {
+    if (!statsMap || Object.keys(statsMap).length === 0) return [];
+    const used = new Set();
+    const result = [];
+    // Tier budget tracking
+    let perfectUsed = 0, diamondPlusUsed = 0, goldPlusUsed = 0;
+    const MAX_PERFECT = 2, MAX_DIAMOND_PLUS = 5, MAX_GOLD_PLUS = 9;
+
+    const canUseTier = (ovr) => {
+      if (ovr >= 100 && perfectUsed >= MAX_PERFECT) return false;
+      if (ovr >= 90 && diamondPlusUsed >= MAX_DIAMOND_PLUS) return false;
+      if (ovr >= 80 && goldPlusUsed >= MAX_GOLD_PLUS) return false;
+      return true;
+    };
+    const useTier = (ovr) => {
+      if (ovr >= 100) perfectUsed++;
+      if (ovr >= 90) diamondPlusUsed++;
+      if (ovr >= 80) goldPlusUsed++;
+    };
+
+    // Score all cards against today's stats
+    const scoreCard = (card, role) => {
+      const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
+      const pd = statsMap[name];
+      if (!pd) return { card, name, pp: 0 };
+      let pp = 0;
+      if (role === 'batter' && pd.battingGames?.length) pp = ptLiveBatterPP(pd.battingGames);
+      else if (role === 'sp' && pd.pitchingGames?.length) pp = ptLivePitcherPP(pd.pitchingGames, 'sp');
+      else if (role === 'rp' && pd.pitchingGames?.length) pp = ptLivePitcherPP(pd.pitchingGames, 'rp');
+      return { card, name, pp };
+    };
+
+    // 1) Fill positional batter slots (C, 1B, 2B, 3B, SS, LF, CF, RF)
+    const posSlots = PT_LIVE_SLOTS.filter(s => s.role === 'batter' && s.pos);
+    posSlots.forEach(slot => {
+      const eligible = allBatters
+        .filter(c => Number(c.position) === slot.pos && !used.has(c.card_id) && canUseTier(c.card_value || 0))
+        .map(c => scoreCard(c, 'batter'))
+        .sort((a, b) => b.pp - a.pp);
+      const best = eligible[0];
+      if (best) {
+        used.add(best.card.card_id);
+        useTier(best.card.card_value || 0);
+        result.push({ slot: slot.label, slotKey: slot.key, card: best.card, pp: best.pp });
+      } else {
+        result.push({ slot: slot.label, slotKey: slot.key, card: null, pp: 0 });
+      }
+    });
+
+    // 2) Fill open batter slots (DH, U1, U2) — any batter
+    const openSlots = PT_LIVE_SLOTS.filter(s => s.role === 'batter' && !s.pos);
+    openSlots.forEach(slot => {
+      const eligible = allBatters
+        .filter(c => !used.has(c.card_id) && canUseTier(c.card_value || 0))
+        .map(c => scoreCard(c, 'batter'))
+        .sort((a, b) => b.pp - a.pp);
+      const best = eligible[0];
+      if (best) {
+        used.add(best.card.card_id);
+        useTier(best.card.card_value || 0);
+        result.push({ slot: slot.label, slotKey: slot.key, card: best.card, pp: best.pp });
+      } else {
+        result.push({ slot: slot.label, slotKey: slot.key, card: null, pp: 0 });
+      }
+    });
+
+    // 3) Fill SP slots
+    const spSlots = PT_LIVE_SLOTS.filter(s => s.role === 'sp');
+    spSlots.forEach(slot => {
+      const eligible = allSps
+        .filter(c => !used.has(c.card_id) && canUseTier(c.card_value || 0))
+        .map(c => scoreCard(c, 'sp'))
+        .sort((a, b) => b.pp - a.pp);
+      const best = eligible[0];
+      if (best) {
+        used.add(best.card.card_id);
+        useTier(best.card.card_value || 0);
+        result.push({ slot: slot.label, slotKey: slot.key, card: best.card, pp: best.pp });
+      } else {
+        result.push({ slot: slot.label, slotKey: slot.key, card: null, pp: 0 });
+      }
+    });
+
+    // 4) Fill RP slots
+    const rpSlots = PT_LIVE_SLOTS.filter(s => s.role === 'rp');
+    rpSlots.forEach(slot => {
+      const eligible = allRps
+        .filter(c => !used.has(c.card_id) && canUseTier(c.card_value || 0))
+        .map(c => scoreCard(c, 'rp'))
+        .sort((a, b) => b.pp - a.pp);
+      const best = eligible[0];
+      if (best) {
+        used.add(best.card.card_id);
+        useTier(best.card.card_value || 0);
+        result.push({ slot: slot.label, slotKey: slot.key, card: best.card, pp: best.pp });
+      } else {
+        result.push({ slot: slot.label, slotKey: slot.key, card: null, pp: 0 });
+      }
+    });
+
+    return result;
+  };
+
+  const loadBestRoster = async (dateStr) => {
+    setBestRosterLoading(true);
+    let stats;
+    if (dateStr === todayStr) {
+      stats = mlbStats;
+    } else if (dateStr === yesterdayStr && Object.keys(yesterdayStats).length > 0) {
+      stats = yesterdayStats;
+    } else {
+      stats = await fetchMLBForDate(dateStr);
+    }
+    setBestRosterStats(stats);
+    setBestRoster(computeBestRoster(stats, batters, sps, rps));
+    setBestRosterLoading(false);
+  };
+
+  const loadAlltimeRankings = async () => {
+    setAlltimeLoading(true);
+    const { data } = await supabase
+      .from('ptlive_alltime_performances')
+      .select('*')
+      .order('pp', { ascending: false })
+      .limit(25);
+    setAlltimeRankings(data || []);
+    setAlltimeLoading(false);
   };
 
   const handleYesterdayToggle = async () => {
@@ -12398,6 +12543,8 @@ function PTLivePage() {
                 { id: 'group-rankings', label: 'Group Rankings' },
                 { id: 'global',         label: 'Global Rankings' },
                 { id: 'most-used',      label: 'Most Used' },
+                { id: 'best-roster',    label: 'Best Roster' },
+                { id: 'alltime',        label: 'All-Time Top 25' },
               ].map(tab => (
                 <button key={tab.id} onClick={() => {
                   setActiveTab(tab.id);
@@ -12405,6 +12552,8 @@ function PTLivePage() {
                   if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode, date);
                   if (tab.id === 'group-rankings') loadGlobalRankings(date);
                   if (tab.id === 'global' || tab.id === 'most-used') loadIndividualRankings(date);
+                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || todayStr);
+                  if (tab.id === 'alltime') loadAlltimeRankings();
                 }} style={{
                   textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
@@ -12761,6 +12910,119 @@ function PTLivePage() {
                     </div>
                   );
                 })()}
+              </div>
+            )}
+
+            {/* ── BEST POSSIBLE ROSTER TAB ────────────────────────────────── */}
+            {activeTab === 'best-roster' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Best Possible Roster</div>
+                    <div style={{ fontSize: 12, color: theme.textMuted }}>Highest-PP card per slot for the selected date (respects tier limits)</div>
+                  </div>
+                  <input
+                    type="date"
+                    min={SEASON_START}
+                    max={todayStr}
+                    value={bestRosterDate || todayStr}
+                    onChange={e => {
+                      const d = e.target.value;
+                      setBestRosterDate(d);
+                      loadBestRoster(d);
+                    }}
+                    style={{ background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: '#fff', outline: 'none', cursor: 'pointer' }}
+                  />
+                </div>
+                {bestRosterLoading ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                ) : bestRoster.length === 0 ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No game data for this date.</div>
+                ) : (() => {
+                  const totalBestPP = bestRoster.reduce((s, r) => s + (r.pp || 0), 0);
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['Slot', 'Player', 'OVR', 'PP'].map(h => (
+                          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' ? 'right' : 'left' }}>{h}</div>
+                        ))}
+                      </div>
+                      {bestRoster.map((r, idx) => {
+                        const ovr = r.card?.card_value || 0;
+                        const tc = tierColor(ovr);
+                        const isSep = idx === 11 || idx === 8; // separator before pitchers, and before open slots
+                        return (
+                          <React.Fragment key={r.slotKey}>
+                            {isSep && <div style={{ borderTop: `1px solid ${theme.border}`, margin: '4px 0' }} />}
+                            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                {r.card ? `${r.card.first_name} ${r.card.last_name}` : '—'}
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                {r.card ? (
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
+                                ) : '—'}
+                              </div>
+                              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : theme.textMuted }}>
+                                {r.pp !== null && r.pp !== undefined ? `${r.pp >= 0 ? '+' : ''}${r.pp}` : '—'}
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                      <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '12px 12px 6px', borderTop: `2px solid ${theme.border}` }}>
+                        <div />
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total</div>
+                        <div />
+                        <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: totalBestPP > 0 ? '#22c55e' : totalBestPP < 0 ? '#ef4444' : theme.textMuted }}>
+                          {totalBestPP >= 0 ? '+' : ''}{totalBestPP}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* ── ALL-TIME TOP 25 TAB ─────────────────────────────────────── */}
+            {activeTab === 'alltime' && (
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>All-Time Top 25</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>Greatest single-day individual PP performances · 2026 season</div>
+                </div>
+                {alltimeLoading ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading…</div>
+                ) : alltimeRankings.length === 0 ? (
+                  <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No data yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {['#', 'Player', 'OVR', 'Date', 'Pos', 'PP'].map(h => (
+                        <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' ? 'right' : 'left' }}>{h}</div>
+                      ))}
+                    </div>
+                    {alltimeRankings.map((r, idx) => {
+                      const ovr = r.card_value || 0;
+                      const tc = tierColor(ovr);
+                      return (
+                        <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: idx < 3 ? '#fbbf24' : theme.textDim, fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: theme.textMuted }}>{r.date}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : theme.textMuted }}>
+                            {r.pp >= 0 ? '+' : ''}{Number(r.pp)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
