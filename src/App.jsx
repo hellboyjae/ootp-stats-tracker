@@ -12007,8 +12007,10 @@ function PTLivePage() {
     try {
       const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
       const pageSize = 1000;
-      const { data: firstPage, count } = await supabase
+      const { data: firstPage, count, error: cardsErr } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
+      if (cardsErr) console.error('[PTLive] Cards query error:', cardsErr);
+      console.log(`[PTLive] Cards query: ${firstPage?.length ?? 'null'} rows, count=${count}`);
       const totalPages = Math.ceil((count || 0) / pageSize);
       const rest = totalPages > 1
         ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, i) =>
@@ -13143,7 +13145,7 @@ function PTLivePage() {
                             return (
                               <div key={entry.username}>
                                 <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
-                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : idx % 2 === 1 ? theme.tableHeaderBg66 : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                                     {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
@@ -13220,7 +13222,7 @@ function PTLivePage() {
                     {globalRankings.map((g, idx) => {
                       const isMyGroup = g.group_code === groupCode;
                       return (
-                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : idx % 2 === 1 ? theme.tableHeaderBg66 : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
+                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em' }}>
                             {g.group_code}{isMyGroup && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11, fontFamily: 'inherit' }}>you</span>}
@@ -13266,7 +13268,7 @@ function PTLivePage() {
                         return (
                           <div key={expandKey}>
                             <div onClick={() => setExpandedGlobal(isExpanded ? null : expandKey)}
-                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : idx % 2 === 1 ? theme.tableHeaderBg66 : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                               <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
@@ -13615,24 +13617,24 @@ function PTLivePage() {
                   </div>
 
                   {/* Admin Upload Section */}
-                  <div style={{ marginBottom: 20, padding: 16, background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
+                  <div style={{ marginBottom: 20 }}>
                     {!projAdminUnlocked ? (
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: 220 }}>
                         <input
                           type="password"
                           value={projAdminPw}
                           onChange={e => setProjAdminPw(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter' && projAdminPw === 'KOBALYTICS') setProjAdminUnlocked(true); }}
                           placeholder="Admin password"
-                          style={{ flex: 1, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#fff', outline: 'none' }}
+                          style={{ width: 130, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 11, color: '#fff', outline: 'none' }}
                         />
                         <button onClick={() => { if (projAdminPw === 'KOBALYTICS') setProjAdminUnlocked(true); }}
-                          style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                           Unlock
                         </button>
                       </div>
                     ) : (
-                      <div>
+                      <div style={{ padding: 16, background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 10 }}>Upload BallparkPal Files</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                           {[
@@ -13782,9 +13784,9 @@ function PTLivePage() {
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
                               return (
-                                <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: idx % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}
+                                <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}
                                   onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
-                                  onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 1 ? theme.tableHeaderBg66 : 'transparent'}>
+                                  onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent'}>
                                   <td style={{ padding: '10px 8px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
                                   <td style={{ padding: '10px 8px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17 }}>{p.Player}</td>
                                   <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
@@ -13831,7 +13833,7 @@ function PTLivePage() {
                                 <tbody>
                                   {projData.cheatSheet.slice(0, 11).map((entry, i) => {
                                     if (!entry) return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}>
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                         <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
                                         <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
                                       </tr>
@@ -13839,7 +13841,7 @@ function PTLivePage() {
                                     const tc2 = projTeamColor(entry.Team);
                                     const hasSim = entry.HasSim !== false;
                                     return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}>
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                         <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
                                         <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
                                         <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
@@ -13861,7 +13863,7 @@ function PTLivePage() {
                                 <tbody>
                                   {projData.cheatSheet.slice(11, 15).map((entry, i) => {
                                     if (!entry) return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}>
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                         <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
                                         <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
                                       </tr>
@@ -13869,7 +13871,7 @@ function PTLivePage() {
                                     const tc2 = projTeamColor(entry.Team);
                                     const hasSim = entry.HasSim !== false;
                                     return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}>
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                         <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
                                         <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
                                         <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
@@ -13920,7 +13922,7 @@ function PTLivePage() {
                               const totalDiff = totalActual - totalProj;
                               const renderRow = (entry, i) => {
                                 if (!entry) return (
-                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}>
+                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                     <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50 }}>—</td>
                                     <td colSpan={6} style={{ color: '#556677', padding: '7px 10px' }}>No player</td>
                                   </tr>
@@ -13929,7 +13931,7 @@ function PTLivePage() {
                                 const hasPP = entry.actualPP !== null;
                                 const diff = hasPP ? entry.actualPP - entry.projectedPP : null;
                                 return (
-                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? theme.tableHeaderBg66 : 'transparent' }}>
+                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                     <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
                                     <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
                                     <td style={{ padding: '7px 10px', color: tc, fontWeight: 600 }}>{entry.Team}</td>
