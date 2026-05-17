@@ -12002,7 +12002,7 @@ function PTLivePage() {
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
-      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price';
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
       const pageSize = 1000;
       const { data: firstPage, count } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
@@ -12170,19 +12170,16 @@ function PTLivePage() {
         const matches = cardsByName[name];
         if (!matches || matches.length === 0) return null;
         if (matches.length === 1) return matches[0];
-        // Disambiguate: prefer matching franchise
-        const getFranchise = c => {
-          // Cards don't have a franchise field exposed, but we can use the card list structure
-          // For now, prefer by type
-          if (playerType === 'batter') {
-            const typed = matches.filter(m => !m.pitcher_role || Number(m.pitcher_role) === 0);
-            return typed.length > 0 ? typed[0] : matches[0];
-          } else {
-            const typed = matches.filter(m => Number(m.position) === 1);
-            return typed.length > 0 ? typed[0] : matches[0];
-          }
-        };
-        return getFranchise();
+        // Disambiguate by team first, then by player type
+        const teamMatch = matches.filter(m => m.franchise === ptTeam);
+        const pool = teamMatch.length > 0 ? teamMatch : matches;
+        if (playerType === 'batter') {
+          const typed = pool.filter(m => !m.pitcher_role || Number(m.pitcher_role) === 0);
+          return typed.length > 0 ? typed[0] : pool[0];
+        } else {
+          const typed = pool.filter(m => Number(m.position) === 1);
+          return typed.length > 0 ? typed[0] : pool[0];
+        }
       };
 
       const results = [];
@@ -13512,7 +13509,7 @@ function PTLivePage() {
                     <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
                       <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
                     </div>
-                    <div style={{ fontSize: 12, color: theme.textMuted }}>BallparkPal simulation projections · PT scoring rubric</div>
+                    <div style={{ fontSize: 12, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
                   </div>
 
                   {/* Admin Upload Section */}
@@ -13574,7 +13571,7 @@ function PTLivePage() {
 
                   {/* Last Updated */}
                   {projData?.updatedAt && (
-                    <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: '#fff', marginBottom: 12 }}>
                       Last updated: {new Date(projData.updatedAt).toLocaleString()} · {projData.gameDate || ''} · {projData.players?.length || 0} players
                     </div>
                   )}
@@ -13587,7 +13584,7 @@ function PTLivePage() {
                     <>
                       {/* Value Picks */}
                       {valuePicks.length > 0 && (
-                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 13, color: '#667788', lineHeight: 1.8 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 19, color: '#667788', lineHeight: 1.8 }}>
                           <span style={{ fontWeight: 600, color: '#fbbf24' }}>Value Picks: </span>
                           {valuePicks.map((v, i) => (
                             <span key={i}>
@@ -13604,7 +13601,7 @@ function PTLivePage() {
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                         {['all', 'batter', 'pitcher'].map(t => (
                           <button key={t} onClick={() => setProjTypeFilter(t)} style={{
-                            padding: '6px 16px', borderRadius: 16, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            padding: '8px 20px', borderRadius: 18, fontSize: 18, fontWeight: 600, cursor: 'pointer',
                             border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projTypeFilter === t ? theme.accent : theme.inputBg,
                             color: projTypeFilter === t ? '#fff' : theme.textMuted,
@@ -13613,7 +13610,7 @@ function PTLivePage() {
                           </button>
                         ))}
                         <button onClick={() => setShowCheatSheet(true)} style={{
-                          padding: '6px 16px', borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          padding: '8px 20px', borderRadius: 18, fontSize: 18, fontWeight: 700, cursor: 'pointer',
                           background: '#2a1a33', border: '1px solid #6b3fa0', color: '#c89dff',
                         }}>
                           Cheat Sheet
@@ -13623,14 +13620,14 @@ function PTLivePage() {
                       {/* Position filters */}
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
                         <button onClick={() => setProjFilter('all')} style={{
-                          padding: '5px 14px', borderRadius: 14, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          padding: '7px 18px', borderRadius: 16, fontSize: 17, fontWeight: 600, cursor: 'pointer',
                           border: projFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                           background: projFilter === 'all' ? theme.accent : theme.inputBg,
                           color: projFilter === 'all' ? '#fff' : theme.textMuted,
                         }}>All</button>
                         {allPositions.map(pos => (
                           <button key={pos} onClick={() => setProjFilter(pos)} style={{
-                            padding: '5px 14px', borderRadius: 14, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            padding: '7px 18px', borderRadius: 16, fontSize: 17, fontWeight: 600, cursor: 'pointer',
                             border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projFilter === pos ? theme.accent : theme.inputBg,
                             color: projFilter === pos ? '#fff' : theme.textMuted,
@@ -13640,29 +13637,29 @@ function PTLivePage() {
 
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 19 }}>
                           <thead>
                             <tr>
                               {[
-                                { col: '_rank', label: '#', w: 36 },
+                                { col: '_rank', label: '#', w: 44 },
                                 { col: 'Player', label: 'Player', w: null },
-                                { col: 'Team', label: 'Team', w: 60 },
-                                { col: 'Position', label: 'Pos', w: 50 },
-                                { col: 'OVR', label: 'OVR', w: 50 },
-                                { col: 'ExpPP', label: 'Exp PP', w: 70 },
-                                { col: 'BustPct', label: 'Bust %', w: 60 },
-                                { col: '_matchup', label: 'Matchup', w: 90 },
-                                { col: 'GameTime', label: 'Time', w: 70 },
+                                { col: 'Team', label: 'Team', w: 70 },
+                                { col: 'Position', label: 'Pos', w: 60 },
+                                { col: 'OVR', label: 'OVR', w: 60 },
+                                { col: 'ExpPP', label: 'Exp PP', w: 80 },
+                                { col: 'BustPct', label: 'Bust %', w: 70 },
+                                { col: '_matchup', label: 'Matchup', w: 100 },
+                                { col: 'GameTime', label: 'Time', w: 80 },
                               ].map(h => (
                                 <th key={h.col} onClick={() => h.col !== '_rank' && h.col !== '_matchup' && handleProjSort(h.col)} style={{
-                                  padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 10,
+                                  padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 16,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
                                   borderBottom: `2px solid ${theme.border}`, cursor: h.col !== '_rank' && h.col !== '_matchup' ? 'pointer' : 'default',
                                   whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
                                   ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
                                 }}>
                                   {h.label}
-                                  {projSort.col === h.col && <span style={{ fontSize: 9, marginLeft: 2 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
+                                  {projSort.col === h.col && <span style={{ fontSize: 13, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
                                 </th>
                               ))}
                             </tr>
@@ -13679,29 +13676,29 @@ function PTLivePage() {
                                 <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22` }}
                                   onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
                                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 12 }}>{idx + 1}</td>
-                                  <td style={{ padding: '8px 6px', fontWeight: 600, color: '#fff', textAlign: 'left' }}>{p.Player}</td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, color: tc }}>{p.Team}</td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center' }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 18 }}>{idx + 1}</td>
+                                  <td style={{ padding: '12px 10px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 19 }}>{p.Player}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 19 }}>{p.Team}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                                     <span style={{
-                                      display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 17, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
                                     }}>{p.Position}</span>
                                   </td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center' }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                                     <span style={{
-                                      display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 18, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 700, fontSize: 15, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 700, fontSize: 21, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 19, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 18 }}>
                                     <span style={{ color: '#fff' }}>{sideLabel}</span>
                                     <span style={{ color: oc }}>{p.Opponent}</span>
                                   </td>
-                                  <td style={{ padding: '8px 6px', textAlign: 'center', color: '#fff', fontSize: 12 }}>{p.GameTime}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', color: '#fff', fontSize: 18 }}>{p.GameTime}</td>
                                 </tr>
                               );
                             })}
