@@ -531,15 +531,15 @@ function StatsPage() {
   const [showNewTournament, setShowNewTournament] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentType, setNewTournamentType] = useState('daily');
-  const [filters, setFilters] = useState({ 
-    search: '', 
-    position: 'all', 
-    sortBy: 'war', 
-    sortDir: 'desc', 
-    gFilter: { enabled: false, operator: '>=', value: 0 }, 
-    paFilter: { enabled: false, operator: '>=', value: 0 }, 
-    abFilter: { enabled: false, operator: '>=', value: 0 }, 
-    ipFilter: { enabled: false, operator: '>=', value: 0 },
+  const [filters, setFilters] = useState({
+    search: '',
+    position: 'all',
+    sortBy: 'fipMinus',
+    sortDir: 'asc',
+    gFilter: { enabled: false, operator: '>=', value: 0 },
+    paFilter: { enabled: false, operator: '>=', value: 0 },
+    abFilter: { enabled: false, operator: '>=', value: 0 },
+    ipFilter: { enabled: true, operator: '>=', value: 400 },
     // Card tier filters (all enabled by default)
     cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
     // Variant filter: 'all', 'yes', 'no'
@@ -1207,18 +1207,21 @@ function StatsPage() {
 
   const toggleSort = (field) => { if (filters.sortBy === field) setFilters(f => ({ ...f, sortDir: f.sortDir === 'asc' ? 'desc' : 'asc' })); else setFilters(f => ({ ...f, sortBy: field, sortDir: 'desc' })); };
   const updateStatFilter = (name, updates) => setFilters(f => ({ ...f, [name]: { ...f[name], ...updates } }));
-  const resetFilters = () => setFilters({ 
-    search: '', 
-    position: 'all', 
-    sortBy: 'war', 
-    sortDir: 'desc', 
-    gFilter: { enabled: false, operator: '>=', value: 0 }, 
-    paFilter: { enabled: false, operator: '>=', value: 0 }, 
-    abFilter: { enabled: false, operator: '>=', value: 0 }, 
-    ipFilter: { enabled: false, operator: '>=', value: 0 },
-    cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
-    variantFilter: 'all'
-  });
+  const resetFilters = () => {
+    const isPitching = activeTab === 'pitching';
+    setFilters({
+      search: '',
+      position: 'all',
+      sortBy: isPitching ? 'fipMinus' : 'woba',
+      sortDir: isPitching ? 'asc' : 'desc',
+      gFilter: { enabled: false, operator: '>=', value: 0 },
+      paFilter: isPitching ? { enabled: false, operator: '>=', value: 0 } : { enabled: true, operator: '>=', value: 1000 },
+      abFilter: { enabled: false, operator: '>=', value: 0 },
+      ipFilter: isPitching ? { enabled: true, operator: '>=', value: 400 } : { enabled: false, operator: '>=', value: 0 },
+      cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
+      variantFilter: 'all'
+    });
+  };
   const getActiveFilterCount = () => { 
     let c = 0; 
     if (filters.position !== 'all') c++; 
@@ -1685,8 +1688,8 @@ function StatsPage() {
             )}
             <div style={styles.tabRow}>
               <div style={styles.tabs}>
-                <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching?.length || 0}</span></button>
-                <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting?.length || 0}</span></button>
+                <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all', sortBy: 'fipMinus', sortDir: 'asc', ipFilter: { enabled: true, operator: '>=', value: 400 }, paFilter: { enabled: false, operator: '>=', value: 0 }})); setCurrentPage(1); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching?.length || 0}</span></button>
+                <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all', sortBy: 'woba', sortDir: 'desc', paFilter: { enabled: true, operator: '>=', value: 1000 }, ipFilter: { enabled: false, operator: '>=', value: 0 }})); setCurrentPage(1); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting?.length || 0}</span></button>
                 {cardData.length > 0 && <button style={{...styles.tab, ...(activeTab === 'analysis' ? styles.tabActive : {})}} onClick={() => setActiveTab('analysis')}>Analysis</button>}
               </div>
             </div>
@@ -12346,7 +12349,6 @@ function PTLivePage() {
       const guessDate = isLocked ? todayStr : yesterdayStr;
 
       // 1. Fetch snapshot
-      console.log('[PTLive] Yesterday guess fetching:', `ptlive_cheatsheet_${guessDate}`);
       const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${guessDate}`).maybeSingle();
       if (!row?.content?.cheatSheet) { setYesterdayGuess(null); setYesterdayGuessLoading(false); return; }
       const snapshot = row.content;
