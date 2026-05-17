@@ -12342,13 +12342,17 @@ function PTLivePage() {
     setYesterdayGuessLoading(true);
     if (showModal) setShowYesterdayGuess(true);
     try {
+      // After lock, today's projections are the "guess" — games are in progress/done
+      const guessDate = isLocked ? todayStr : yesterdayStr;
+
       // 1. Fetch snapshot
-      const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${yesterdayStr}`).single();
+      console.log('[PTLive] Yesterday guess fetching:', `ptlive_cheatsheet_${guessDate}`);
+      const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${guessDate}`).maybeSingle();
       if (!row?.content?.cheatSheet) { setYesterdayGuess(null); setYesterdayGuessLoading(false); return; }
       const snapshot = row.content;
 
-      // 2. Fetch yesterday's MLB schedule
-      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${yesterdayStr}`);
+      // 2. Fetch MLB schedule for that date
+      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${guessDate}`);
       const schedData = await schedRes.json();
       const games = schedData.dates?.[0]?.games || [];
 
