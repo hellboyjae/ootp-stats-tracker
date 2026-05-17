@@ -11611,6 +11611,13 @@ function PTLivePage() {
 
   const isLocked = lockTime && new Date() >= lockTime;
 
+  // Auto-load yesterday's best guess once lock happens (preload without opening modal)
+  useEffect(() => {
+    if (isLocked && !yesterdayGuess && !yesterdayGuessLoading) {
+      loadYesterdayGuess(false);
+    }
+  }, [isLocked]);
+
   const todayStr = (() => {
     const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     return `${et.getFullYear()}-${String(et.getMonth()+1).padStart(2,'0')}-${String(et.getDate()).padStart(2,'0')}`;
@@ -12331,9 +12338,9 @@ function PTLivePage() {
     return { roster, tierCounts: { perfect: pCount, diamond: dCount, gold: gCount } };
   };
 
-  const loadYesterdayGuess = async () => {
+  const loadYesterdayGuess = async (showModal = true) => {
     setYesterdayGuessLoading(true);
-    setShowYesterdayGuess(true);
+    if (showModal) setShowYesterdayGuess(true);
     try {
       // 1. Fetch snapshot
       const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${yesterdayStr}`).single();
