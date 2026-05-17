@@ -12005,12 +12005,10 @@ function PTLivePage() {
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
-      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price';
       const pageSize = 1000;
-      const { data: firstPage, count, error: cardsErr } = await supabase
+      const { data: firstPage, count } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
-      if (cardsErr) console.error('[PTLive] Cards query error:', cardsErr);
-      console.log(`[PTLive] Cards query: ${firstPage?.length ?? 'null'} rows, count=${count}`);
       const totalPages = Math.ceil((count || 0) / pageSize);
       const rest = totalPages > 1
         ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, i) =>
