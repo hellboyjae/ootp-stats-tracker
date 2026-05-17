@@ -8,6 +8,7 @@ import { IMG_CUSTOMIZE_VIEW, IMG_PITCHING_FILTERS, IMG_BATTING_COLS_TOP, IMG_BAT
 import { LIVE_CARD_COLORS, LIVE_CARD_OVR } from './liveCardColors.js';
 import { UZIPS_BAT, UZIPS_PIT, UZIPS_SNAPSHOT_DATE } from './uzipsSnapshot.js';
 import { BAT_REGRESSION, PIT_REGRESSION } from './regressionCoeffs.js';
+import * as XLSX from 'xlsx';
 
 const ThemeContext = createContext();
 const BannerContext = createContext();
@@ -11593,6 +11594,18 @@ function PTLivePage() {
   const [cumulativeSearchLoading, setCumulativeSearchLoading] = useState(false);
   const cumulativeSearchTimer = useRef(null);
 
+  // ── Projections state ──────────────────────────────────────────────────────
+  const [projData, setProjData] = useState(null);
+  const [projLoading, setProjLoading] = useState(false);
+  const [projFilter, setProjFilter] = useState('all');
+  const [projTypeFilter, setProjTypeFilter] = useState('all');
+  const [projSort, setProjSort] = useState({ col: 'ExpPP', dir: 'desc' });
+  const [projAdminUnlocked, setProjAdminUnlocked] = useState(false);
+  const [projAdminPw, setProjAdminPw] = useState('');
+  const [projUploadFiles, setProjUploadFiles] = useState({ batters: null, pitchers: null, games: null, teams: null });
+  const [projUpdating, setProjUpdating] = useState(false);
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
+
   const isLocked = lockTime && new Date() >= lockTime;
 
   const todayStr = (() => {
@@ -11981,6 +11994,7 @@ function PTLivePage() {
     loadPTLiveCards();
     fetchMLBToday();
     fetchFgData();
+    loadProjections();
     const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -12011,6 +12025,302 @@ function PTLivePage() {
       setRps(all.filter(isRP).sort(byOvr));
     } catch (e) { console.error('PTLive cards error:', e); }
     setIsLoadingCards(false);
+  };
+
+  // ── Projections: load from Supabase ──────────────────────────────────────
+  const loadProjections = async () => {
+    setProjLoading(true);
+    try {
+      const { data } = await supabase.from('site_content').select('*').eq('id', 'ptlive_projections').single();
+      if (data?.content) setProjData(data.content);
+    } catch (e) { console.error('Load projections error:', e); }
+    setProjLoading(false);
+  };
+
+  // ── Projections: helpers ────────────────────────────────────────────────
+  const ovrToTier = ovr => ovr >= 100 ? 'Perfect' : ovr >= 90 ? 'Diamond' : ovr >= 80 ? 'Gold' : ovr >= 70 ? 'Silver' : ovr >= 60 ? 'Bronze' : 'Iron';
+
+  // ── Projections: scoring constants ────────────────────────────────────────
+  const PROJ_BATTER_SINGLE = 4, PROJ_BATTER_DOUBLE = 6, PROJ_BATTER_TRIPLE = 10, PROJ_BATTER_HR = 15;
+  const PROJ_BATTER_HR_BONUS = 100, PROJ_BATTER_HIT_BONUS_PER = 25;
+  const PROJ_BATTER_RUN = 6, PROJ_BATTER_RBI = 6, PROJ_BATTER_BB_HBP = 3, PROJ_BATTER_SB = 10, PROJ_BATTER_CS = -2;
+  const PROJ_SP_WIN = 20, PROJ_SP_IP = 4, PROJ_SP_K = 2, PROJ_SP_K_BONUS = 40, PROJ_SP_QS = 5, PROJ_SP_ER = -2, PROJ_SP_BB = -1;
+
+  const PROJ_TEAM_CODE_MAP = { ATH: 'OAK', KC: 'KCR', LAA: 'ANA', NYY: 'NYA', SD: 'SDP', SF: 'SFG', TB: 'TBD', WAS: 'WSN', MIA: 'FLA' };
+  const PROJ_FRANCHISE_TO_BPP = Object.fromEntries(Object.entries(PROJ_TEAM_CODE_MAP).map(([k, v]) => [v, k]));
+  const PROJ_NAME_FIXES = {
+    'Louis Varland': 'Louie Varland', 'Louie Varland': 'Louie Varland',
+    'C.J. Abrams': 'CJ Abrams', 'Jazz Chisholm': 'Jazz Chisholm Jr.',
+    'Hyeseong Kim': 'Hye-seong Kim', 'Jung Hoo Lee': 'Jung-hoo Lee',
+  };
+  const PROJ_TEAM_NAME_FIXES = { 'Luis Garcia|WAS': 'Luis Garcia Jr.' };
+  const PROJ_TEAM_COLORS = {
+    ARI: '#E32636', ATH: '#00A86B', ATL: '#CE1141', BAL: '#DF4601',
+    BOS: '#BD3039', CHC: '#2B65EC', CHW: '#C4CED4', CIN: '#C6011F',
+    CLE: '#E31937', COL: '#9B72CF', DET: '#FA4616', HOU: '#EB6E1F',
+    KC:  '#4B9CD3', LAA: '#E4002B', LAD: '#4F8FD4', MIA: '#00B2ED',
+    MIL: '#FFC52F', MIN: '#D31145', NYM: '#FF6F3C', NYY: '#4169E1',
+    PHI: '#E81828', PIT: '#FDB827', SD:  '#FFC425', SEA: '#00C7B7',
+    SF:  '#FD5A1E', STL: '#C41E3A', TB:  '#8FBCE6', TEX: '#4682B4',
+    TOR: '#3B8DD0', WAS: '#AB0003',
+  };
+  const projTeamColor = t => PROJ_TEAM_COLORS[(t || '').trim()] || '#8899aa';
+
+  const PROJ_POS_MAP = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
+  const PROJ_PITCHER_ROLE_MAP = { 11: 'SP', 12: 'RP', 13: 'CL' };
+  const projDisplayPos = (pos, role) => pos === 1 ? (PROJ_PITCHER_ROLE_MAP[role] || 'P') : (PROJ_POS_MAP[pos] || '?');
+
+  // ── Projections: math helpers ─────────────────────────────────────────────
+  const projPoissonPmf = (k, lam) => {
+    if (lam <= 0) return k === 0 ? 1.0 : 0.0;
+    let fac = 1; for (let i = 2; i <= k; i++) fac *= i;
+    return Math.exp(-lam) * Math.pow(lam, k) / fac;
+  };
+  const projPoissonCdf = (k, lam) => {
+    let s = 0; for (let i = 0; i <= k; i++) s += projPoissonPmf(i, lam);
+    return s;
+  };
+  const projNormalCdf = x => 0.5 * (1 + (x => { // erfc approximation via erf
+    const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+    const sign = x < 0 ? -1 : 1; const ax = Math.abs(x);
+    const t = 1.0 / (1.0 + p * ax);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
+    return sign * y;
+  })(x / Math.sqrt(2)));
+
+  const projExpectedHitsBonus = hits => {
+    if (hits <= 0) return 0;
+    let total = 0;
+    for (let k = 4; k < 20; k++) total += (k - 3) * projPoissonPmf(k, hits);
+    return PROJ_BATTER_HIT_BONUS_PER * total;
+  };
+  const projExpectedHrBonus = hr => hr <= 0 ? 0 : PROJ_BATTER_HR_BONUS * (1.0 - projPoissonCdf(2, hr));
+  const projExpectedKBonus = k => k <= 0 ? 0 : PROJ_SP_K_BONUS * (1.0 - projPoissonCdf(9, k));
+
+  const projCalcBatterPP = r => {
+    const singles = r.Singles || 0, doubles = r.Doubles || 0, triples = r.Triples || 0;
+    const hr = r.HomeRuns || 0, runs = r.Runs || 0, rbi = r.RBIs || 0;
+    const walks = r.Walks || 0, sb = r.StolenBaseSuccesses || 0, sba = r.StolenBaseAttempts || 0;
+    const hits = r.Hits || 0, cs = sba - sb;
+    const base = singles * PROJ_BATTER_SINGLE + doubles * PROJ_BATTER_DOUBLE + triples * PROJ_BATTER_TRIPLE +
+      hr * PROJ_BATTER_HR + runs * PROJ_BATTER_RUN + rbi * PROJ_BATTER_RBI +
+      walks * PROJ_BATTER_BB_HBP + sb * PROJ_BATTER_SB + cs * PROJ_BATTER_CS;
+    return Math.round((base + projExpectedHrBonus(hr) + projExpectedHitsBonus(hits)) * 10) / 10;
+  };
+
+  const projCalcSpPP = r => {
+    const winPct = r.WinPct || 0, innings = r.Innings || 0, strikeouts = r.Strikeouts || 0;
+    const qs = r.QualityStart || 0, runsAllowed = r.RunsAllowed || 0, walks = r.Walks || 0;
+    const base = winPct * PROJ_SP_WIN + innings * PROJ_SP_IP + strikeouts * PROJ_SP_K +
+      qs * PROJ_SP_QS + runsAllowed * PROJ_SP_ER + walks * PROJ_SP_BB;
+    return Math.round((base + projExpectedKBonus(strikeouts)) * 10) / 10;
+  };
+
+  const projCalcBatterBust = (hitProb, walks) => {
+    const pNoHits = Math.max(0, 1.0 - (hitProb || 0));
+    const pNoWalks = Math.exp(-Math.max(0, walks || 0));
+    return Math.round(pNoHits * pNoWalks * 1000) / 10;
+  };
+
+  const projCalcPitcherBust = (meanPP, winPct, qs, strikeouts, runsAllowed, walks) => {
+    const v = 400 * winPct * (1 - winPct) + 25 * qs * (1 - qs) + 36 +
+      4 * strikeouts + 4 * runsAllowed + walks;
+    if (v <= 0) return 0;
+    const std = Math.sqrt(v);
+    return Math.round(projNormalCdf(-meanPP / std) * 1000) / 10;
+  };
+
+  // ── Projections: processUpload ────────────────────────────────────────────
+  const projProcessUpload = async () => {
+    if (!projUploadFiles.batters || !projUploadFiles.pitchers) return;
+    setProjUpdating(true);
+    try {
+      const readXlsx = file => new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
+        };
+        reader.onerror = rej;
+        reader.readAsArrayBuffer(file);
+      });
+
+      const [simBatters, simPitchers] = await Promise.all([
+        readXlsx(projUploadFiles.batters),
+        readXlsx(projUploadFiles.pitchers),
+      ]);
+
+      // Build card lookup from existing PT card data
+      const allCards = [...batters, ...sps, ...rps];
+      const cardsByName = {};
+      allCards.forEach(c => {
+        const name = `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`;
+        if (!cardsByName[name]) cardsByName[name] = [];
+        cardsByName[name].push(c);
+      });
+
+      const matchCard = (simName, simTeam, playerType) => {
+        let name = (simName || '').trim();
+        // Team-specific name fix
+        const teamKey = `${name}|${(simTeam || '').trim()}`;
+        if (PROJ_TEAM_NAME_FIXES[teamKey]) name = PROJ_TEAM_NAME_FIXES[teamKey];
+        // General name fix
+        name = PROJ_NAME_FIXES[name] || name;
+        const ptTeam = PROJ_TEAM_CODE_MAP[(simTeam || '').trim()] || (simTeam || '').trim();
+        const matches = cardsByName[name];
+        if (!matches || matches.length === 0) return null;
+        if (matches.length === 1) return matches[0];
+        // Disambiguate: prefer matching franchise
+        const getFranchise = c => {
+          // Cards don't have a franchise field exposed, but we can use the card list structure
+          // For now, prefer by type
+          if (playerType === 'batter') {
+            const typed = matches.filter(m => !m.pitcher_role || Number(m.pitcher_role) === 0);
+            return typed.length > 0 ? typed[0] : matches[0];
+          } else {
+            const typed = matches.filter(m => Number(m.position) === 1);
+            return typed.length > 0 ? typed[0] : matches[0];
+          }
+        };
+        return getFranchise();
+      };
+
+      const results = [];
+      // Process batters
+      simBatters.forEach(r => {
+        const name = (r.FullName || '').trim();
+        const team = (r.Team || '').trim();
+        const card = matchCard(name, team, 'batter');
+        if (!card) return;
+        const expPP = projCalcBatterPP(r);
+        const bust = projCalcBatterBust(r.HitProbability || 0, r.Walks || 0);
+        const ovr = card.card_value || 0;
+        results.push({
+          Player: name, Team: team, Opponent: (r.Opponent || '').trim(),
+          Side: r.Side || '', GameTime: r.GameTime || '',
+          Position: projDisplayPos(Number(card.position), Number(card.pitcher_role)),
+          OVR: ovr, Tier: ovrToTier(ovr), ExpPP: expPP, BustPct: bust, Type: 'batter',
+          Singles: Math.round((r.Singles || 0) * 100) / 100,
+          Doubles: Math.round((r.Doubles || 0) * 100) / 100,
+          Triples: Math.round((r.Triples || 0) * 100) / 100,
+          HR: Math.round((r.HomeRuns || 0) * 100) / 100,
+          Runs: Math.round((r.Runs || 0) * 100) / 100,
+          RBI: Math.round((r.RBIs || 0) * 100) / 100,
+          BB: Math.round((r.Walks || 0) * 100) / 100,
+          SB: Math.round((r.StolenBaseSuccesses || 0) * 100) / 100,
+        });
+      });
+
+      // Process pitchers
+      simPitchers.forEach(r => {
+        const name = (r.FullName || '').trim();
+        const team = (r.Team || '').trim();
+        const card = matchCard(name, team, 'pitcher');
+        if (!card) return;
+        const expPP = projCalcSpPP(r);
+        const bust = projCalcPitcherBust(expPP, r.WinPct || 0, r.QualityStart || 0, r.Strikeouts || 0, r.RunsAllowed || 0, r.Walks || 0);
+        const ovr = card.card_value || 0;
+        results.push({
+          Player: name, Team: team, Opponent: (r.Opponent || '').trim(),
+          Side: r.Side || '', GameTime: r.GameTime || '',
+          Position: projDisplayPos(Number(card.position), Number(card.pitcher_role)),
+          OVR: ovr, Tier: ovrToTier(ovr), ExpPP: expPP, BustPct: bust, Type: 'pitcher',
+          IP: Math.round((r.Innings || 0) * 100) / 100,
+          K: Math.round((r.Strikeouts || 0) * 100) / 100,
+          WinPct: Math.round((r.WinPct || 0) * 1000) / 10,
+          QS: Math.round((r.QualityStart || 0) * 1000) / 10,
+          ER: Math.round((r.RunsAllowed || 0) * 100) / 100,
+          BB: Math.round((r.Walks || 0) * 100) / 100,
+        });
+      });
+
+      results.sort((a, b) => b.ExpPP - a.ExpPP);
+
+      // Build cheat sheet
+      const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers);
+
+      const gameDate = simBatters.length > 0 && simBatters[0].GameDate
+        ? String(simBatters[0].GameDate).slice(0, 10) : todayStr;
+
+      const content = {
+        players: results,
+        cheatSheet: cheatSheet.roster,
+        gameDate,
+        updatedAt: new Date().toISOString(),
+        tierCounts: cheatSheet.tierCounts,
+      };
+
+      await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
+      setProjData(content);
+      setProjUploadFiles({ batters: null, pitchers: null, games: null, teams: null });
+    } catch (e) { console.error('Projection upload error:', e); alert('Error processing files: ' + e.message); }
+    setProjUpdating(false);
+  };
+
+  // ── Projections: cheat sheet optimizer ─────────────────────────────────────
+  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers) => {
+    const bats = allPlayers.filter(p => p.Type === 'batter');
+    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP');
+
+    // Get RP candidates from card list for teams playing today
+    const teamsPlaying = new Set([...simBatters.map(r => (r.Team || '').trim()), ...simPitchers.map(r => (r.Team || '').trim())]);
+    const ptTeamsPlaying = new Set();
+    teamsPlaying.forEach(t => ptTeamsPlaying.add(PROJ_TEAM_CODE_MAP[t] || t));
+
+    const rpCandidates = allCards
+      .filter(c => Number(c.position) === 1 && [12, 13].includes(Number(c.pitcher_role)))
+      .map(c => {
+        const name = `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`;
+        const bppTeam = PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '';
+        return {
+          Player: name, Team: bppTeam, Opponent: '',
+          Position: PROJ_PITCHER_ROLE_MAP[Number(c.pitcher_role)] || 'RP',
+          OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
+          ExpPP: 0, BustPct: 0, Type: 'pitcher', Side: '', GameTime: '', HasSim: false,
+        };
+      })
+      .sort((a, b) => b.OVR - a.OVR);
+
+    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL'));
+    const allRp = [...simRps, ...rpCandidates];
+
+    const BATTER_POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+    const slotDefs = [
+      ['C', ['C'], bats], ['1B', ['1B'], bats], ['2B', ['2B'], bats], ['3B', ['3B'], bats],
+      ['SS', ['SS'], bats], ['LF', ['LF'], bats], ['CF', ['CF'], bats], ['RF', ['RF'], bats],
+      ['DH', BATTER_POS, bats], ['UTIL', BATTER_POS, bats], ['UTIL', BATTER_POS, bats],
+      ['SP', ['SP'], spList], ['SP', ['SP'], spList],
+      ['RP', ['RP', 'CL'], allRp], ['RP', ['RP', 'CL'], allRp],
+    ];
+
+    const slotCandidates = slotDefs.map(([slotName, eligPos, source], idx) => {
+      const cands = source.filter(p => eligPos.includes(p.Position)).sort((a, b) => b.ExpPP - a.ExpPP);
+      return { idx, slotName, cands };
+    });
+    slotCandidates.sort((a, b) => a.cands.length - b.cands.length);
+
+    const used = new Set();
+    const roster = new Array(15).fill(null);
+    let pCount = 0, dCount = 0, gCount = 0;
+
+    for (const { idx, slotName, cands } of slotCandidates) {
+      for (const player of cands) {
+        const key = `${player.Player}|${player.Team}`;
+        if (used.has(key)) continue;
+        const tier = player.Tier;
+        if (tier === 'Perfect' && pCount >= 2) continue;
+        if (tier === 'Diamond' && pCount + dCount >= 5) continue;
+        if (tier === 'Gold' && pCount + dCount + gCount >= 9) continue;
+        used.add(key);
+        roster[idx] = { slot: slotName, ...player };
+        if (tier === 'Perfect') pCount++;
+        else if (tier === 'Diamond') dCount++;
+        else if (tier === 'Gold') gCount++;
+        break;
+      }
+    }
+
+    return { roster, tierCounts: { perfect: pCount, diamond: dCount, gold: gCount } };
   };
 
   const fetchMLBToday = async () => {
@@ -12581,6 +12891,21 @@ function PTLivePage() {
           {/* Left sidebar — vertical tab nav */}
           <div style={{ width: 160, flexShrink: 0 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <button onClick={() => { setActiveTab('projections'); loadProjections(); }} style={{
+                textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
+                border: activeTab === 'projections' ? '1px solid #a855f7' : '1px solid transparent',
+                background: activeTab === 'projections'
+                  ? 'linear-gradient(135deg, #a855f722, #ec489922)'
+                  : 'linear-gradient(135deg, #a855f711, #ec489911)',
+                color: activeTab === 'projections' ? '#e0b0ff' : '#c084fc',
+                fontWeight: 700, fontSize: 13, letterSpacing: '0.02em',
+                backgroundClip: 'padding-box',
+                position: 'relative',
+              }}>
+                <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                  Projections
+                </span>
+              </button>
               {[
                 { id: 'team',           label: 'My Team' },
                 { id: 'leaderboard',    label: 'My Group' },
@@ -13142,6 +13467,338 @@ function PTLivePage() {
                 })()}
               </div>
             )}
+
+            {/* ── PROJECTIONS TAB ──────────────────────────────────────────── */}
+            {activeTab === 'projections' && (() => {
+              const PROJ_BATTER_POSITIONS = new Set(['C','1B','2B','3B','SS','LF','CF','RF','DH']);
+              const PROJ_PITCHER_POSITIONS = new Set(['SP','RP','CL']);
+              const allPositions = projData?.players ? [...new Set(projData.players.map(p => p.Position))].sort((a, b) => {
+                const order = ['SP','RP','CL','C','1B','2B','3B','SS','LF','CF','RF','DH'];
+                return (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b));
+              }) : [];
+
+              const filteredPlayers = (projData?.players || []).filter(p => {
+                if (projFilter !== 'all' && p.Position !== projFilter) return false;
+                if (projTypeFilter === 'batter' && !PROJ_BATTER_POSITIONS.has(p.Position)) return false;
+                if (projTypeFilter === 'pitcher' && !PROJ_PITCHER_POSITIONS.has(p.Position)) return false;
+                return true;
+              }).sort((a, b) => {
+                const col = projSort.col;
+                let va = a[col], vb = b[col];
+                if (typeof va === 'string') {
+                  return projSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                }
+                va = va || 0; vb = vb || 0;
+                return projSort.dir === 'asc' ? va - vb : vb - va;
+              });
+
+              const valuePicks = (projData?.players || [])
+                .filter(p => ['Silver', 'Bronze', 'Iron'].includes(p.Tier))
+                .sort((a, b) => b.ExpPP - a.ExpPP)
+                .slice(0, 3);
+
+              const handleProjSort = col => {
+                setProjSort(prev => prev.col === col
+                  ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
+                  : { col, dir: typeof (projData?.players?.[0]?.[col]) === 'string' ? 'asc' : 'desc' });
+              };
+
+              const bustColor = pct => pct < 15 ? '#4ade80' : pct < 30 ? '#fbbf24' : '#ef4444';
+
+              return (
+                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                  {/* Header */}
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
+                      <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: theme.textMuted }}>BallparkPal simulation projections · PT scoring rubric</div>
+                  </div>
+
+                  {/* Admin Upload Section */}
+                  <div style={{ marginBottom: 20, padding: 16, background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
+                    {!projAdminUnlocked ? (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="password"
+                          value={projAdminPw}
+                          onChange={e => setProjAdminPw(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && projAdminPw === 'KOBALYTICS') setProjAdminUnlocked(true); }}
+                          placeholder="Admin password"
+                          style={{ flex: 1, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#fff', outline: 'none' }}
+                        />
+                        <button onClick={() => { if (projAdminPw === 'KOBALYTICS') setProjAdminUnlocked(true); }}
+                          style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                          Unlock
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 10 }}>Upload BallparkPal Files</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                          {[
+                            { key: 'batters', label: 'Batters (.xlsx)' },
+                            { key: 'pitchers', label: 'Pitchers (.xlsx)' },
+                          ].map(f => (
+                            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>{f.label}</span>
+                              <div style={{ position: 'relative', background: theme.inputBg, border: `1px solid ${projUploadFiles[f.key] ? '#4ade80' : theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, color: projUploadFiles[f.key] ? '#4ade80' : theme.textMuted, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {projUploadFiles[f.key]?.name || 'Choose file…'}
+                                <input type="file" accept=".xlsx,.xls" onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  if (file) setProjUploadFiles(prev => ({ ...prev, [f.key]: file }));
+                                }} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            onClick={projProcessUpload}
+                            disabled={projUpdating || !projUploadFiles.batters || !projUploadFiles.pitchers}
+                            style={{
+                              background: projUploadFiles.batters && projUploadFiles.pitchers ? 'linear-gradient(135deg, #a855f7, #ec4899)' : theme.inputBg,
+                              color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: projUpdating ? 'not-allowed' : 'pointer',
+                              opacity: (!projUploadFiles.batters || !projUploadFiles.pitchers) ? 0.4 : 1,
+                            }}>
+                            {projUpdating ? 'Processing…' : 'Update Projections'}
+                          </button>
+                          <button onClick={() => { setProjAdminUnlocked(false); setProjAdminPw(''); }}
+                            style={{ background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
+                            Lock
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Last Updated */}
+                  {projData?.updatedAt && (
+                    <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 12 }}>
+                      Last updated: {new Date(projData.updatedAt).toLocaleString()} · {projData.gameDate || ''} · {projData.players?.length || 0} players
+                    </div>
+                  )}
+
+                  {projLoading ? (
+                    <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading projections…</div>
+                  ) : !projData?.players?.length ? (
+                    <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No projection data yet. Admin must upload BallparkPal files.</div>
+                  ) : (
+                    <>
+                      {/* Value Picks */}
+                      {valuePicks.length > 0 && (
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 13, color: '#667788', lineHeight: 1.8 }}>
+                          <span style={{ fontWeight: 600, color: '#fbbf24' }}>Value Picks: </span>
+                          {valuePicks.map((v, i) => (
+                            <span key={i}>
+                              {i > 0 && <span style={{ color: '#334455' }}> | </span>}
+                              <span style={{ color: projTeamColor(v.Team) }}>{v.Player}</span>
+                              <span style={{ color: '#8899aa' }}> ({v.Position}) </span>
+                              <span style={{ color: '#4ade80' }}>{v.ExpPP} PP</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Type filters + Cheat Sheet button */}
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                        {['all', 'batter', 'pitcher'].map(t => (
+                          <button key={t} onClick={() => setProjTypeFilter(t)} style={{
+                            padding: '6px 16px', borderRadius: 16, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
+                            background: projTypeFilter === t ? theme.accent : theme.inputBg,
+                            color: projTypeFilter === t ? '#fff' : theme.textMuted,
+                          }}>
+                            {t === 'all' ? 'All' : t === 'batter' ? 'Batters' : 'Pitchers'}
+                          </button>
+                        ))}
+                        <button onClick={() => setShowCheatSheet(true)} style={{
+                          padding: '6px 16px', borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          background: '#2a1a33', border: '1px solid #6b3fa0', color: '#c89dff',
+                        }}>
+                          Cheat Sheet
+                        </button>
+                      </div>
+
+                      {/* Position filters */}
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                        <button onClick={() => setProjFilter('all')} style={{
+                          padding: '5px 14px', borderRadius: 14, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          border: projFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
+                          background: projFilter === 'all' ? theme.accent : theme.inputBg,
+                          color: projFilter === 'all' ? '#fff' : theme.textMuted,
+                        }}>All</button>
+                        {allPositions.map(pos => (
+                          <button key={pos} onClick={() => setProjFilter(pos)} style={{
+                            padding: '5px 14px', borderRadius: 14, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
+                            background: projFilter === pos ? theme.accent : theme.inputBg,
+                            color: projFilter === pos ? '#fff' : theme.textMuted,
+                          }}>{pos}</button>
+                        ))}
+                      </div>
+
+                      {/* Table */}
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                          <thead>
+                            <tr>
+                              {[
+                                { col: '_rank', label: '#', w: 36 },
+                                { col: 'Player', label: 'Player', w: null },
+                                { col: 'Team', label: 'Team', w: 60 },
+                                { col: 'Position', label: 'Pos', w: 50 },
+                                { col: 'OVR', label: 'OVR', w: 50 },
+                                { col: 'ExpPP', label: 'Exp PP', w: 70 },
+                                { col: 'BustPct', label: 'Bust %', w: 60 },
+                                { col: '_matchup', label: 'Matchup', w: 90 },
+                                { col: 'GameTime', label: 'Time', w: 70 },
+                              ].map(h => (
+                                <th key={h.col} onClick={() => h.col !== '_rank' && h.col !== '_matchup' && handleProjSort(h.col)} style={{
+                                  padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 10,
+                                  textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
+                                  borderBottom: `2px solid ${theme.border}`, cursor: h.col !== '_rank' && h.col !== '_matchup' ? 'pointer' : 'default',
+                                  whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
+                                  ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
+                                }}>
+                                  {h.label}
+                                  {projSort.col === h.col && <span style={{ fontSize: 9, marginLeft: 2 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredPlayers.map((p, idx) => {
+                              const tc = projTeamColor(p.Team);
+                              const oc = projTeamColor(p.Opponent);
+                              const sideLabel = p.Side === 'A' ? '@ ' : 'vs ';
+                              const tooltip = p.Type === 'batter'
+                                ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
+                                : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
+                              return (
+                                <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22` }}
+                                  onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 12 }}>{idx + 1}</td>
+                                  <td style={{ padding: '8px 6px', fontWeight: 600, color: '#fff', textAlign: 'left' }}>{p.Player}</td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, color: tc }}>{p.Team}</td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center' }}>
+                                    <span style={{
+                                      display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                                      background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
+                                      color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
+                                    }}>{p.Position}</span>
+                                  </td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center' }}>
+                                    <span style={{
+                                      display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                                      color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
+                                    }}>{p.OVR}</span>
+                                  </td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 700, fontSize: 15, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>
+                                    <span style={{ color: '#fff' }}>{sideLabel}</span>
+                                    <span style={{ color: oc }}>{p.Opponent}</span>
+                                  </td>
+                                  <td style={{ padding: '8px 6px', textAlign: 'center', color: '#fff', fontSize: 12 }}>{p.GameTime}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Cheat Sheet Modal */}
+                      {showCheatSheet && projData?.cheatSheet && ReactDOM.createPortal(
+                        <div onClick={() => setShowCheatSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: `1px solid ${theme.border}`, borderRadius: 16, maxWidth: 800, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                              <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>Cheat Sheet</div>
+                              <button onClick={() => setShowCheatSheet(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
+                            </div>
+
+                            {/* Lineup */}
+                            <div style={{ marginBottom: 16 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Starting Lineup</div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                                <tbody>
+                                  {projData.cheatSheet.slice(0, 11).map((entry, i) => {
+                                    if (!entry) return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
+                                        <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
+                                      </tr>
+                                    );
+                                    const tc2 = projTeamColor(entry.Team);
+                                    const hasSim = entry.HasSim !== false;
+                                    return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
+                                        <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
+                                        <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                                          <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
+                                        </td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Pitching */}
+                            <div style={{ marginBottom: 16 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Pitching</div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                                <tbody>
+                                  {projData.cheatSheet.slice(11, 15).map((entry, i) => {
+                                    if (!entry) return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
+                                        <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
+                                      </tr>
+                                    );
+                                    const tc2 = projTeamColor(entry.Team);
+                                    const hasSim = entry.HasSim !== false;
+                                    return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
+                                        <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
+                                        <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                                          <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
+                                        </td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Footer */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16 }}>
+                              <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>
+                                Total: {projData.cheatSheet.filter(r => r && r.HasSim !== false).reduce((s, r) => s + (r?.ExpPP || 0), 0).toFixed(1)} PP
+                              </div>
+                              {projData.tierCounts && (
+                                <div style={{ color: '#8899aa', fontSize: 13 }}>
+                                  {projData.tierCounts.perfect}P / {projData.tierCounts.diamond}D / {projData.tierCounts.gold}G
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots selected by OVR (no sim data available for relievers).</div>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
           </div>
 
