@@ -11605,9 +11605,6 @@ function PTLivePage() {
   const [projUploadFiles, setProjUploadFiles] = useState({ batters: null, pitchers: null, games: null, teams: null });
   const [projUpdating, setProjUpdating] = useState(false);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
-  const [yesterdayGuess, setYesterdayGuess] = useState(null);
-  const [yesterdayGuessLoading, setYesterdayGuessLoading] = useState(false);
-  const [showYesterdayGuess, setShowYesterdayGuess] = useState(false);
 
   const isLocked = lockTime && new Date() >= lockTime;
 
@@ -12251,10 +12248,6 @@ function PTLivePage() {
       };
 
       await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
-      await supabase.from('site_content').upsert(
-        { id: `ptlive_cheatsheet_${gameDate}`, content: { cheatSheet: cheatSheet.roster, tierCounts: cheatSheet.tierCounts, gameDate, updatedAt: new Date().toISOString() } },
-        { onConflict: 'id' }
-      );
       setProjData(content);
       setProjUploadFiles({ batters: null, pitchers: null, games: null, teams: null });
     } catch (e) { console.error('Projection upload error:', e); alert('Error processing files: ' + e.message); }
@@ -12325,92 +12318,6 @@ function PTLivePage() {
     }
 
     return { roster, tierCounts: { perfect: pCount, diamond: dCount, gold: gCount } };
-  };
-
-  const loadYesterdayGuess = async () => {
-    setYesterdayGuessLoading(true);
-    setShowYesterdayGuess(true);
-    try {
-      // 1. Fetch snapshot
-      const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${yesterdayStr}`).single();
-      if (!row?.content?.cheatSheet) { setYesterdayGuess(null); setYesterdayGuessLoading(false); return; }
-      const snapshot = row.content;
-
-      // 2. Fetch yesterday's MLB schedule
-      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${yesterdayStr}`);
-      const schedData = await schedRes.json();
-      const games = schedData.dates?.[0]?.games || [];
-
-      // 3. Fetch boxscores
-      const boxscores = await Promise.all(
-        games.map(g => fetch(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`).then(r => r.json()).catch(() => null))
-      );
-
-      // 4. Build stats map
-      const mergeIP = (a, b) => {
-        const toOuts = s => { const [inn, frac] = String(s || '0').split('.'); return parseInt(inn) * 3 + parseInt(frac || 0); };
-        return `${Math.floor((toOuts(a) + toOuts(b)) / 3)}.${(toOuts(a) + toOuts(b)) % 3}`;
-      };
-      const sumStats = (a, b) => {
-        if (!a && !b) return null; if (!a) return b; if (!b) return a;
-        const result = { ...a };
-        for (const k of Object.keys(b)) {
-          if (k === 'inningsPitched') result[k] = mergeIP(a[k], b[k]);
-          else if (typeof b[k] === 'number') result[k] = (result[k] || 0) + b[k];
-        }
-        return result;
-      };
-
-      const statsMap = {};
-      boxscores.forEach(bs => {
-        if (!bs) return;
-        ['home', 'away'].forEach(side => {
-          Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
-            let name = normalizeName(p.person?.fullName);
-            if (!name) return;
-            if (MLB_ID_OVERRIDES[p.person?.id]) name = MLB_ID_OVERRIDES[p.person.id];
-            const batting = p.stats?.batting || {};
-            const pitching = p.stats?.pitching || {};
-            const newBat = Object.keys(batting).length ? batting : null;
-            const newPit = Object.keys(pitching).length ? pitching : null;
-            if (statsMap[name]) {
-              statsMap[name] = {
-                batting: sumStats(statsMap[name].batting, newBat),
-                pitching: sumStats(statsMap[name].pitching, newPit),
-                battingGames: newBat ? [...statsMap[name].battingGames, newBat] : statsMap[name].battingGames,
-                pitchingGames: newPit ? [...statsMap[name].pitchingGames, newPit] : statsMap[name].pitchingGames,
-              };
-            } else {
-              statsMap[name] = { batting: newBat, pitching: newPit, battingGames: newBat ? [newBat] : [], pitchingGames: newPit ? [newPit] : [] };
-            }
-          });
-        });
-      });
-
-      // 5. Match entries to actuals
-      const slotRoles = ['batter','batter','batter','batter','batter','batter','batter','batter','batter','batter','batter','sp','sp','rp','rp'];
-      const results = snapshot.cheatSheet.map((entry, i) => {
-        if (!entry) return null;
-        const key = normalizeName(entry.Player);
-        const stats = statsMap[key];
-        const role = slotRoles[i] || 'batter';
-        let actualPP = null;
-        if (stats) {
-          if (role === 'batter') {
-            actualPP = ptLiveBatterPP(stats.battingGames);
-          } else {
-            actualPP = ptLivePitcherPP(stats.pitchingGames, role);
-          }
-        }
-        return { ...entry, actualPP, projectedPP: entry.ExpPP || 0 };
-      });
-
-      setYesterdayGuess({ roster: results, tierCounts: snapshot.tierCounts, gameDate: snapshot.gameDate });
-    } catch (e) {
-      console.error('Yesterday guess error:', e);
-      setYesterdayGuess(null);
-    }
-    setYesterdayGuessLoading(false);
   };
 
   const fetchMLBToday = async () => {
@@ -13582,15 +13489,10 @@ function PTLivePage() {
                 return projSort.dir === 'asc' ? va - vb : vb - va;
               });
 
-              const valuePicks = (() => {
-                const allPlayers = projData?.players || [];
-                const topBatters = new Set(allPlayers.filter(p => p.Type === 'batter').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 25).map(p => p.Player));
-                const topPitchers = new Set(allPlayers.filter(p => p.Type === 'pitcher').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 5).map(p => p.Player));
-                return allPlayers
-                  .filter(p => ['Silver', 'Bronze', 'Iron'].includes(p.Tier) && (topBatters.has(p.Player) || topPitchers.has(p.Player)))
-                  .sort((a, b) => b.ExpPP - a.ExpPP)
-                  .slice(0, 3);
-              })();
+              const valuePicks = (projData?.players || [])
+                .filter(p => ['Silver', 'Bronze', 'Iron'].includes(p.Tier))
+                .sort((a, b) => b.ExpPP - a.ExpPP)
+                .slice(0, 3);
 
               const handleProjSort = col => {
                 setProjSort(prev => prev.col === col
@@ -13607,7 +13509,7 @@ function PTLivePage() {
                     <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
                       <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
                     </div>
-                    <div style={{ fontSize: 13, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
+                    <div style={{ fontSize: 12, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
                   </div>
 
                   {/* Admin Upload Section */}
@@ -13669,7 +13571,7 @@ function PTLivePage() {
 
                   {/* Last Updated */}
                   {projData?.updatedAt && (
-                    <div style={{ fontSize: 12, color: '#fff', marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: '#fff', marginBottom: 12 }}>
                       Last updated: {new Date(projData.updatedAt).toLocaleString()} · {projData.gameDate || ''} · {projData.players?.length || 0} players
                     </div>
                   )}
@@ -13682,7 +13584,7 @@ function PTLivePage() {
                     <>
                       {/* Value Picks */}
                       {valuePicks.length > 0 && (
-                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 17, color: '#667788', lineHeight: 1.8 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 19, color: '#667788', lineHeight: 1.8 }}>
                           <span style={{ fontWeight: 600, color: '#fbbf24' }}>Value Picks: </span>
                           {valuePicks.map((v, i) => (
                             <span key={i}>
@@ -13699,7 +13601,7 @@ function PTLivePage() {
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                         {['all', 'batter', 'pitcher'].map(t => (
                           <button key={t} onClick={() => setProjTypeFilter(t)} style={{
-                            padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                            padding: '8px 20px', borderRadius: 18, fontSize: 18, fontWeight: 600, cursor: 'pointer',
                             border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projTypeFilter === t ? theme.accent : theme.inputBg,
                             color: projTypeFilter === t ? '#fff' : theme.textMuted,
@@ -13708,31 +13610,24 @@ function PTLivePage() {
                           </button>
                         ))}
                         <button onClick={() => setShowCheatSheet(true)} style={{
-                          padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                          padding: '8px 20px', borderRadius: 18, fontSize: 18, fontWeight: 700, cursor: 'pointer',
                           background: '#2a1a33', border: '1px solid #6b3fa0', color: '#c89dff',
                         }}>
                           Cheat Sheet
-                        </button>
-                        <button onClick={loadYesterdayGuess} disabled={yesterdayGuessLoading} style={{
-                          padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 700, cursor: 'pointer',
-                          background: '#2a1a08', border: '1px solid #b8860b', color: '#fbbf24',
-                          opacity: yesterdayGuessLoading ? 0.6 : 1,
-                        }}>
-                          {yesterdayGuessLoading ? 'Loading…' : "Yesterday's Best Guess"}
                         </button>
                       </div>
 
                       {/* Position filters */}
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
                         <button onClick={() => setProjFilter('all')} style={{
-                          padding: '5px 16px', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                          padding: '7px 18px', borderRadius: 16, fontSize: 17, fontWeight: 600, cursor: 'pointer',
                           border: projFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                           background: projFilter === 'all' ? theme.accent : theme.inputBg,
                           color: projFilter === 'all' ? '#fff' : theme.textMuted,
                         }}>All</button>
                         {allPositions.map(pos => (
                           <button key={pos} onClick={() => setProjFilter(pos)} style={{
-                            padding: '5px 16px', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                            padding: '7px 18px', borderRadius: 16, fontSize: 17, fontWeight: 600, cursor: 'pointer',
                             border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projFilter === pos ? theme.accent : theme.inputBg,
                             color: projFilter === pos ? '#fff' : theme.textMuted,
@@ -13742,7 +13637,7 @@ function PTLivePage() {
 
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 19 }}>
                           <thead>
                             <tr>
                               {[
@@ -13757,14 +13652,14 @@ function PTLivePage() {
                                 { col: 'GameTime', label: 'Time', w: 80 },
                               ].map(h => (
                                 <th key={h.col} onClick={() => h.col !== '_rank' && h.col !== '_matchup' && handleProjSort(h.col)} style={{
-                                  padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 14,
+                                  padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 16,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
                                   borderBottom: `2px solid ${theme.border}`, cursor: h.col !== '_rank' && h.col !== '_matchup' ? 'pointer' : 'default',
                                   whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
                                   ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
                                 }}>
                                   {h.label}
-                                  {projSort.col === h.col && <span style={{ fontSize: 11, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
+                                  {projSort.col === h.col && <span style={{ fontSize: 13, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
                                 </th>
                               ))}
                             </tr>
@@ -13781,29 +13676,29 @@ function PTLivePage() {
                                 <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22` }}
                                   onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
                                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
-                                  <td style={{ padding: '10px 8px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17 }}>{p.Player}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 18 }}>{idx + 1}</td>
+                                  <td style={{ padding: '12px 10px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 19 }}>{p.Player}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 19 }}>{p.Team}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                                     <span style={{
-                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 17, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
                                     }}>{p.Position}</span>
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                                     <span style={{
-                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 16, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 18, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 16 }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 700, fontSize: 21, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 19, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 18 }}>
                                     <span style={{ color: '#fff' }}>{sideLabel}</span>
                                     <span style={{ color: oc }}>{p.Opponent}</span>
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: '#fff', fontSize: 16 }}>{p.GameTime}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', color: '#fff', fontSize: 18 }}>{p.GameTime}</td>
                                 </tr>
                               );
                             })}
@@ -13892,103 +13787,6 @@ function PTLivePage() {
                               )}
                             </div>
                             <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots selected by OVR (no sim data available for relievers).</div>
-                          </div>
-                        </div>,
-                        document.body
-                      )}
-
-                      {/* Yesterday's Best Guess Modal */}
-                      {showYesterdayGuess && ReactDOM.createPortal(
-                        <div onClick={() => setShowYesterdayGuess(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: '1px solid #b8860b', borderRadius: 16, maxWidth: 900, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                              <div style={{ fontSize: 24, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>Yesterday's Best Guess</div>
-                              <button onClick={() => setShowYesterdayGuess(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
-                            </div>
-                            {yesterdayGuessLoading ? (
-                              <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading yesterday's data…</div>
-                            ) : !yesterdayGuess?.roster ? (
-                              <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No projection data for yesterday.</div>
-                            ) : (() => {
-                              const roster = yesterdayGuess.roster;
-                              const totalProj = roster.filter(r => r).reduce((s, r) => s + (r.projectedPP || 0), 0);
-                              const totalActual = roster.filter(r => r && r.actualPP !== null).reduce((s, r) => s + r.actualPP, 0);
-                              const totalDiff = totalActual - totalProj;
-                              const renderRow = (entry, i) => {
-                                if (!entry) return (
-                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50 }}>—</td>
-                                    <td colSpan={6} style={{ color: '#556677', padding: '7px 10px' }}>No player</td>
-                                  </tr>
-                                );
-                                const tc = projTeamColor(entry.Team);
-                                const hasPP = entry.actualPP !== null;
-                                const diff = hasPP ? entry.actualPP - entry.projectedPP : null;
-                                return (
-                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
-                                    <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
-                                    <td style={{ padding: '7px 10px', color: tc, fontWeight: 600 }}>{entry.Team}</td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                                      <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
-                                    </td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>{entry.projectedPP.toFixed(1)}</td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: hasPP ? (entry.actualPP >= 0 ? '#22c55e' : '#ef4444') : '#556677' }}>
-                                      {hasPP ? entry.actualPP.toFixed(1) : 'DNP'}
-                                    </td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: diff !== null ? (diff >= 0 ? '#22c55e' : '#ef4444') : '#556677' }}>
-                                      {diff !== null ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}` : '—'}
-                                    </td>
-                                  </tr>
-                                );
-                              };
-                              return (
-                                <>
-                                  <div style={{ fontSize: 12, color: '#8899aa', marginBottom: 12 }}>Date: {yesterdayGuess.gameDate}</div>
-                                  {/* Header */}
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                    <thead>
-                                      <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Slot</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Player</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Team</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'center', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>OVR</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Proj PP</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Actual PP</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Diff</th>
-                                      </tr>
-                                    </thead>
-                                  </table>
-                                  {/* Lineup */}
-                                  <div style={{ marginBottom: 16 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, marginTop: 12 }}>Starting Lineup</div>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                      <tbody>{roster.slice(0, 11).map((e, i) => renderRow(e, i))}</tbody>
-                                    </table>
-                                  </div>
-                                  {/* Pitching */}
-                                  <div style={{ marginBottom: 16 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Pitching</div>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                      <tbody>{roster.slice(11, 15).map((e, i) => renderRow(e, 11 + i))}</tbody>
-                                    </table>
-                                  </div>
-                                  {/* Footer */}
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16, flexWrap: 'wrap', gap: 12 }}>
-                                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                                      <div><span style={{ color: '#8899aa', fontSize: 13 }}>Projected: </span><span style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>{totalProj.toFixed(1)}</span></div>
-                                      <div><span style={{ color: '#8899aa', fontSize: 13 }}>Actual: </span><span style={{ color: totalActual >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>{totalActual.toFixed(1)}</span></div>
-                                      <div><span style={{ color: '#8899aa', fontSize: 13 }}>Diff: </span><span style={{ color: totalDiff >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>{totalDiff >= 0 ? '+' : ''}{totalDiff.toFixed(1)}</span></div>
-                                    </div>
-                                    {yesterdayGuess.tierCounts && (
-                                      <div style={{ color: '#8899aa', fontSize: 13 }}>
-                                        {yesterdayGuess.tierCounts.perfect}P / {yesterdayGuess.tierCounts.diamond}D / {yesterdayGuess.tierCounts.gold}G
-                                      </div>
-                                    )}
-                                  </div>
-                                </>
-                              );
-                            })()}
                           </div>
                         </div>,
                         document.body
