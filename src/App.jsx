@@ -13584,7 +13584,7 @@ function PTLivePage() {
                     <>
                       {/* Value Picks */}
                       {valuePicks.length > 0 && (
-                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 18, color: '#667788', lineHeight: 1.8 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 17, color: '#667788', lineHeight: 1.8 }}>
                           <span style={{ fontWeight: 600, color: '#fbbf24' }}>Value Picks: </span>
                           {valuePicks.map((v, i) => (
                             <span key={i}>
@@ -13601,7 +13601,7 @@ function PTLivePage() {
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                         {['all', 'batter', 'pitcher'].map(t => (
                           <button key={t} onClick={() => setProjTypeFilter(t)} style={{
-                            padding: '7px 19px', borderRadius: 17, fontSize: 17, fontWeight: 600, cursor: 'pointer',
+                            padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 600, cursor: 'pointer',
                             border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projTypeFilter === t ? theme.accent : theme.inputBg,
                             color: projTypeFilter === t ? '#fff' : theme.textMuted,
@@ -13610,7 +13610,7 @@ function PTLivePage() {
                           </button>
                         ))}
                         <button onClick={() => setShowCheatSheet(true)} style={{
-                          padding: '7px 19px', borderRadius: 17, fontSize: 17, fontWeight: 700, cursor: 'pointer',
+                          padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 700, cursor: 'pointer',
                           background: '#2a1a33', border: '1px solid #6b3fa0', color: '#c89dff',
                         }}>
                           Cheat Sheet
@@ -13620,14 +13620,14 @@ function PTLivePage() {
                       {/* Position filters */}
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
                         <button onClick={() => setProjFilter('all')} style={{
-                          padding: '6px 17px', borderRadius: 15, fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                          padding: '5px 16px', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer',
                           border: projFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                           background: projFilter === 'all' ? theme.accent : theme.inputBg,
                           color: projFilter === 'all' ? '#fff' : theme.textMuted,
                         }}>All</button>
                         {allPositions.map(pos => (
                           <button key={pos} onClick={() => setProjFilter(pos)} style={{
-                            padding: '6px 17px', borderRadius: 15, fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                            padding: '5px 16px', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer',
                             border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projFilter === pos ? theme.accent : theme.inputBg,
                             color: projFilter === pos ? '#fff' : theme.textMuted,
@@ -13637,7 +13637,7 @@ function PTLivePage() {
 
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 18 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17 }}>
                           <thead>
                             <tr>
                               {[
@@ -13652,14 +13652,14 @@ function PTLivePage() {
                                 { col: 'GameTime', label: 'Time', w: 80 },
                               ].map(h => (
                                 <th key={h.col} onClick={() => h.col !== '_rank' && h.col !== '_matchup' && handleProjSort(h.col)} style={{
-                                  padding: '11px 9px', textAlign: 'center', fontWeight: 600, fontSize: 15,
+                                  padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 14,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
                                   borderBottom: `2px solid ${theme.border}`, cursor: h.col !== '_rank' && h.col !== '_matchup' ? 'pointer' : 'default',
                                   whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
                                   ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
                                 }}>
                                   {h.label}
-                                  {projSort.col === h.col && <span style={{ fontSize: 12, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
+                                  {projSort.col === h.col && <span style={{ fontSize: 11, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
                                 </th>
                               ))}
                             </tr>
@@ -13676,29 +13676,29 @@ function PTLivePage() {
                                 <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22` }}
                                   onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
                                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 17 }}>{idx + 1}</td>
-                                  <td style={{ padding: '11px 9px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 18 }}>{p.Player}</td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 18 }}>{p.Team}</td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center' }}>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
+                                  <td style={{ padding: '10px 8px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17 }}>{p.Player}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                                     <span style={{
-                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 16, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
                                     }}>{p.Position}</span>
                                   </td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center' }}>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                                     <span style={{
-                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 17, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 16, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center', fontWeight: 700, fontSize: 20, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center', fontWeight: 600, fontSize: 18, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center', fontWeight: 600, fontSize: 17 }}>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 16 }}>
                                     <span style={{ color: '#fff' }}>{sideLabel}</span>
                                     <span style={{ color: oc }}>{p.Opponent}</span>
                                   </td>
-                                  <td style={{ padding: '11px 9px', textAlign: 'center', color: '#fff', fontSize: 17 }}>{p.GameTime}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: '#fff', fontSize: 16 }}>{p.GameTime}</td>
                                 </tr>
                               );
                             })}
