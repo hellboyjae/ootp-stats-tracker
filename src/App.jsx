@@ -12061,8 +12061,9 @@ function PTLivePage() {
     try {
       const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
       const pageSize = 1000;
-      const { data: firstPage, count } = await supabase
+      const { data: firstPage, count, error: firstErr } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
+      if (firstErr) console.error('[PTLive] Card query error:', firstErr);
       const totalPages = Math.ceil((count || 0) / pageSize);
       const rest = totalPages > 1
         ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, i) =>
@@ -13354,26 +13355,37 @@ function PTLivePage() {
                                   </div>
                                 </div>
                                 {isExpanded && (
-                                  <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    {PT_LIVE_SLOTS.map(slot => {
+                                  <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                    {PT_LIVE_SLOTS.map((slot, si) => {
                                       const card = entry.team?.[slot.key];
                                       if (!card) return (
-                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, color: '#374151' }}>
-                                          <span>{slot.label}</span><span>—</span><span />
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
+                                          <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span><span />
                                         </div>
                                       );
-                                      const name = cardStatsKey(card);
-                                      const pd = activeStats[name];
+                                      const cName = cardStatsKey(card);
+                                      const pd = activeStats[cName];
                                       let slotPP = null;
                                       if (pd) {
                                         if (slot.role === 'batter' && pd.battingGames?.length) slotPP = ptLiveBatterPP(pd.battingGames);
                                         else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                       }
+                                      const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
+                                      const fr = card.franchise || ([...batters, ...sps, ...rps].find(c => c.card_id === card.card_id)?.franchise || '');
+                                      const bppTeam = PROJ_FRANCHISE_TO_BPP[fr] || fr || '';
+                                      const tc = projTeamColor(bppTeam);
                                       return (
-                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
-                                          <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
-                                          <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
-                                          <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', fontSize: 11 }}>{slot.label}</span>
+                                            {bppTeam && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: `${tc}22`, color: tc }}>{bppTeam}</span>}
+                                          </div>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                                            <span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{card.card_value}</span>
+                                            <span style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.first_name} {card.last_name}</span>
+                                            {perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
+                                          </div>
+                                          <span style={{ textAlign: 'right', fontWeight: 700, fontSize: 14, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                             {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                           </span>
                                         </div>
@@ -13488,26 +13500,37 @@ function PTLivePage() {
                               </div>
                             </div>
                             {isExpanded && (
-                              <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                {PT_LIVE_SLOTS.map(slot => {
+                              <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                {PT_LIVE_SLOTS.map((slot, si) => {
                                   const card = entry.team?.[slot.key];
                                   if (!card) return (
-                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, color: '#374151' }}>
-                                      <span>{slot.label}</span><span>—</span><span />
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
+                                      <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span><span />
                                     </div>
                                   );
-                                  const name = cardStatsKey(card);
-                                  const pd = activeStats[name];
+                                  const cName = cardStatsKey(card);
+                                  const pd = activeStats[cName];
                                   let slotPP = null;
                                   if (pd) {
                                     if (slot.role === 'batter' && pd.battingGames?.length) slotPP = ptLiveBatterPP(pd.battingGames);
                                     else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                   }
+                                  const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
+                                  const fr = card.franchise || ([...batters, ...sps, ...rps].find(c => c.card_id === card.card_id)?.franchise || '');
+                                  const bppTeam = PROJ_FRANCHISE_TO_BPP[fr] || fr || '';
+                                  const tc = projTeamColor(bppTeam);
                                   return (
-                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
-                                      <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
-                                      <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
-                                      <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', fontSize: 11 }}>{slot.label}</span>
+                                        {bppTeam && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: `${tc}22`, color: tc }}>{bppTeam}</span>}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                                        <span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{card.card_value}</span>
+                                        <span style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.first_name} {card.last_name}</span>
+                                        {perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
+                                      </div>
+                                      <span style={{ textAlign: 'right', fontWeight: 700, fontSize: 14, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                         {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                       </span>
                                     </div>
