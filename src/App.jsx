@@ -12308,6 +12308,18 @@ function PTLivePage() {
     const ptTeamsPlaying = new Set();
     teamsPlaying.forEach(t => ptTeamsPlaying.add(PROJ_TEAM_CODE_MAP[t] || t));
 
+    // Build team win chance from SP WinPct (best SP per team as proxy)
+    const teamWinChance = {};
+    // Track teams whose SP is projected >6 IP (less bullpen usage)
+    const teamsWithDeepSP = new Set();
+    spList.forEach(sp => {
+      const t = (sp.Team || '').trim();
+      if (!t) return;
+      const wPct = sp.WinPct || 0;
+      if (!teamWinChance[t] || wPct > teamWinChance[t]) teamWinChance[t] = wPct;
+      if ((sp.IP || 0) > 6) teamsWithDeepSP.add(t);
+    });
+
     const rpCandidates = allCards
       .filter(c => Number(c.position) === 1 && [12, 13].includes(Number(c.pitcher_role)))
       .map(c => {
@@ -12319,11 +12331,23 @@ function PTLivePage() {
           OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
           ExpPP: 0, BustPct: 0, Type: 'pitcher', Side: '', GameTime: '', HasSim: false,
         };
-      })
-      .sort((a, b) => b.OVR - a.OVR);
+      });
 
     const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL'));
-    const allRp = [...simRps, ...rpCandidates];
+    const allRp = [...simRps, ...rpCandidates]
+      .filter(p => !teamsWithDeepSP.has((p.Team || '').trim())) // exclude teams whose SP goes 6+ IP
+      .sort((a, b) => {
+        // 1. Prioritize RPs with sim data (SPs listed as RP) — they have projected points
+        const aHasSim = (a.ExpPP || 0) > 0 ? 1 : 0;
+        const bHasSim = (b.ExpPP || 0) > 0 ? 1 : 0;
+        if (bHasSim !== aHasSim) return bHasSim - aHasSim;
+        // 2. Prioritize teams with highest win chance
+        const aWin = teamWinChance[(a.Team || '').trim()] || 0;
+        const bWin = teamWinChance[(b.Team || '').trim()] || 0;
+        if (bWin !== aWin) return bWin - aWin;
+        // 3. Then highest OVR
+        return b.OVR - a.OVR;
+      });
 
     const BATTER_POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
     const slotDefs = [
