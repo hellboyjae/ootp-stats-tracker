@@ -12055,8 +12055,43 @@ function PTLivePage() {
   const loadPlayerTeams = async () => {
     try {
       const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_player_teams').single();
-      if (data?.content?.map) setStoredTeamMap(data.content.map);
+      if (data?.content?.map) {
+        setStoredTeamMap(data.content.map);
+        // Fresh if updatedAt is today (PST)
+        const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+        const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
+        if (data.content.updatedDate === todayStr) return;
+      }
     } catch (e) {}
+    // Stale or missing — fetch from MLB API
+    try { await refreshPlayerTeams(); } catch (e) { console.error('[PTLive] Roster refresh error:', e); }
+  };
+
+  const refreshPlayerTeams = async () => {
+    const MLB_TO_BPP = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
+    const teamsRes = await fetch('https://statsapi.mlb.com/api/v1/teams?sportId=1');
+    const teamsData = await teamsRes.json();
+    const teams = (teamsData.teams || []).filter(t => t.sport?.id === 1);
+
+    const map = {};
+    await Promise.all(teams.map(async (team) => {
+      const bppAbbr = MLB_TO_BPP[team.abbreviation] || team.abbreviation;
+      try {
+        const res = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/roster?rosterType=active`);
+        const rd = await res.json();
+        (rd.roster || []).forEach(p => {
+          if (p.person?.fullName) map[normalizeName(p.person.fullName)] = bppAbbr;
+        });
+      } catch (e) {}
+    }));
+
+    const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
+    await supabase.from('site_content').upsert(
+      { id: 'ptlive_player_teams', content: { map, updatedDate: todayStr, updatedAt: new Date().toISOString() } },
+      { onConflict: 'id' }
+    );
+    setStoredTeamMap(map);
   };
 
   useEffect(() => {
@@ -12306,17 +12341,6 @@ function PTLivePage() {
       });
 
       results.sort((a, b) => b.ExpPP - a.ExpPP);
-
-      // Save persistent player-team map
-      const teamMap = {};
-      results.forEach(p => {
-        if (p.Player && p.Team) teamMap[normalizeName(p.Player)] = (p.Team || '').trim();
-      });
-      await supabase.from('site_content').upsert(
-        { id: 'ptlive_player_teams', content: { map: teamMap, updatedAt: new Date().toISOString() } },
-        { onConflict: 'id' }
-      );
-      setStoredTeamMap(teamMap);
 
       // Build cheat sheet
       const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers);
