@@ -13931,65 +13931,55 @@ function PTLivePage() {
                               <button onClick={() => setShowCheatSheet(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
                             </div>
 
-                            {/* Lineup */}
-                            <div style={{ marginBottom: 16 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Starting Lineup</div>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                <tbody>
-                                  {projData.cheatSheet.slice(0, 11).map((entry, i) => {
-                                    if (!entry) return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
-                                        <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
-                                      </tr>
-                                    );
-                                    const tc2 = projTeamColor(entry.Team);
-                                    const hasSim = entry.HasSim !== false;
-                                    return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
-                                        <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
-                                        <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                                          <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
-                                        </td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            {/* Pitching */}
-                            <div style={{ marginBottom: 16 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Pitching</div>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                <tbody>
-                                  {projData.cheatSheet.slice(11, 15).map((entry, i) => {
-                                    if (!entry) return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
-                                        <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
-                                      </tr>
-                                    );
-                                    const tc2 = projTeamColor(entry.Team);
-                                    const hasSim = entry.HasSim !== false;
-                                    return (
-                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
-                                        <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
-                                        <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                                          <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
-                                        </td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
+                            {(() => {
+                              const csRow = (entry, i) => {
+                                if (!entry) return (
+                                  <tr key={`cs-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
+                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase' }}>???</td>
+                                    <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
+                                  </tr>
+                                );
+                                const tc2 = projTeamColor(entry.Team);
+                                const hasSim = entry.HasSim !== false;
+                                return (
+                                  <tr key={`cs-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
+                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
+                                    <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
+                                    <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
+                                    <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                                      <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
+                                    </td>
+                                    <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
+                                  </tr>
+                                );
+                              };
+                              return (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, tableLayout: 'fixed', marginBottom: 16 }}>
+                                  <colgroup>
+                                    <col style={{ width: 55 }} />
+                                    <col />
+                                    <col style={{ width: 70 }} />
+                                    <col style={{ width: 60 }} />
+                                    <col style={{ width: 80 }} />
+                                  </colgroup>
+                                  <thead>
+                                    <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
+                                      <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Slot</th>
+                                      <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Player</th>
+                                      <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Team</th>
+                                      <th style={{ padding: '7px 10px', textAlign: 'center', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>OVR</th>
+                                      <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Exp PP</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr><td colSpan={5} style={{ padding: '10px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Starting Lineup</td></tr>
+                                    {projData.cheatSheet.slice(0, 11).map((entry, i) => csRow(entry, i))}
+                                    <tr><td colSpan={5} style={{ padding: '14px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Pitching</td></tr>
+                                    {projData.cheatSheet.slice(11, 15).map((entry, i) => csRow(entry, 11 + i))}
+                                  </tbody>
+                                </table>
+                              );
+                            })()}
 
                             {/* Footer */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16 }}>
@@ -14002,7 +13992,7 @@ function PTLivePage() {
                                 </div>
                               )}
                             </div>
-                            <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots selected by OVR (no sim data available for relievers).</div>
+                            <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots prioritize SPs listed as RP, then teams with highest win chance and shortest SP outings, then highest OVR.</div>
                           </div>
                         </div>,
                         document.body
@@ -14027,8 +14017,8 @@ function PTLivePage() {
                               const totalDiff = totalActual - totalProj;
                               const renderRow = (entry, i) => {
                                 if (!entry) return (
-                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50 }}>—</td>
+                                  <tr key={`yg-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
+                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700 }}>—</td>
                                     <td colSpan={6} style={{ color: '#556677', padding: '7px 10px' }}>No player</td>
                                   </tr>
                                 );
@@ -14036,8 +14026,8 @@ function PTLivePage() {
                                 const hasPP = entry.actualPP !== null;
                                 const diff = hasPP ? entry.actualPP - entry.projectedPP : null;
                                 return (
-                                  <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
+                                  <tr key={`yg-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
+                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
                                     <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
                                     <td style={{ padding: '7px 10px', color: tc, fontWeight: 600 }}>{entry.Team}</td>
                                     <td style={{ padding: '7px 10px', textAlign: 'center' }}>
@@ -14056,8 +14046,16 @@ function PTLivePage() {
                               return (
                                 <>
                                   <div style={{ fontSize: 12, color: '#8899aa', marginBottom: 12 }}>Date: {yesterdayGuess.gameDate}</div>
-                                  {/* Header */}
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, tableLayout: 'fixed', marginBottom: 16 }}>
+                                    <colgroup>
+                                      <col style={{ width: 55 }} />
+                                      <col />
+                                      <col style={{ width: 70 }} />
+                                      <col style={{ width: 60 }} />
+                                      <col style={{ width: 80 }} />
+                                      <col style={{ width: 80 }} />
+                                      <col style={{ width: 70 }} />
+                                    </colgroup>
                                     <thead>
                                       <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
                                         <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Slot</th>
@@ -14065,25 +14063,17 @@ function PTLivePage() {
                                         <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Team</th>
                                         <th style={{ padding: '7px 10px', textAlign: 'center', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>OVR</th>
                                         <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Proj PP</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Actual PP</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Actual</th>
                                         <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Diff</th>
                                       </tr>
                                     </thead>
+                                    <tbody>
+                                      <tr><td colSpan={7} style={{ padding: '10px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Starting Lineup</td></tr>
+                                      {roster.slice(0, 11).map((e, i) => renderRow(e, i))}
+                                      <tr><td colSpan={7} style={{ padding: '14px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Pitching</td></tr>
+                                      {roster.slice(11, 15).map((e, i) => renderRow(e, 11 + i))}
+                                    </tbody>
                                   </table>
-                                  {/* Lineup */}
-                                  <div style={{ marginBottom: 16 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, marginTop: 12 }}>Starting Lineup</div>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                      <tbody>{roster.slice(0, 11).map((e, i) => renderRow(e, i))}</tbody>
-                                    </table>
-                                  </div>
-                                  {/* Pitching */}
-                                  <div style={{ marginBottom: 16 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Pitching</div>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                                      <tbody>{roster.slice(11, 15).map((e, i) => renderRow(e, 11 + i))}</tbody>
-                                    </table>
-                                  </div>
                                   {/* Footer */}
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16, flexWrap: 'wrap', gap: 12 }}>
                                     <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
