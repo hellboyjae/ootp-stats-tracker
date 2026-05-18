@@ -11639,6 +11639,29 @@ function PTLivePage() {
     return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   };
 
+  // Convert cheat sheet roster (15-element array) to a team object compatible with computeTeamPP
+  const cheatSheetToTeam = (roster) => {
+    if (!roster || !Array.isArray(roster)) return null;
+    const slotKeys = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'U1', 'U2', 'SP1', 'SP2', 'RP1', 'RP2'];
+    const allCards = [...batters, ...sps, ...rps];
+    const team = {};
+    roster.forEach((entry, i) => {
+      if (!entry) return;
+      const parts = (entry.Player || '').split(' ');
+      const firstName = parts[0] || '';
+      const lastName = parts.slice(1).join(' ') || '';
+      const nameKey = normalizeName(entry.Player || '');
+      const matched = allCards.find(c => normalizeName(`${c.first_name || ''} ${c.last_name || ''}`) === nameKey);
+      team[slotKeys[i]] = {
+        first_name: firstName, last_name: lastName,
+        card_value: entry.OVR || 0, position: entry.Position,
+        pitcher_role: entry.Position === 'SP' ? 11 : (entry.Position === 'RP' || entry.Position === 'CL') ? 12 : 0,
+        last_10_price: matched?.last_10_price || 0,
+      };
+    });
+    return team;
+  };
+
   const computeTeamPP = (teamObj, statsMap = mlbStats) => {
     let total = 0;
     PT_LIVE_SLOTS.forEach(slot => {
@@ -13134,7 +13157,13 @@ function PTLivePage() {
                       </div>
                     ) : (() => {
                       const activeStats = showYesterday ? yesterdayStats : mlbStats;
-                      const ranked = [...groupEntries]
+                      const entries = [...groupEntries];
+                      // Inject projected team if locked and projections available
+                      if (isLocked && projData?.cheatSheet) {
+                        const projTeam = cheatSheetToTeam(projData.cheatSheet);
+                        if (projTeam) entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData.updatedAt || null, pp: 0, _isProjected: true });
+                      }
+                      const ranked = entries
                         .map(e => ({
                           ...e,
                           livePP:   computeTeamPP(e.team, activeStats),
@@ -13156,12 +13185,17 @@ function PTLivePage() {
                             return (
                               <div key={entry.username}>
                                 <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
-                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                                    {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
-                                    {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
-                                    {isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
+                                    {entry._isProjected
+                                      ? <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', fontWeight: 700 }}>{entry.username}</span>
+                                      : <>
+                                          {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
+                                          {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
+                                          {isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
+                                        </>
+                                    }
                                   </div>
                                   <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
                                     {entry.teamCost > 0 ? entry.teamCost.toLocaleString() : '—'}
@@ -13261,7 +13295,12 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No submissions yet today.</div>
                 ) : (() => {
                   const activeStats = showYesterday ? yesterdayStats : mlbStats;
-                  const ranked = [...individualRankings]
+                  const entries = [...individualRankings];
+                  if (isLocked && projData?.cheatSheet) {
+                    const projTeam = cheatSheetToTeam(projData.cheatSheet);
+                    if (projTeam) entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData.updatedAt || null, pp: 0, _isProjected: true });
+                  }
+                  const ranked = entries
                     .map(e => ({ ...e, livePP: computeTeamPP(e.team, activeStats) }))
                     .sort((a, b) => b.livePP - a.livePP);
                   return (
@@ -13279,16 +13318,21 @@ function PTLivePage() {
                         return (
                           <div key={expandKey}>
                             <div onClick={() => setExpandedGlobal(isExpanded ? null : expandKey)}
-                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                               <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                                  {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
-                                </span>
-                                {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
-                                {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
-                                {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
+                                {entry._isProjected
+                                  ? <span style={{ fontSize: 14, fontWeight: 700, background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{entry.username}</span>
+                                  : <>
+                                      <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                        {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
+                                      </span>
+                                      {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
+                                      <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                                      {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
+                                      {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
+                                    </>
+                                }
                               </div>
                               <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                 {fmtTime(entry.submitted_at)}{isLate && ' · late'}
