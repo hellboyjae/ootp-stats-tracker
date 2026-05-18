@@ -11619,6 +11619,7 @@ function PTLivePage() {
   const [hoveredMatchup, setHoveredMatchup] = useState(null);
   const [matchupRect, setMatchupRect] = useState(null);
   const [storedTeamMap, setStoredTeamMap] = useState(null);
+  const [storedILPlayers, setStoredILPlayers] = useState(new Set());
 
   const isLocked = lockTime && new Date() >= lockTime;
   const [lockCountdown, setLockCountdown] = useState('');
@@ -12057,6 +12058,7 @@ function PTLivePage() {
       const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_player_teams').single();
       if (data?.content?.map) {
         setStoredTeamMap(data.content.map);
+        if (data.content.ilPlayers) setStoredILPlayers(new Set(data.content.ilPlayers));
         // Fresh if updatedAt is today (PST)
         const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
         const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
@@ -12074,13 +12076,18 @@ function PTLivePage() {
     const teams = (teamsData.teams || []).filter(t => t.sport?.id === 1);
 
     const map = {};
+    const ilNames = [];
     await Promise.all(teams.map(async (team) => {
       const bppAbbr = MLB_TO_BPP[team.abbreviation] || team.abbreviation;
       try {
-        const res = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/roster?rosterType=active`);
+        const res = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/roster?rosterType=40Man`);
         const rd = await res.json();
         (rd.roster || []).forEach(p => {
-          if (p.person?.fullName) map[normalizeName(p.person.fullName)] = bppAbbr;
+          if (p.person?.fullName) {
+            const nn = normalizeName(p.person.fullName);
+            map[nn] = bppAbbr;
+            if (p.status?.code !== 'A') ilNames.push(nn);
+          }
         });
       } catch (e) {}
     }));
@@ -12088,10 +12095,11 @@ function PTLivePage() {
     const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
     await supabase.from('site_content').upsert(
-      { id: 'ptlive_player_teams', content: { map, updatedDate: todayStr, updatedAt: new Date().toISOString() } },
+      { id: 'ptlive_player_teams', content: { map, ilPlayers: ilNames, updatedDate: todayStr, updatedAt: new Date().toISOString() } },
       { onConflict: 'id' }
     );
     setStoredTeamMap(map);
+    setStoredILPlayers(new Set(ilNames));
   };
 
   useEffect(() => {
@@ -12343,7 +12351,7 @@ function PTLivePage() {
       results.sort((a, b) => b.ExpPP - a.ExpPP);
 
       // Build cheat sheet
-      const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers);
+      const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers, null, storedILPlayers);
 
       const gameDate = simBatters.length > 0 && simBatters[0].GameDate
         ? String(simBatters[0].GameDate).slice(0, 10) : todayStr;
@@ -12429,7 +12437,7 @@ function PTLivePage() {
 
       // Rebuild cheat sheet excluding confirmed-out players
       const allCards = [...batters, ...sps, ...rps];
-      const cheatSheet = projBuildCheatSheet(projData.players, allCards, null, null, excludeSet);
+      const cheatSheet = projBuildCheatSheet(projData.players, allCards, null, null, excludeSet, storedILPlayers);
 
       const content = {
         ...projData,
@@ -12454,7 +12462,7 @@ function PTLivePage() {
   };
 
   // ── Projections: cheat sheet optimizer ─────────────────────────────────────
-  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null) => {
+  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null, ilSet = null) => {
     const exclude = excludeSet || new Set();
     const bats = allPlayers.filter(p => p.Type === 'batter' && !exclude.has(normalizeName(p.Player)));
     const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP' && !exclude.has(normalizeName(p.Player)));
@@ -12490,7 +12498,8 @@ function PTLivePage() {
           OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
           ExpPP: 0, BustPct: 0, Type: 'pitcher', Side: '', GameTime: '', HasSim: false,
         };
-      });
+      })
+      .filter(c => !ilSet || !ilSet.has(normalizeName(c.Player)));
 
     const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !exclude.has(normalizeName(p.Player)));
     const allRp = [...simRps, ...rpCandidates]
