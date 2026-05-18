@@ -13158,10 +13158,10 @@ function PTLivePage() {
                     ) : (() => {
                       const activeStats = showYesterday ? yesterdayStats : mlbStats;
                       const entries = [...groupEntries];
-                      // Inject projected team if locked and projections available
-                      if (isLocked && projData?.cheatSheet) {
-                        const projTeam = cheatSheetToTeam(projData.cheatSheet);
-                        if (projTeam) entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData.updatedAt || null, pp: 0, _isProjected: true });
+                      // Inject projected team if locked and yesterday's guess is loaded
+                      if (isLocked && yesterdayGuess?.roster) {
+                        const projTeam = cheatSheetToTeam(yesterdayGuess.roster);
+                        if (projTeam) entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                       }
                       const ranked = entries
                         .map(e => ({
@@ -13296,9 +13296,9 @@ function PTLivePage() {
                 ) : (() => {
                   const activeStats = showYesterday ? yesterdayStats : mlbStats;
                   const entries = [...individualRankings];
-                  if (isLocked && projData?.cheatSheet) {
-                    const projTeam = cheatSheetToTeam(projData.cheatSheet);
-                    if (projTeam) entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData.updatedAt || null, pp: 0, _isProjected: true });
+                  if (isLocked && yesterdayGuess?.roster) {
+                    const projTeam = cheatSheetToTeam(yesterdayGuess.roster);
+                    if (projTeam) entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                   }
                   const ranked = entries
                     .map(e => ({ ...e, livePP: computeTeamPP(e.team, activeStats) }))
