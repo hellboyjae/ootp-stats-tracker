@@ -13665,20 +13665,18 @@ function PTLivePage() {
 
               return (
                 <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
-                  {/* Header */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
-                      <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
-                      <span style={{ fontSize: '0.5em', fontWeight: 400, color: '#8899aa', letterSpacing: '0.03em', margin: '0 8px' }}>brought to you by</span>
-                      <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>KOBA</span>
+                  {/* Header + Admin */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                    <div>
+                      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
+                        <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
+                        <span style={{ fontSize: '0.5em', fontWeight: 400, color: '#fff', letterSpacing: '0.03em', margin: '0 8px' }}>brought to you by</span>
+                        <span style={{ fontSize: '0.9em', background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>KOBA</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
                     </div>
-                    <div style={{ fontSize: 13, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
-                  </div>
-
-                  {/* Admin Upload Section */}
-                  <div style={{ marginBottom: 20 }}>
                     {!projAdminUnlocked ? (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: 220 }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                         <input
                           type="password"
                           value={projAdminPw}
@@ -13692,7 +13690,11 @@ function PTLivePage() {
                           Unlock
                         </button>
                       </div>
-                    ) : (
+                    ) : null}
+                  </div>
+
+                  {/* Admin Upload Section (expanded) */}
+                  {projAdminUnlocked && <div style={{ marginBottom: 20 }}>
                       <div style={{ padding: 16, background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 10 }}>Upload BallparkPal Files</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
@@ -13729,8 +13731,7 @@ function PTLivePage() {
                           </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                  </div>}
 
                   {/* Last Updated */}
                   {projData?.updatedAt && (
