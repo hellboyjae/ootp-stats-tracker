@@ -12059,7 +12059,7 @@ function PTLivePage() {
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
-      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price';
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
       const pageSize = 1000;
       const { data: firstPage, count } = await supabase
         .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
