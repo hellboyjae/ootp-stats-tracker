@@ -13647,10 +13647,12 @@ function PTLivePage() {
                 const allPlayers = projData?.players || [];
                 const topBatters = new Set(allPlayers.filter(p => p.Type === 'batter').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 25).map(p => p.Player));
                 const topPitchers = new Set(allPlayers.filter(p => p.Type === 'pitcher').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 5).map(p => p.Player));
-                return allPlayers
+                const eligible = allPlayers
                   .filter(p => ['Silver', 'Bronze', 'Iron'].includes(p.Tier) && (topBatters.has(p.Player) || topPitchers.has(p.Player)))
-                  .sort((a, b) => b.ExpPP - a.ExpPP)
-                  .slice(0, 3);
+                  .sort((a, b) => b.ExpPP - a.ExpPP);
+                const pitcherPick = eligible.find(p => p.Type === 'pitcher');
+                const batterPicks = eligible.filter(p => p.Type === 'batter').slice(0, 3);
+                return [...(pitcherPick ? [pitcherPick] : []), ...batterPicks].sort((a, b) => b.ExpPP - a.ExpPP);
               })();
 
               const handleProjSort = col => {
@@ -13667,6 +13669,8 @@ function PTLivePage() {
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
                       <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
+                      <span style={{ fontSize: '0.5em', fontWeight: 400, color: '#8899aa', letterSpacing: '0.03em', margin: '0 8px' }}>brought to you by</span>
+                      <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>KOBA</span>
                     </div>
                     <div style={{ fontSize: 13, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
                   </div>
