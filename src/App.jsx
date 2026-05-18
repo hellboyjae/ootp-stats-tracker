@@ -1967,6 +1967,7 @@ function InfoPage() {
           'Card Badge': 'card_badge',
           'Last 10 Price': 'last_10_price',
           'packs': 'packs',
+          'Franchise': 'franchise',
         };
 
         console.log('PapaParse headers:', parsed.meta?.fields?.slice(0, 15));
@@ -12863,6 +12864,17 @@ function PTLivePage() {
     tierCounts.goldOrHigher    > 9 && `${tierCounts.goldOrHigher}/9 Gold+`,
   ].filter(Boolean);
 
+  // Build name→BPP team lookup from projections (franchise column is often null in pt_cards)
+  const playerTeamLookup = useMemo(() => {
+    const map = {};
+    if (projData?.players) {
+      projData.players.forEach(p => {
+        if (p.Player && p.Team) map[normalizeName(p.Player)] = (p.Team || '').trim();
+      });
+    }
+    return map;
+  }, [projData]);
+
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
     if (slot.pos) pool = pool.filter(c => Number(c.position) === slot.pos);
@@ -12872,7 +12884,7 @@ function PTLivePage() {
   };
 
   const selectCard = (slotKey, card) => {
-    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value, last_10_price: card.last_10_price || 0, franchise: card.franchise || '' } }));
+    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value, last_10_price: card.last_10_price || 0 } }));
     setActivePicker(null); setPickerSearch('');
   };
 
@@ -12939,11 +12951,7 @@ function PTLivePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: 32 }}>{slot.label}</div>
             {card && (() => {
-              // Backfill franchise for cards saved before franchise was persisted
-              const fr = card.franchise || (
-                [...batters, ...sps, ...rps].find(c => c.card_id === card.card_id)?.franchise || ''
-              );
-              const bppTeam = PROJ_FRANCHISE_TO_BPP[fr] || fr || '';
+              const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
               const tc = projTeamColor(bppTeam);
               return bppTeam ? (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: `${tc}22`, color: tc, letterSpacing: '0.04em' }}>{bppTeam}</span>
@@ -13370,8 +13378,7 @@ function PTLivePage() {
                                         else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                       }
                                       const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
-                                      const fr = card.franchise || ([...batters, ...sps, ...rps].find(c => c.card_id === card.card_id)?.franchise || '');
-                                      const bppTeam = PROJ_FRANCHISE_TO_BPP[fr] || fr || '';
+                                      const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
                                       const tc = projTeamColor(bppTeam);
                                       return (
                                         <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
@@ -13515,8 +13522,7 @@ function PTLivePage() {
                                     else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                   }
                                   const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
-                                  const fr = card.franchise || ([...batters, ...sps, ...rps].find(c => c.card_id === card.card_id)?.franchise || '');
-                                  const bppTeam = PROJ_FRANCHISE_TO_BPP[fr] || fr || '';
+                                  const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
                                   const tc = projTeamColor(bppTeam);
                                   return (
                                     <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
