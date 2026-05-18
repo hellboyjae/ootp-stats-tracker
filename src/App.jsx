@@ -12935,17 +12935,16 @@ function PTLivePage() {
       <div key={slot.key} style={{ borderBottom: `1px solid ${theme.border}`, position: 'relative' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
 
-          {/* Slot label + Stats button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {/* Slot label + team tag */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: 32 }}>{slot.label}</div>
-            {card && !isEditing && (
-              <button
-                onClick={() => setPerfModal({ name: `${card.first_name} ${card.last_name}`, role: slot.role, cardOvr: card.card_value || 0 })}
-                style={{ fontSize: 9, fontWeight: 700, padding: '3px 6px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
-              >
-                Stats
-              </button>
-            )}
+            {card && (() => {
+              const bppTeam = PROJ_FRANCHISE_TO_BPP[card.franchise] || card.franchise || '';
+              const tc = projTeamColor(bppTeam);
+              return bppTeam ? (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: `${tc}22`, color: tc, letterSpacing: '0.04em' }}>{bppTeam}</span>
+              ) : null;
+            })()}
           </div>
 
           {/* Card picker / display */}
