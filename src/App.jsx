@@ -13813,14 +13813,16 @@ function PTLivePage() {
                                 { col: 'Position', label: 'Pos', w: 60 },
                                 { col: 'OVR', label: 'OVR', w: 60 },
                                 { col: 'ExpPP', label: 'Exp PP', w: 80 },
+                                { col: '_stat1', label: 'HR/K', w: 60 },
+                                { col: '_stat2', label: 'SB/IP', w: 60 },
                                 { col: 'BustPct', label: 'Bust %', w: 70 },
                                 { col: '_matchup', label: 'Matchup', w: 100 },
                                 { col: 'GameTime', label: 'Time', w: 80 },
                               ].map(h => (
-                                <th key={h.col} onClick={() => h.col !== '_rank' && h.col !== '_matchup' && handleProjSort(h.col)} style={{
+                                <th key={h.col} onClick={() => !h.col.startsWith('_') && handleProjSort(h.col)} style={{
                                   padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 14,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
-                                  borderBottom: `2px solid ${theme.border}`, cursor: h.col !== '_rank' && h.col !== '_matchup' ? 'pointer' : 'default',
+                                  borderBottom: `2px solid ${theme.border}`, cursor: !h.col.startsWith('_') ? 'pointer' : 'default',
                                   whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
                                   ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
                                 }}>
@@ -13859,6 +13861,12 @@ function PTLivePage() {
                                     }}>{p.OVR}</span>
                                   </td>
                                   <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 15, color: p.Type === 'batter' ? '#f97316' : '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>
+                                    {p.Type === 'batter' ? p.HR : p.K}
+                                  </td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 15, color: p.Type === 'batter' ? '#a78bfa' : '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
+                                    {p.Type === 'batter' ? p.SB : p.IP}
+                                  </td>
                                   <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
                                   <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 16 }}>
                                     <span style={{ color: '#fff' }}>{sideLabel}</span>
