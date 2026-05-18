@@ -12062,7 +12062,7 @@ function PTLivePage() {
         // Fresh if updatedAt is today (PST)
         const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
         const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-        if (data.content.updatedDate === todayStr) return;
+        if (data.content.updatedDate === todayStr && data.content.ilPlayers) return;
       }
     } catch (e) {}
     // Stale or missing — fetch from MLB API
