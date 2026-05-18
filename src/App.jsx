@@ -13803,28 +13803,28 @@ function PTLivePage() {
 
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17, tableLayout: 'auto' }}>
                           <thead>
                             <tr>
                               {[
-                                { col: '_rank', label: '#', w: 44 },
-                                { col: 'Player', label: 'Player', w: null },
+                                { col: '_rank', label: '#', w: 40 },
                                 { col: 'Team', label: 'Team', w: 70 },
+                                { col: 'Player', label: 'Player', w: null, maxW: 220, align: 'left' },
                                 { col: 'Position', label: 'Pos', w: 60 },
-                                { col: 'OVR', label: 'OVR', w: 60 },
-                                { col: 'ExpPP', label: 'Exp PP', w: 80 },
-                                { col: '_stat1', label: 'HR/K', w: 60 },
-                                { col: '_stat2', label: 'SB/IP', w: 60 },
-                                { col: 'BustPct', label: 'Bust %', w: 70 },
-                                { col: '_matchup', label: 'Matchup', w: 100 },
-                                { col: 'GameTime', label: 'Time', w: 80 },
+                                { col: 'OVR', label: 'OVR', w: 64 },
+                                { col: 'ExpPP', label: 'Exp PP', w: 90 },
+                                ...(projTypeFilter !== 'pitcher' ? [{ col: 'HR', label: 'HR', w: 70 }] : []),
+                                ...(projTypeFilter !== 'pitcher' ? [{ col: 'SB', label: 'SB', w: 70 }] : []),
+                                ...(projTypeFilter !== 'batter' ? [{ col: 'K', label: 'K', w: 70 }] : []),
+                                ...(projTypeFilter !== 'batter' ? [{ col: 'IP', label: 'IP', w: 70 }] : []),
+                                { col: 'BustPct', label: 'Bust %', w: 80 },
+                                { col: '_matchup', label: 'Matchup', w: 130 },
                               ].map(h => (
                                 <th key={h.col} onClick={() => !h.col.startsWith('_') && handleProjSort(h.col)} style={{
-                                  padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 14,
+                                  padding: '10px 12px', textAlign: h.align || 'center', fontWeight: 600, fontSize: 14,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
                                   borderBottom: `2px solid ${theme.border}`, cursor: !h.col.startsWith('_') ? 'pointer' : 'default',
-                                  whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
-                                  ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
+                                  whiteSpace: 'nowrap', width: h.w || undefined, maxWidth: h.maxW || undefined, userSelect: 'none',
                                 }}>
                                   {h.label}
                                   {projSort.col === h.col && <span style={{ fontSize: 11, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
@@ -13836,7 +13836,7 @@ function PTLivePage() {
                             {filteredPlayers.map((p, idx) => {
                               const tc = projTeamColor(p.Team);
                               const oc = projTeamColor(p.Opponent);
-                              const sideLabel = p.Side === 'A' ? '@ ' : 'vs ';
+                              const isHome = p.Side !== 'A';
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
@@ -13844,35 +13844,48 @@ function PTLivePage() {
                                 <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}
                                   onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
                                   onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent'}>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
-                                  <td style={{ padding: '10px 8px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17 }}>{p.Player}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
+                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.Player}</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                     <span style={{
                                       display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
                                     }}>{p.Position}</span>
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                     <span style={{
                                       display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 16, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 15, color: p.Type === 'batter' ? '#f97316' : '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>
-                                    {p.Type === 'batter' ? p.HR : p.K}
-                                  </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 15, color: p.Type === 'batter' ? '#a78bfa' : '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
-                                    {p.Type === 'batter' ? p.SB : p.IP}
-                                  </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, fontSize: 16 }}>
-                                    <span style={{ color: '#fff' }}>{sideLabel}</span>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  {projTypeFilter !== 'pitcher' && (
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#f97316' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                      {p.Type === 'batter' ? `${Math.round(p.HR * 100)}%` : 'N/A'}
+                                    </td>
+                                  )}
+                                  {projTypeFilter !== 'pitcher' && (
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#a78bfa' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                      {p.Type === 'batter' ? `${Math.round(p.SB * 100)}%` : 'N/A'}
+                                    </td>
+                                  )}
+                                  {projTypeFilter !== 'batter' && (
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#38bdf8' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                      {p.Type === 'pitcher' ? p.K : 'N/A'}
+                                    </td>
+                                  )}
+                                  {projTypeFilter !== 'batter' && (
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#fbbf24' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                      {p.Type === 'pitcher' ? p.IP : 'N/A'}
+                                    </td>
+                                  )}
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15 }}>
                                     <span style={{ color: oc }}>{p.Opponent}</span>
+                                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: isHome ? '#1a3a2a' : '#2a2040', color: isHome ? '#4ade80' : '#c084fc' }}>{isHome ? 'HOME' : 'AWAY'}</span>
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: '#fff', fontSize: 16 }}>{p.GameTime}</td>
                                 </tr>
                               );
                             })}
