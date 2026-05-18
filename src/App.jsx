@@ -12059,15 +12059,14 @@ function PTLivePage() {
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
-      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
       const pageSize = 1000;
       const { data: firstPage, count, error: firstErr } = await supabase
-        .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
-      if (firstErr) console.error('[PTLive] Card query error:', firstErr);
+        .from('pt_cards').select('*', { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
+      if (firstErr) { console.error('[PTLive] Card query error:', firstErr); setIsLoadingCards(false); return; }
       const totalPages = Math.ceil((count || 0) / pageSize);
       const rest = totalPages > 1
         ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, i) =>
-            supabase.from('pt_cards').select(cols).eq('card_type', 1)
+            supabase.from('pt_cards').select('*').eq('card_type', 1)
               .range((i + 1) * pageSize, (i + 2) * pageSize - 1)))
         : [];
       const all = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
