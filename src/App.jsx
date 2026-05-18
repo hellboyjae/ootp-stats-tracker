@@ -11612,8 +11612,27 @@ function PTLivePage() {
   const [yesterdayGuessLoading, setYesterdayGuessLoading] = useState(false);
   const [showYesterdayGuess, setShowYesterdayGuess] = useState(false);
   const [projRefreshing, setProjRefreshing] = useState(false);
+  const [hoveredMatchup, setHoveredMatchup] = useState(null);
 
   const isLocked = lockTime && new Date() >= lockTime;
+  const [lockCountdown, setLockCountdown] = useState('');
+
+  // Countdown timer — locks 20 min before first pitch
+  useEffect(() => {
+    if (!lockTime) { setLockCountdown(''); return; }
+    const effectiveLock = new Date(lockTime.getTime() - 20 * 60 * 1000);
+    const tick = () => {
+      const diff = effectiveLock - new Date();
+      if (diff <= 0) { setLockCountdown('LOCKED'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setLockCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lockTime]);
 
   // Auto-load yesterday's best guess once lock happens (preload without opening modal)
   useEffect(() => {
@@ -13018,7 +13037,14 @@ function PTLivePage() {
       <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: `4px solid ${theme.accent}` }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent }}>PT Live</h1>
+            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent, display: 'flex', alignItems: 'center', gap: 12 }}>
+              PT Live
+              {lockCountdown && (
+                <span style={{ fontSize: 16, fontWeight: 600, color: lockCountdown === 'LOCKED' ? '#ef4444' : '#fff', letterSpacing: '0.04em', fontFamily: "'Inter', sans-serif" }}>
+                  {lockCountdown === 'LOCKED' ? '— Locked' : `— Locks in ${lockCountdown}`}
+                </span>
+              )}
+            </h1>
             <div style={{ fontSize: 11, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -13759,6 +13785,15 @@ function PTLivePage() {
                 return projSort.dir === 'asc' ? va - vb : vb - va;
               });
 
+              // Build opposing SP lookup: team abbreviation → best SP on that team
+              const opposingSPByTeam = {};
+              (projData?.players || []).forEach(p => {
+                if (p.Type === 'pitcher' && p.Position === 'SP') {
+                  const t = (p.Team || '').trim();
+                  if (!opposingSPByTeam[t] || p.ExpPP > opposingSPByTeam[t].ExpPP) opposingSPByTeam[t] = p;
+                }
+              });
+
               const valuePicks = (() => {
                 const allPlayers = projData?.players || [];
                 const topBatters = new Set(allPlayers.filter(p => p.Type === 'batter').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 25).map(p => p.Player));
@@ -14024,9 +14059,36 @@ function PTLivePage() {
                                     </td>
                                   )}
                                   <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15, ...blurStyle }}>
-                                    <span style={{ color: oc }}>{p.Opponent}</span>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15, position: 'relative', ...blurStyle }}
+                                    onMouseEnter={() => { if (p.Type === 'batter' && opposingSPByTeam[(p.Opponent || '').trim()]) setHoveredMatchup(idx); }}
+                                    onMouseLeave={() => setHoveredMatchup(null)}>
+                                    <span style={{ color: oc, cursor: p.Type === 'batter' && opposingSPByTeam[(p.Opponent || '').trim()] ? 'pointer' : 'default' }}>{p.Opponent}</span>
                                     <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: isHome ? '#1a3a2a' : '#2a2040', color: isHome ? '#4ade80' : '#c084fc' }}>{isHome ? 'HOME' : 'AWAY'}</span>
+                                    {hoveredMatchup === idx && p.Type === 'batter' && (() => {
+                                      const sp = opposingSPByTeam[(p.Opponent || '').trim()];
+                                      if (!sp) return null;
+                                      const spTc = projTeamColor(sp.Team);
+                                      return (
+                                        <div style={{
+                                          position: 'absolute', bottom: '100%', right: 0, marginBottom: 6, zIndex: 50,
+                                          background: '#1a2332', border: `1px solid ${theme.border}`, borderRadius: 10,
+                                          padding: '10px 14px', minWidth: 200, textAlign: 'left',
+                                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', pointerEvents: 'none',
+                                        }}>
+                                          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, marginBottom: 6 }}>Opposing Pitcher</div>
+                                          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{sp.Player}</div>
+                                          <div style={{ fontSize: 12, color: spTc, fontWeight: 600, marginBottom: 8 }}>{sp.Team} · <span style={{ color: tierColor(sp.OVR) }}>{sp.OVR} OVR</span></div>
+                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 12px' }}>
+                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Exp PP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#4ade80' }}>{sp.ExpPP}</div></div>
+                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>K</div><div style={{ fontSize: 15, fontWeight: 700, color: '#38bdf8' }}>{sp.K}</div></div>
+                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>IP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>{sp.IP}</div></div>
+                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Win%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.WinPct}%</div></div>
+                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>QS%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.QS}%</div></div>
+                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Bust%</div><div style={{ fontSize: 14, fontWeight: 600, color: bustColor(sp.BustPct) }}>{sp.BustPct}%</div></div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                 </tr>
                               );
