@@ -11611,6 +11611,7 @@ function PTLivePage() {
   const [yesterdayGuess, setYesterdayGuess] = useState(null);
   const [yesterdayGuessLoading, setYesterdayGuessLoading] = useState(false);
   const [showYesterdayGuess, setShowYesterdayGuess] = useState(false);
+  const [projRefreshing, setProjRefreshing] = useState(false);
 
   const isLocked = lockTime && new Date() >= lockTime;
 
@@ -12298,13 +12299,103 @@ function PTLivePage() {
     setProjUpdating(false);
   };
 
+  // ── Projections: refresh confirmed lineups ────────────────────────────────
+  const projRefreshLineups = async () => {
+    if (!projData?.players?.length || !projData.gameDate) return;
+    setProjRefreshing(true);
+    try {
+      // MLB API abbreviation → BallparkPal abbreviation
+      const MLB_TO_BPP = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
+      const mlbToBpp = abbr => MLB_TO_BPP[abbr] || abbr;
+
+      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${projData.gameDate}&hydrate=lineups,probablePitcher`);
+      const schedData = await schedRes.json();
+      const games = schedData.dates?.[0]?.games || [];
+
+      // For each game, collect confirmed lineup names keyed by BPP team abbreviation
+      const confirmedByTeam = {}; // { bppTeam: Set<normalizedName> }
+      const teamsWithLineups = new Set(); // BPP teams that have confirmed lineups
+
+      for (const game of games) {
+        const homeAbbr = mlbToBpp(game.teams?.home?.team?.abbreviation || '');
+        const awayAbbr = mlbToBpp(game.teams?.away?.team?.abbreviation || '');
+        const homePlayers = game.lineups?.homePlayers || [];
+        const awayPlayers = game.lineups?.awayPlayers || [];
+        const homePP = game.teams?.home?.probablePitcher;
+        const awayPP = game.teams?.away?.probablePitcher;
+
+        // Only flag teams whose lineup has actually been posted
+        if (homePlayers.length > 0) {
+          teamsWithLineups.add(homeAbbr);
+          const names = new Set(homePlayers.map(p => normalizeName(p.fullName)));
+          if (homePP?.fullName) names.add(normalizeName(homePP.fullName));
+          confirmedByTeam[homeAbbr] = names;
+        }
+        if (awayPlayers.length > 0) {
+          teamsWithLineups.add(awayAbbr);
+          const names = new Set(awayPlayers.map(p => normalizeName(p.fullName)));
+          if (awayPP?.fullName) names.add(normalizeName(awayPP.fullName));
+          confirmedByTeam[awayAbbr] = names;
+        }
+      }
+
+      // Build confirmed-out set
+      const confirmedOut = [];
+      for (const player of projData.players) {
+        const pos = (player.Position || '').trim();
+        // Skip RPs/CLs — they don't appear in starting lineups
+        if (pos === 'RP' || pos === 'CL') continue;
+        const team = (player.Team || '').trim();
+        if (!teamsWithLineups.has(team)) continue; // no lineup yet for this team
+        const normalizedPlayer = normalizeName(player.Player);
+        // Also try PROJ_NAME_FIXES mapping for the MLB API side
+        const lineupNames = confirmedByTeam[team];
+        if (!lineupNames) continue;
+        // Check if this player (or any name-fixed variant) is in the confirmed lineup
+        if (!lineupNames.has(normalizedPlayer)) {
+          confirmedOut.push(normalizedPlayer);
+        }
+      }
+
+      const excludeSet = new Set(confirmedOut);
+
+      // Rebuild cheat sheet excluding confirmed-out players
+      const allCards = [...batters, ...sps, ...rps];
+      const cheatSheet = projBuildCheatSheet(projData.players, allCards, null, null, excludeSet);
+
+      const content = {
+        ...projData,
+        cheatSheet: cheatSheet.roster,
+        tierCounts: cheatSheet.tierCounts,
+        confirmedOut,
+        lineupsRefreshedAt: new Date().toISOString(),
+      };
+
+      await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
+      await supabase.from('site_content').upsert(
+        { id: `ptlive_cheatsheet_${projData.gameDate}`, content: { cheatSheet: cheatSheet.roster, tierCounts: cheatSheet.tierCounts, gameDate: projData.gameDate, updatedAt: new Date().toISOString() } },
+        { onConflict: 'id' }
+      );
+      setProjData(content);
+      alert(`Lineups refreshed! ${confirmedOut.length} player(s) confirmed out. ${teamsWithLineups.size} team(s) have posted lineups.`);
+    } catch (e) {
+      console.error('Lineup refresh error:', e);
+      alert('Error refreshing lineups: ' + e.message);
+    }
+    setProjRefreshing(false);
+  };
+
   // ── Projections: cheat sheet optimizer ─────────────────────────────────────
-  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers) => {
-    const bats = allPlayers.filter(p => p.Type === 'batter');
-    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP');
+  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null) => {
+    const exclude = excludeSet || new Set();
+    const bats = allPlayers.filter(p => p.Type === 'batter' && !exclude.has(normalizeName(p.Player)));
+    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP' && !exclude.has(normalizeName(p.Player)));
 
     // Get RP candidates from card list for teams playing today
-    const teamsPlaying = new Set([...simBatters.map(r => (r.Team || '').trim()), ...simPitchers.map(r => (r.Team || '').trim())]);
+    // Derive teams from allPlayers when sim data is null
+    const teamsPlaying = (simBatters && simPitchers)
+      ? new Set([...simBatters.map(r => (r.Team || '').trim()), ...simPitchers.map(r => (r.Team || '').trim())])
+      : new Set(allPlayers.map(r => (r.Team || '').trim()));
     const ptTeamsPlaying = new Set();
     teamsPlaying.forEach(t => ptTeamsPlaying.add(PROJ_TEAM_CODE_MAP[t] || t));
 
@@ -12333,8 +12424,9 @@ function PTLivePage() {
         };
       });
 
-    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL'));
+    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !exclude.has(normalizeName(p.Player)));
     const allRp = [...simRps, ...rpCandidates]
+      .filter(p => !exclude.has(normalizeName(p.Player)))
       .filter(p => !teamsWithDeepSP.has((p.Team || '').trim())) // exclude teams whose SP goes 6+ IP
       .sort((a, b) => {
         // 1. Prioritize RPs with sim data (SPs listed as RP) — they have projected points
@@ -13749,6 +13841,16 @@ function PTLivePage() {
                             }}>
                             {projUpdating ? 'Processing…' : 'Update Projections'}
                           </button>
+                          <button
+                            onClick={projRefreshLineups}
+                            disabled={projRefreshing || !projData}
+                            style={{
+                              background: projData ? 'linear-gradient(135deg, #3b82f6, #06b6d4)' : theme.inputBg,
+                              color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: projRefreshing ? 'not-allowed' : 'pointer',
+                              opacity: !projData ? 0.4 : 1,
+                            }}>
+                            {projRefreshing ? 'Refreshing…' : 'Refresh Lineups'}
+                          </button>
                           <button onClick={() => { setProjAdminUnlocked(false); setProjAdminPw(''); }}
                             style={{ background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
                             Lock
@@ -13761,6 +13863,9 @@ function PTLivePage() {
                   {projData?.updatedAt && (
                     <div style={{ fontSize: 12, color: '#fff', marginBottom: 12 }}>
                       Last updated: {new Date(projData.updatedAt).toLocaleString()} · {projData.gameDate || ''} · {projData.players?.length || 0} players
+                      {projData.lineupsRefreshedAt && (
+                        <span style={{ color: '#3b82f6', marginLeft: 8 }}>· Lineups: {new Date(projData.lineupsRefreshedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ({(projData.confirmedOut || []).length} out)</span>
+                      )}
                     </div>
                   )}
 
@@ -13866,18 +13971,25 @@ function PTLivePage() {
                               const tc = projTeamColor(p.Team);
                               const oc = projTeamColor(p.Opponent);
                               const isHome = p.Side !== 'A';
+                              const isOut = (projData?.confirmedOut || []).includes(normalizeName(p.Player));
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
+                              const rowBg = isOut ? 'rgba(239,68,68,0.15)' : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
+                              const blurStyle = isOut ? { filter: 'blur(4px)', userSelect: 'none' } : {};
                               return (
-                                <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}
-                                  onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
-                                  onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent'}>
+                                <tr key={idx} title={isOut ? 'Not in confirmed lineup' : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
+                                  onMouseEnter={e => { if (!isOut) e.currentTarget.style.background = theme.tableRowHover; }}
+                                  onMouseLeave={e => e.currentTarget.style.background = rowBg}>
                                   <td style={{ padding: '10px 12px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
                                   <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
-                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.Player}</td>
+                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: 17, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {p.Player}
+                                    {isOut && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
+                                  </td>
                                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                     <span style={{
+                                      ...blurStyle,
                                       display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
@@ -13885,33 +13997,34 @@ function PTLivePage() {
                                   </td>
                                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                     <span style={{
+                                      ...blurStyle,
                                       display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 16, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.ExpPP}</td>
                                   {projTypeFilter !== 'pitcher' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#f97316' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#f97316' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'batter' ? `${Math.round(p.HR * 100)}%` : 'N/A'}
                                     </td>
                                   )}
                                   {projTypeFilter !== 'pitcher' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#a78bfa' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#a78bfa' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'batter' ? `${Math.round(p.SB * 100)}%` : 'N/A'}
                                     </td>
                                   )}
                                   {projTypeFilter !== 'batter' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#38bdf8' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#38bdf8' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'pitcher' ? p.K : 'N/A'}
                                     </td>
                                   )}
                                   {projTypeFilter !== 'batter' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#fbbf24' : '#556677', fontVariantNumeric: 'tabular-nums' }}>
+                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#fbbf24' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'pitcher' ? p.IP : 'N/A'}
                                     </td>
                                   )}
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15 }}>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15, ...blurStyle }}>
                                     <span style={{ color: oc }}>{p.Opponent}</span>
                                     <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: isHome ? '#1a3a2a' : '#2a2040', color: isHome ? '#4ade80' : '#c084fc' }}>{isHome ? 'HOME' : 'AWAY'}</span>
                                   </td>
