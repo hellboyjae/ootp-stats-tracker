@@ -10770,9 +10770,12 @@ function PackSimulatorPage() {
 // ============================================================
 // PT LIVE — constants & scoring
 // ============================================================
-const NAME_ALIASES = { 'louis varland': 'louie varland' };
+const NAME_ALIASES = {
+  'louis varland': 'louie varland',
+  'jazz chisholm': 'jazz chisholm jr',
+};
 const normalizeName = (s) => {
-  const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, '').toLowerCase().trim();
+  const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-.]/g, '').replace(/\s+/g, ' ').toLowerCase().trim();
   return NAME_ALIASES[n] || n;
 };
 // MLB player IDs that need disambiguation (same name, different player)
@@ -11615,6 +11618,7 @@ function PTLivePage() {
   const [projRefreshing, setProjRefreshing] = useState(false);
   const [hoveredMatchup, setHoveredMatchup] = useState(null);
   const [matchupRect, setMatchupRect] = useState(null);
+  const [storedTeamMap, setStoredTeamMap] = useState(null);
 
   const isLocked = lockTime && new Date() >= lockTime;
   const [lockCountdown, setLockCountdown] = useState('');
@@ -12048,11 +12052,19 @@ function PTLivePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [activePicker]);
 
+  const loadPlayerTeams = async () => {
+    try {
+      const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_player_teams').single();
+      if (data?.content?.map) setStoredTeamMap(data.content.map);
+    } catch (e) {}
+  };
+
   useEffect(() => {
     loadPTLiveCards();
     fetchMLBToday();
     fetchFgData();
     loadProjections();
+    loadPlayerTeams();
     const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -12294,6 +12306,17 @@ function PTLivePage() {
       });
 
       results.sort((a, b) => b.ExpPP - a.ExpPP);
+
+      // Save persistent player-team map
+      const teamMap = {};
+      results.forEach(p => {
+        if (p.Player && p.Team) teamMap[normalizeName(p.Player)] = (p.Team || '').trim();
+      });
+      await supabase.from('site_content').upsert(
+        { id: 'ptlive_player_teams', content: { map: teamMap, updatedAt: new Date().toISOString() } },
+        { onConflict: 'id' }
+      );
+      setStoredTeamMap(teamMap);
 
       // Build cheat sheet
       const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers);
@@ -12864,16 +12887,17 @@ function PTLivePage() {
     tierCounts.goldOrHigher    > 9 && `${tierCounts.goldOrHigher}/9 Gold+`,
   ].filter(Boolean);
 
-  // Build name→BPP team lookup from projections (franchise column is often null in pt_cards)
+  // Build name→BPP team lookup: stored map (persistent) as base, live projData overrides
   const playerTeamLookup = useMemo(() => {
     const map = {};
+    if (storedTeamMap) Object.assign(map, storedTeamMap);
     if (projData?.players) {
       projData.players.forEach(p => {
         if (p.Player && p.Team) map[normalizeName(p.Player)] = (p.Team || '').trim();
       });
     }
     return map;
-  }, [projData]);
+  }, [storedTeamMap, projData]);
 
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
