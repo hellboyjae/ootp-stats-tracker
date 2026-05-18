@@ -11613,6 +11613,7 @@ function PTLivePage() {
   const [showYesterdayGuess, setShowYesterdayGuess] = useState(false);
   const [projRefreshing, setProjRefreshing] = useState(false);
   const [hoveredMatchup, setHoveredMatchup] = useState(null);
+  const [matchupRect, setMatchupRect] = useState(null);
 
   const isLocked = lockTime && new Date() >= lockTime;
   const [lockCountdown, setLockCountdown] = useState('');
@@ -14059,36 +14060,11 @@ function PTLivePage() {
                                     </td>
                                   )}
                                   <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.BustPct}%</td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15, position: 'relative', ...blurStyle }}
-                                    onMouseEnter={() => { if (p.Type === 'batter' && opposingSPByTeam[(p.Opponent || '').trim()]) setHoveredMatchup(idx); }}
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15, ...blurStyle }}
+                                    onMouseEnter={e => { if (p.Type === 'batter' && opposingSPByTeam[(p.Opponent || '').trim()]) { setHoveredMatchup(idx); setMatchupRect(e.currentTarget.getBoundingClientRect()); } }}
                                     onMouseLeave={() => setHoveredMatchup(null)}>
                                     <span style={{ color: oc, cursor: p.Type === 'batter' && opposingSPByTeam[(p.Opponent || '').trim()] ? 'pointer' : 'default' }}>{p.Opponent}</span>
                                     <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: isHome ? '#1a3a2a' : '#2a2040', color: isHome ? '#4ade80' : '#c084fc' }}>{isHome ? 'HOME' : 'AWAY'}</span>
-                                    {hoveredMatchup === idx && p.Type === 'batter' && (() => {
-                                      const sp = opposingSPByTeam[(p.Opponent || '').trim()];
-                                      if (!sp) return null;
-                                      const spTc = projTeamColor(sp.Team);
-                                      return (
-                                        <div style={{
-                                          position: 'absolute', bottom: '100%', right: 0, marginBottom: 6, zIndex: 50,
-                                          background: '#1a2332', border: `1px solid ${theme.border}`, borderRadius: 10,
-                                          padding: '10px 14px', minWidth: 200, textAlign: 'left',
-                                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', pointerEvents: 'none',
-                                        }}>
-                                          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, marginBottom: 6 }}>Opposing Pitcher</div>
-                                          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{sp.Player}</div>
-                                          <div style={{ fontSize: 12, color: spTc, fontWeight: 600, marginBottom: 8 }}>{sp.Team} · <span style={{ color: tierColor(sp.OVR) }}>{sp.OVR} OVR</span></div>
-                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 12px' }}>
-                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Exp PP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#4ade80' }}>{sp.ExpPP}</div></div>
-                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>K</div><div style={{ fontSize: 15, fontWeight: 700, color: '#38bdf8' }}>{sp.K}</div></div>
-                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>IP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>{sp.IP}</div></div>
-                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Win%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.WinPct}%</div></div>
-                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>QS%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.QS}%</div></div>
-                                            <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Bust%</div><div style={{ fontSize: 14, fontWeight: 600, color: bustColor(sp.BustPct) }}>{sp.BustPct}%</div></div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
                                   </td>
                                 </tr>
                               );
@@ -14096,6 +14072,41 @@ function PTLivePage() {
                           </tbody>
                         </table>
                       </div>
+
+                      {/* Matchup hover popover — fixed position to avoid clipping */}
+                      {hoveredMatchup !== null && matchupRect && (() => {
+                        const hp = filteredPlayers[hoveredMatchup];
+                        if (!hp || hp.Type !== 'batter') return null;
+                        const sp = opposingSPByTeam[(hp.Opponent || '').trim()];
+                        if (!sp) return null;
+                        const spTc = projTeamColor(sp.Team);
+                        const popoverH = 160;
+                        const showBelow = matchupRect.top < popoverH + 20;
+                        return ReactDOM.createPortal(
+                          <div style={{
+                            position: 'fixed',
+                            top: showBelow ? matchupRect.bottom + 6 : matchupRect.top - popoverH - 6,
+                            left: Math.min(matchupRect.right - 220, window.innerWidth - 230),
+                            zIndex: 9999, pointerEvents: 'none',
+                            background: '#1a2332', border: `1px solid ${theme.border}`, borderRadius: 10,
+                            padding: '10px 14px', width: 220, textAlign: 'left',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, marginBottom: 6 }}>Opposing Pitcher</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{sp.Player}</div>
+                            <div style={{ fontSize: 12, color: spTc, fontWeight: 600, marginBottom: 8 }}>{sp.Team} · <span style={{ color: tierColor(sp.OVR) }}>{sp.OVR} OVR</span></div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 12px' }}>
+                              <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Exp PP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#4ade80' }}>{sp.ExpPP}</div></div>
+                              <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>K</div><div style={{ fontSize: 15, fontWeight: 700, color: '#38bdf8' }}>{sp.K}</div></div>
+                              <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>IP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>{sp.IP}</div></div>
+                              <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Win%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.WinPct}%</div></div>
+                              <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>QS%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.QS}%</div></div>
+                              <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Bust%</div><div style={{ fontSize: 14, fontWeight: 600, color: bustColor(sp.BustPct) }}>{sp.BustPct}%</div></div>
+                            </div>
+                          </div>,
+                          document.body
+                        );
+                      })()}
 
                       {/* Cheat Sheet Modal */}
                       {showCheatSheet && projData?.cheatSheet && ReactDOM.createPortal(
