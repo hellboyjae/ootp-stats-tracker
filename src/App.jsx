@@ -13803,13 +13803,13 @@ function PTLivePage() {
 
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17, tableLayout: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17, tableLayout: 'fixed' }}>
                           <thead>
                             <tr>
                               {[
                                 { col: '_rank', label: '#', w: 40 },
                                 { col: 'Team', label: 'Team', w: 70 },
-                                { col: 'Player', label: 'Player', w: null, maxW: 220, align: 'left' },
+                                { col: 'Player', label: 'Player', w: 200, align: 'left' },
                                 { col: 'Position', label: 'Pos', w: 60 },
                                 { col: 'OVR', label: 'OVR', w: 64 },
                                 { col: 'ExpPP', label: 'Exp PP', w: 90 },
@@ -13824,7 +13824,7 @@ function PTLivePage() {
                                   padding: '10px 12px', textAlign: h.align || 'center', fontWeight: 600, fontSize: 14,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
                                   borderBottom: `2px solid ${theme.border}`, cursor: !h.col.startsWith('_') ? 'pointer' : 'default',
-                                  whiteSpace: 'nowrap', width: h.w || undefined, maxWidth: h.maxW || undefined, userSelect: 'none',
+                                  whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
                                 }}>
                                   {h.label}
                                   {projSort.col === h.col && <span style={{ fontSize: 11, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
@@ -13846,7 +13846,7 @@ function PTLivePage() {
                                   onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent'}>
                                   <td style={{ padding: '10px 12px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
                                   <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
-                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.Player}</td>
+                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 17, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.Player}</td>
                                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                     <span style={{
                                       display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 700,
