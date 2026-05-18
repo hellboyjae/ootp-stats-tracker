@@ -12872,7 +12872,7 @@ function PTLivePage() {
   };
 
   const selectCard = (slotKey, card) => {
-    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value, last_10_price: card.last_10_price || 0 } }));
+    setTeam(prev => ({ ...prev, [slotKey]: { card_id: card.card_id, first_name: card.first_name, last_name: card.last_name, card_value: card.card_value, last_10_price: card.last_10_price || 0, franchise: card.franchise || '' } }));
     setActivePicker(null); setPickerSearch('');
   };
 
@@ -12939,7 +12939,11 @@ function PTLivePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: 32 }}>{slot.label}</div>
             {card && (() => {
-              const bppTeam = PROJ_FRANCHISE_TO_BPP[card.franchise] || card.franchise || '';
+              // Backfill franchise for cards saved before franchise was persisted
+              const fr = card.franchise || (
+                [...batters, ...sps, ...rps].find(c => c.card_id === card.card_id)?.franchise || ''
+              );
+              const bppTeam = PROJ_FRANCHISE_TO_BPP[fr] || fr || '';
               const tc = projTeamColor(bppTeam);
               return bppTeam ? (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: `${tc}22`, color: tc, letterSpacing: '0.04em' }}>{bppTeam}</span>
