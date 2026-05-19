@@ -12261,6 +12261,8 @@ function PTLivePage() {
     if (!projUploadFiles.batters || !projUploadFiles.pitchers) return;
     setProjUpdating(true);
     try {
+      // Refresh roster/IL data before building cheat sheet
+      try { await refreshPlayerTeams(); } catch (e) { console.error('[PTLive] Roster refresh error:', e); }
       const readXlsx = file => new Promise((res, rej) => {
         const reader = new FileReader();
         reader.onload = e => {
@@ -12390,6 +12392,8 @@ function PTLivePage() {
     if (!projData?.players?.length || !projData.gameDate) return;
     setProjRefreshing(true);
     try {
+      // Refresh roster/IL data before rebuilding cheat sheet
+      try { await refreshPlayerTeams(); } catch (e) { console.error('[PTLive] Roster refresh error:', e); }
       // MLB API abbreviation → BallparkPal abbreviation
       const MLB_TO_BPP = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
       const mlbToBpp = abbr => MLB_TO_BPP[abbr] || abbr;
@@ -14259,10 +14263,11 @@ function PTLivePage() {
                               const oc = projTeamColor(p.Opponent);
                               const isHome = p.Side !== 'A';
                               const isOut = (projData?.confirmedOut || []).includes(normalizeName(p.Player));
+                              const isIL = storedILPlayers.has(normalizeName(p.Player));
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
-                              const rowBg = isOut ? 'rgba(239,68,68,0.15)' : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
+                              const rowBg = isIL ? 'rgba(239,68,68,0.10)' : isOut ? 'rgba(239,68,68,0.15)' : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
                               const blurStyle = isOut ? { filter: 'blur(4px)', userSelect: 'none' } : {};
                               return (
                                 <tr key={idx} title={isOut ? 'Not in confirmed lineup' : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
@@ -14272,6 +14277,7 @@ function PTLivePage() {
                                   <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
                                   <td style={{ padding: '10px 12px', fontWeight: 600, color: isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: 17, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {p.Player}
+                                    {isIL && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IL</span>}
                                     {isOut && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
                                   </td>
                                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
