@@ -11615,6 +11615,7 @@ function PTLivePage() {
   const [yesterdayGuess, setYesterdayGuess] = useState(null);
   const [yesterdayGuessLoading, setYesterdayGuessLoading] = useState(false);
   const [showYesterdayGuess, setShowYesterdayGuess] = useState(false);
+  const [yesterdayProjGuess, setYesterdayProjGuess] = useState(null);
   const [projRefreshing, setProjRefreshing] = useState(false);
   const [hoveredMatchup, setHoveredMatchup] = useState(null);
   const [matchupRect, setMatchupRect] = useState(null);
@@ -11971,6 +11972,14 @@ function PTLivePage() {
         .eq('group_code', groupCode).eq('username', username).eq('date', yesterdayStr)
         .single();
       if (data?.team) setYesterdayTeam(data.team);
+    }
+    // Load yesterday's projected team from cheat sheet snapshot
+    if (next && !yesterdayProjGuess) {
+      const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${yesterdayStr}`).maybeSingle();
+      if (row?.content?.cheatSheet) {
+        const projTeam = cheatSheetToTeam(row.content.cheatSheet);
+        if (projTeam) setYesterdayProjGuess(projTeam);
+      }
     }
     if (groupCode) loadGroupLeaderboard(groupCode, date);
     if (activeTab === 'group-rankings') loadGlobalRankings(date);
@@ -12364,7 +12373,8 @@ function PTLivePage() {
         tierCounts: cheatSheet.tierCounts,
       };
 
-      await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
+      const { error: saveErr } = await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
+      if (saveErr) throw new Error('Failed to save projections: ' + saveErr.message);
       await supabase.from('site_content').upsert(
         { id: `ptlive_cheatsheet_${gameDate}`, content: { cheatSheet: cheatSheet.roster, tierCounts: cheatSheet.tierCounts, gameDate, updatedAt: new Date().toISOString() } },
         { onConflict: 'id' }
@@ -13369,10 +13379,10 @@ function PTLivePage() {
                     ) : (() => {
                       const activeStats = showYesterday ? yesterdayStats : mlbStats;
                       const entries = [...groupEntries];
-                      // Inject projected team if locked and yesterday's guess is loaded
-                      if (isLocked && yesterdayGuess?.roster) {
-                        const projTeam = cheatSheetToTeam(yesterdayGuess.roster);
-                        if (projTeam) entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
+                      // Inject projected team — use yesterday's snapshot when viewing yesterday
+                      const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
+                      if ((showYesterday || isLocked) && projTeam) {
+                        entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                       }
                       const ranked = entries
                         .map(e => ({
@@ -13517,9 +13527,9 @@ function PTLivePage() {
                 ) : (() => {
                   const activeStats = showYesterday ? yesterdayStats : mlbStats;
                   const entries = [...individualRankings];
-                  if (isLocked && yesterdayGuess?.roster) {
-                    const projTeam = cheatSheetToTeam(yesterdayGuess.roster);
-                    if (projTeam) entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
+                  const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
+                  if ((showYesterday || isLocked) && projTeam) {
+                    entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                   }
                   const ranked = entries
                     .map(e => ({ ...e, livePP: computeTeamPP(e.team, activeStats) }))
