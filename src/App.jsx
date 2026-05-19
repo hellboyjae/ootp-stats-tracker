@@ -12528,6 +12528,7 @@ function PTLivePage() {
       });
 
     const BATTER_POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+    // Slot indices: 0-7=position batters, 8-10=DH/UTIL/UTIL, 11-12=SP, 13-14=RP
     const slotDefs = [
       ['C', ['C'], bats], ['1B', ['1B'], bats], ['2B', ['2B'], bats], ['3B', ['3B'], bats],
       ['SS', ['SS'], bats], ['LF', ['LF'], bats], ['CF', ['CF'], bats], ['RF', ['RF'], bats],
@@ -12538,120 +12539,175 @@ function PTLivePage() {
 
     // Tier limits: 2 Perfect, 3 Diamond, 4 Gold max (independent)
     const TIER_MAX = { Perfect: 2, Diamond: 3, Gold: 4 };
-    const tierCounts = () => {
-      const c = { Perfect: 0, Diamond: 0, Gold: 0 };
-      roster.forEach(p => { if (p && c[p.Tier] !== undefined) c[p.Tier]++; });
-      return c;
-    };
     const tierOk = (r) => {
       const c = { Perfect: 0, Diamond: 0, Gold: 0 };
       r.forEach(p => { if (p && c[p.Tier] !== undefined) c[p.Tier]++; });
       return c.Perfect <= TIER_MAX.Perfect && c.Diamond <= TIER_MAX.Diamond && c.Gold <= TIER_MAX.Gold;
     };
+    const pKey = p => `${p.Player}|${p.Team}`;
 
-    // Build per-slot candidate lists (sorted by ExpPP desc, top 20 per slot for performance)
-    const slotCandidates = slotDefs.map(([slotName, eligPos, source]) => {
+    // Build per-slot candidate lists preserving source sort order
+    const slotCands = slotDefs.map(([slotName, eligPos, source]) => {
       return source.filter(p => eligPos.includes(p.Position))
-        .sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 20)
         .map(p => ({ slot: slotName, ...p }));
     });
-
-    // Phase 1: Greedy fill (most constrained slot first) with correct tier limits
-    const greedy = slotCandidates.map((cands, idx) => ({ idx, cands }));
-    greedy.sort((a, b) => a.cands.length - b.cands.length);
 
     const used = new Set();
     const roster = new Array(15).fill(null);
 
-    for (const { idx, cands } of greedy) {
-      for (const player of cands) {
-        const key = `${player.Player}|${player.Team}`;
-        if (used.has(key)) continue;
-        roster[idx] = player;
-        if (!tierOk(roster)) { roster[idx] = null; continue; }
-        used.add(key);
-        break;
+    const tryPlace = (idx, player) => {
+      const k = pKey(player);
+      if (used.has(k)) return false;
+      roster[idx] = player;
+      if (!tierOk(roster)) { roster[idx] = null; return false; }
+      used.add(k);
+      return true;
+    };
+
+    // ── Phase 1: Fill RP slots first (indices 13, 14) ──
+    // allRp is pre-sorted: sim ExpPP > 0 first, then win PCT, then OVR
+    for (const rpIdx of [13, 14]) {
+      for (const cand of slotCands[rpIdx]) {
+        if (tryPlace(rpIdx, cand)) break;
       }
     }
 
-    // Phase 2: Iterative improvement — try swapping each slot with better candidates
+    // ── Phase 2: Fill SP slots (indices 11, 12) by ExpPP ──
+    const spCands = slotCands[11].slice().sort((a, b) => b.ExpPP - a.ExpPP);
+    for (const spIdx of [11, 12]) {
+      for (const cand of spCands) {
+        if (tryPlace(spIdx, cand)) break;
+      }
+    }
+
+    // ── Phase 3: Fill batter slots with top ExpPP players ──
+    // Sort all batters by ExpPP desc, then assign each to their best available slot
+    const batPool = bats.slice().sort((a, b) => b.ExpPP - a.ExpPP);
+    // Position-locked slots first (0-7), then flex slots (8-10)
+    const lockedSlots = [0, 1, 2, 3, 4, 5, 6, 7];
+    const flexSlots = [8, 9, 10];
+
+    // Fill position-locked slots: for each slot, pick the best unused batter with that position
+    for (const idx of lockedSlots) {
+      const [slotName, eligPos] = slotDefs[idx];
+      for (const batter of batPool) {
+        if (!eligPos.includes(batter.Position)) continue;
+        if (tryPlace(idx, { slot: slotName, ...batter })) break;
+      }
+    }
+
+    // Fill flex slots: pick the best unused batters regardless of position
+    for (const idx of flexSlots) {
+      const [slotName] = slotDefs[idx];
+      for (const batter of batPool) {
+        if (tryPlace(idx, { slot: slotName, ...batter })) break;
+      }
+    }
+
+    // ── Phase 4: Backfill any empty slots ──
+    // For batters/SP: try lower-tier players from card data
+    // For RP: already sourced from full card list, but tier limits may have blocked — retry with any tier
+    for (let idx = 0; idx < 15; idx++) {
+      if (roster[idx]) continue;
+      const [slotName, eligPos, source] = slotDefs[idx];
+      // Build full candidate list: for batter/SP slots use sim players; for RP use allRp
+      // Also try card-based backfill for batter slots
+      let backfillPool;
+      if (idx <= 10) {
+        // Batter slot — try all cards with matching position
+        backfillPool = allCards
+          .filter(c => {
+            const pos = BATTER_POS[Number(c.position) - 2]; // position 2=C → index 0
+            return pos && eligPos.includes(pos) && Number(c.position) !== 1;
+          })
+          .sort((a, b) => (b.card_value || 0) - (a.card_value || 0))
+          .map(c => ({
+            slot: slotName,
+            Player: `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`,
+            Team: PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '',
+            Position: BATTER_POS[Number(c.position) - 2] || '?',
+            OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
+            ExpPP: 0, BustPct: 0, Type: 'batter', Opponent: '', Side: '', GameTime: '', HasSim: false,
+          }));
+      } else if (idx <= 12) {
+        // SP slot — try all SP cards sorted by OVR
+        backfillPool = allCards
+          .filter(c => Number(c.position) === 1 && Number(c.pitcher_role) === 11)
+          .sort((a, b) => (b.card_value || 0) - (a.card_value || 0))
+          .map(c => ({
+            slot: slotName,
+            Player: `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`,
+            Team: PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '',
+            Position: 'SP', OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
+            ExpPP: 0, BustPct: 0, Type: 'pitcher', Opponent: '', Side: '', GameTime: '', HasSim: false,
+          }));
+      } else {
+        // RP slot — allRp already has all candidates, just retry
+        backfillPool = slotCands[idx];
+      }
+      for (const cand of backfillPool) {
+        if (tryPlace(idx, cand.slot ? cand : { slot: slotName, ...cand })) break;
+      }
+    }
+
+    // ── Phase 5: Iterative improvement ──
+    // Try swapping each slot with any better unused candidate to maximize total ExpPP
     let improved = true;
     let passes = 0;
     while (improved && passes < 10) {
       improved = false;
       passes++;
       for (let i = 0; i < 15; i++) {
-        const currentPP = roster[i]?.ExpPP || 0;
-        const currentKey = roster[i] ? `${roster[i].Player}|${roster[i].Team}` : null;
-        for (const cand of slotCandidates[i]) {
-          if (cand.ExpPP <= currentPP) break; // sorted desc, no better candidates
-          const candKey = `${cand.Player}|${cand.Team}`;
-          if (candKey === currentKey) continue;
-          // Check if candidate is used in another slot — try displacing
-          let usedInSlot = -1;
+        const cur = roster[i];
+        if (!cur) continue;
+        const curPP = cur.ExpPP || 0;
+        const curKey = pKey(cur);
+
+        // Try all eligible candidates for this slot
+        const pool = i >= 13 ? slotCands[i] : (i >= 11 ? spCands : batPool.filter(b => slotDefs[i][1].includes(b.Position)));
+        for (const raw of pool) {
+          const cand = raw.slot ? raw : { slot: slotDefs[i][0], ...raw };
+          if ((cand.ExpPP || 0) <= curPP) continue;
+          const candKey = pKey(cand);
+          if (candKey === curKey) continue;
+
+          // Is this candidate used in another slot?
+          let otherIdx = -1;
           for (let j = 0; j < 15; j++) {
-            if (j !== i && roster[j] && `${roster[j].Player}|${roster[j].Team}` === candKey) { usedInSlot = j; break; }
+            if (j !== i && roster[j] && pKey(roster[j]) === candKey) { otherIdx = j; break; }
           }
-          if (usedInSlot === -1) {
-            // Candidate not used anywhere — simple swap in
-            const prev = roster[i];
+
+          if (otherIdx === -1 && !used.has(candKey)) {
+            // Not used — simple swap
             roster[i] = cand;
             if (tierOk(roster)) {
-              if (prev) used.delete(`${prev.Player}|${prev.Team}`);
+              used.delete(curKey);
               used.add(candKey);
               improved = true;
               break;
             }
-            roster[i] = prev;
-          } else {
-            // Candidate is in another slot — try giving that slot our current player or its next best
-            const otherSlot = usedInSlot;
-            const prev = roster[i];
-            // Try putting current player in the other slot
-            if (prev && slotDefs[otherSlot][1].includes(prev.Position)) {
+            roster[i] = cur;
+          } else if (otherIdx >= 0) {
+            // Used in another slot — try swapping the two
+            const other = roster[otherIdx];
+            const otherElig = slotDefs[otherIdx][1];
+            if (otherElig.includes(cur.Position)) {
               roster[i] = cand;
-              roster[otherSlot] = { slot: slotDefs[otherSlot][0], ...prev, slot: slotDefs[otherSlot][0] };
-              const newTotal = (roster[i]?.ExpPP || 0) + (roster[otherSlot]?.ExpPP || 0);
-              const oldTotal = (prev?.ExpPP || 0) + (cand.ExpPP || 0);
-              if (newTotal > oldTotal && tierOk(roster)) {
+              roster[otherIdx] = { ...cur, slot: slotDefs[otherIdx][0] };
+              if (tierOk(roster)) {
                 improved = true;
                 break;
               }
-              roster[i] = prev;
-              roster[otherSlot] = cand;
+              roster[i] = cur;
+              roster[otherIdx] = other;
             }
-            // Try backfilling the other slot with its next best unused candidate
-            const prev2 = roster[otherSlot];
-            roster[i] = cand;
-            roster[otherSlot] = null;
-            let filled = false;
-            for (const alt of slotCandidates[otherSlot]) {
-              const altKey = `${alt.Player}|${alt.Team}`;
-              if (altKey === candKey || (altKey !== currentKey && used.has(altKey))) continue;
-              roster[otherSlot] = alt;
-              if (tierOk(roster)) {
-                const newTotal = (roster[i]?.ExpPP || 0) + (roster[otherSlot]?.ExpPP || 0);
-                const oldTotal = (prev?.ExpPP || 0) + (prev2?.ExpPP || 0);
-                if (newTotal > oldTotal) {
-                  if (prev) used.delete(`${prev.Player}|${prev.Team}`);
-                  used.add(altKey);
-                  improved = true;
-                  filled = true;
-                  break;
-                }
-              }
-              roster[otherSlot] = null;
-            }
-            if (filled) break;
-            // Revert
-            roster[i] = prev;
-            roster[otherSlot] = prev2;
           }
         }
       }
     }
 
-    const tc = tierCounts();
+    const tc = { Perfect: 0, Diamond: 0, Gold: 0 };
+    roster.forEach(p => { if (p && tc[p.Tier] !== undefined) tc[p.Tier]++; });
     return { roster, tierCounts: { perfect: tc.Perfect, diamond: tc.Diamond, gold: tc.Gold } };
   };
 
