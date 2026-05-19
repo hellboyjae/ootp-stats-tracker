@@ -12514,17 +12514,16 @@ function PTLivePage() {
     const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !exclude.has(normalizeName(p.Player)));
     const allRp = [...simRps, ...rpCandidates]
       .filter(p => !exclude.has(normalizeName(p.Player)))
-      .filter(p => !teamsWithDeepSP.has((p.Team || '').trim())) // exclude teams whose SP goes 6+ IP
       .sort((a, b) => {
-        // 1. Prioritize RPs with sim data (SPs listed as RP) — they have projected points
+        // 1. SP-as-RP with sim data first (ExpPP > 0)
         const aHasSim = (a.ExpPP || 0) > 0 ? 1 : 0;
         const bHasSim = (b.ExpPP || 0) > 0 ? 1 : 0;
         if (bHasSim !== aHasSim) return bHasSim - aHasSim;
-        // 2. Prioritize teams with highest win chance
+        // 2. Team with best starter win chance
         const aWin = teamWinChance[(a.Team || '').trim()] || 0;
         const bWin = teamWinChance[(b.Team || '').trim()] || 0;
         if (bWin !== aWin) return bWin - aWin;
-        // 3. Then highest OVR
+        // 3. Highest OVR
         return b.OVR - a.OVR;
       });
 
