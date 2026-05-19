@@ -10773,6 +10773,14 @@ function PackSimulatorPage() {
 const NAME_ALIASES = {
   'louis varland': 'louie varland',
   'jazz chisholm': 'jazz chisholm jr',
+  'cameron schlittler': 'cam schlittler',
+  'hao yu lee': 'haoyu lee',
+  'jung hoo lee': 'junghoo lee',
+  'jacob latz': 'jake latz',
+  'jackson perkins': 'jack perkins',
+  'leo rivas': 'leonardo rivas',
+  'richard lovelady': 'dicky lovelady',
+  'samuel antonacci': 'sam antonacci',
 };
 const normalizeName = (s) => {
   const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-.]/g, '').replace(/\s+/g, ' ').toLowerCase().trim();
