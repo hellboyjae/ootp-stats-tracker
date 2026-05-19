@@ -11620,7 +11620,7 @@ function PTLivePage() {
   const [hoveredMatchup, setHoveredMatchup] = useState(null);
   const [matchupRect, setMatchupRect] = useState(null);
   const [storedTeamMap, setStoredTeamMap] = useState(null);
-  const [storedILPlayers, setStoredILPlayers] = useState(new Set());
+  const [storedILPlayers, setStoredILPlayers] = useState({});
 
   const isLocked = lockTime && new Date() >= lockTime;
   const [lockCountdown, setLockCountdown] = useState('');
@@ -12067,11 +12067,11 @@ function PTLivePage() {
       const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_player_teams').single();
       if (data?.content?.map) {
         setStoredTeamMap(data.content.map);
-        if (data.content.ilPlayers) setStoredILPlayers(new Set(data.content.ilPlayers));
+        if (data.content.ilPlayers) setStoredILPlayers(typeof data.content.ilPlayers === 'object' && !Array.isArray(data.content.ilPlayers) ? data.content.ilPlayers : {});
         // Fresh if updatedAt is today (PST)
         const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
         const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-        if (data.content.updatedDate === todayStr && data.content.ilPlayers) return;
+        if (data.content.updatedDate === todayStr && data.content.ilPlayers && !Array.isArray(data.content.ilPlayers)) return;
       }
     } catch (e) {}
     // Stale or missing — fetch from MLB API
@@ -12085,7 +12085,7 @@ function PTLivePage() {
     const teams = (teamsData.teams || []).filter(t => t.sport?.id === 1);
 
     const map = {};
-    const ilNames = [];
+    const ilMap = {};
     await Promise.all(teams.map(async (team) => {
       const bppAbbr = MLB_TO_BPP[team.abbreviation] || team.abbreviation;
       try {
@@ -12095,7 +12095,7 @@ function PTLivePage() {
           if (p.person?.fullName) {
             const nn = normalizeName(p.person.fullName);
             map[nn] = bppAbbr;
-            if (p.status?.code !== 'A') ilNames.push(nn);
+            if (p.status?.code !== 'A') ilMap[nn] = bppAbbr;
           }
         });
       } catch (e) {}
@@ -12104,11 +12104,11 @@ function PTLivePage() {
     const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
     await supabase.from('site_content').upsert(
-      { id: 'ptlive_player_teams', content: { map, ilPlayers: ilNames, updatedDate: todayStr, updatedAt: new Date().toISOString() } },
+      { id: 'ptlive_player_teams', content: { map, ilPlayers: ilMap, updatedDate: todayStr, updatedAt: new Date().toISOString() } },
       { onConflict: 'id' }
     );
     setStoredTeamMap(map);
-    setStoredILPlayers(new Set(ilNames));
+    setStoredILPlayers(ilMap);
   };
 
   useEffect(() => {
@@ -12478,8 +12478,10 @@ function PTLivePage() {
   // ── Projections: cheat sheet optimizer ─────────────────────────────────────
   const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null, ilSet = null) => {
     const exclude = excludeSet || new Set();
-    const bats = allPlayers.filter(p => p.Type === 'batter' && !exclude.has(normalizeName(p.Player)));
-    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP' && !exclude.has(normalizeName(p.Player)));
+    const isIL = (name, team) => ilSet && ilSet[name] && ilSet[name] === (team || '').trim();
+    const skip = (n, t) => exclude.has(n) || isIL(n, t);
+    const bats = allPlayers.filter(p => p.Type === 'batter' && !skip(normalizeName(p.Player), p.Team));
+    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP' && !skip(normalizeName(p.Player), p.Team));
 
     // Get RP candidates from card list for teams playing today
     // Derive teams from allPlayers when sim data is null
@@ -12513,11 +12515,11 @@ function PTLivePage() {
           ExpPP: 0, BustPct: 0, Type: 'pitcher', Side: '', GameTime: '', HasSim: false,
         };
       })
-      .filter(c => !ilSet || !ilSet.has(normalizeName(c.Player)));
+      .filter(c => !isIL(normalizeName(c.Player), c.Team));
 
-    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !exclude.has(normalizeName(p.Player)));
+    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !skip(normalizeName(p.Player), p.Team));
     const allRp = [...simRps, ...rpCandidates]
-      .filter(p => !exclude.has(normalizeName(p.Player)))
+      .filter(p => !skip(normalizeName(p.Player), p.Team))
       .sort((a, b) => {
         // 1. SP-as-RP with sim data first (ExpPP > 0)
         const aHasSim = (a.ExpPP || 0) > 0 ? 1 : 0;
@@ -14263,7 +14265,7 @@ function PTLivePage() {
                               const oc = projTeamColor(p.Opponent);
                               const isHome = p.Side !== 'A';
                               const isOut = (projData?.confirmedOut || []).includes(normalizeName(p.Player));
-                              const isIL = storedILPlayers.has(normalizeName(p.Player));
+                              const isIL = storedILPlayers[normalizeName(p.Player)] === (p.Team || '').trim();
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
