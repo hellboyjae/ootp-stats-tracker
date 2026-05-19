@@ -12537,34 +12537,123 @@ function PTLivePage() {
       ['RP', ['RP', 'CL'], allRp], ['RP', ['RP', 'CL'], allRp],
     ];
 
-    const slotCandidates = slotDefs.map(([slotName, eligPos, source], idx) => {
-      const cands = source.filter(p => eligPos.includes(p.Position)).sort((a, b) => b.ExpPP - a.ExpPP);
-      return { idx, slotName, cands };
+    // Tier limits: 2 Perfect, 3 Diamond, 4 Gold max (independent)
+    const TIER_MAX = { Perfect: 2, Diamond: 3, Gold: 4 };
+    const tierCounts = () => {
+      const c = { Perfect: 0, Diamond: 0, Gold: 0 };
+      roster.forEach(p => { if (p && c[p.Tier] !== undefined) c[p.Tier]++; });
+      return c;
+    };
+    const tierOk = (r) => {
+      const c = { Perfect: 0, Diamond: 0, Gold: 0 };
+      r.forEach(p => { if (p && c[p.Tier] !== undefined) c[p.Tier]++; });
+      return c.Perfect <= TIER_MAX.Perfect && c.Diamond <= TIER_MAX.Diamond && c.Gold <= TIER_MAX.Gold;
+    };
+
+    // Build per-slot candidate lists (sorted by ExpPP desc, top 20 per slot for performance)
+    const slotCandidates = slotDefs.map(([slotName, eligPos, source]) => {
+      return source.filter(p => eligPos.includes(p.Position))
+        .sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 20)
+        .map(p => ({ slot: slotName, ...p }));
     });
-    slotCandidates.sort((a, b) => a.cands.length - b.cands.length);
+
+    // Phase 1: Greedy fill (most constrained slot first) with correct tier limits
+    const greedy = slotCandidates.map((cands, idx) => ({ idx, cands }));
+    greedy.sort((a, b) => a.cands.length - b.cands.length);
 
     const used = new Set();
     const roster = new Array(15).fill(null);
-    let pCount = 0, dCount = 0, gCount = 0;
 
-    for (const { idx, slotName, cands } of slotCandidates) {
+    for (const { idx, cands } of greedy) {
       for (const player of cands) {
         const key = `${player.Player}|${player.Team}`;
         if (used.has(key)) continue;
-        const tier = player.Tier;
-        if (tier === 'Perfect' && pCount >= 2) continue;
-        if (tier === 'Diamond' && pCount + dCount >= 5) continue;
-        if (tier === 'Gold' && pCount + dCount + gCount >= 9) continue;
+        roster[idx] = player;
+        if (!tierOk(roster)) { roster[idx] = null; continue; }
         used.add(key);
-        roster[idx] = { slot: slotName, ...player };
-        if (tier === 'Perfect') pCount++;
-        else if (tier === 'Diamond') dCount++;
-        else if (tier === 'Gold') gCount++;
         break;
       }
     }
 
-    return { roster, tierCounts: { perfect: pCount, diamond: dCount, gold: gCount } };
+    // Phase 2: Iterative improvement — try swapping each slot with better candidates
+    let improved = true;
+    let passes = 0;
+    while (improved && passes < 10) {
+      improved = false;
+      passes++;
+      for (let i = 0; i < 15; i++) {
+        const currentPP = roster[i]?.ExpPP || 0;
+        const currentKey = roster[i] ? `${roster[i].Player}|${roster[i].Team}` : null;
+        for (const cand of slotCandidates[i]) {
+          if (cand.ExpPP <= currentPP) break; // sorted desc, no better candidates
+          const candKey = `${cand.Player}|${cand.Team}`;
+          if (candKey === currentKey) continue;
+          // Check if candidate is used in another slot — try displacing
+          let usedInSlot = -1;
+          for (let j = 0; j < 15; j++) {
+            if (j !== i && roster[j] && `${roster[j].Player}|${roster[j].Team}` === candKey) { usedInSlot = j; break; }
+          }
+          if (usedInSlot === -1) {
+            // Candidate not used anywhere — simple swap in
+            const prev = roster[i];
+            roster[i] = cand;
+            if (tierOk(roster)) {
+              if (prev) used.delete(`${prev.Player}|${prev.Team}`);
+              used.add(candKey);
+              improved = true;
+              break;
+            }
+            roster[i] = prev;
+          } else {
+            // Candidate is in another slot — try giving that slot our current player or its next best
+            const otherSlot = usedInSlot;
+            const prev = roster[i];
+            // Try putting current player in the other slot
+            if (prev && slotDefs[otherSlot][1].includes(prev.Position)) {
+              roster[i] = cand;
+              roster[otherSlot] = { slot: slotDefs[otherSlot][0], ...prev, slot: slotDefs[otherSlot][0] };
+              const newTotal = (roster[i]?.ExpPP || 0) + (roster[otherSlot]?.ExpPP || 0);
+              const oldTotal = (prev?.ExpPP || 0) + (cand.ExpPP || 0);
+              if (newTotal > oldTotal && tierOk(roster)) {
+                improved = true;
+                break;
+              }
+              roster[i] = prev;
+              roster[otherSlot] = cand;
+            }
+            // Try backfilling the other slot with its next best unused candidate
+            const prev2 = roster[otherSlot];
+            roster[i] = cand;
+            roster[otherSlot] = null;
+            let filled = false;
+            for (const alt of slotCandidates[otherSlot]) {
+              const altKey = `${alt.Player}|${alt.Team}`;
+              if (altKey === candKey || (altKey !== currentKey && used.has(altKey))) continue;
+              roster[otherSlot] = alt;
+              if (tierOk(roster)) {
+                const newTotal = (roster[i]?.ExpPP || 0) + (roster[otherSlot]?.ExpPP || 0);
+                const oldTotal = (prev?.ExpPP || 0) + (prev2?.ExpPP || 0);
+                if (newTotal > oldTotal) {
+                  if (prev) used.delete(`${prev.Player}|${prev.Team}`);
+                  used.add(altKey);
+                  improved = true;
+                  filled = true;
+                  break;
+                }
+              }
+              roster[otherSlot] = null;
+            }
+            if (filled) break;
+            // Revert
+            roster[i] = prev;
+            roster[otherSlot] = prev2;
+          }
+        }
+      }
+    }
+
+    const tc = tierCounts();
+    return { roster, tierCounts: { perfect: tc.Perfect, diamond: tc.Diamond, gold: tc.Gold } };
   };
 
   const loadYesterdayGuess = async (showModal = true) => {
