@@ -12203,6 +12203,7 @@ function PTLivePage() {
   const PROJ_POS_MAP = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
   const PROJ_PITCHER_ROLE_MAP = { 11: 'SP', 12: 'RP', 13: 'CL' };
   const projDisplayPos = (pos, role) => pos === 1 ? (PROJ_PITCHER_ROLE_MAP[role] || 'P') : (PROJ_POS_MAP[pos] || '?');
+  const TWO_WAY_PLAYERS = new Set(['Shohei Ohtani']);
 
   // ── Projections: math helpers ─────────────────────────────────────────────
   const projPoissonPmf = (k, lam) => {
@@ -12353,10 +12354,11 @@ function PTLivePage() {
         const expPP = projCalcSpPP(r);
         const bust = projCalcPitcherBust(expPP, r.WinPct || 0, r.QualityStart || 0, r.Strikeouts || 0, r.RunsAllowed || 0, r.Walks || 0);
         const ovr = card.card_value || 0;
+        const isTwoWay = TWO_WAY_PLAYERS.has(name);
         results.push({
           Player: name, Team: team, Opponent: (r.Opponent || '').trim(),
           Side: r.Side || '', GameTime: r.GameTime || '',
-          Position: projDisplayPos(Number(card.position), Number(card.pitcher_role)),
+          Position: isTwoWay ? 'SP' : projDisplayPos(Number(card.position), Number(card.pitcher_role)),
           OVR: ovr, Tier: ovrToTier(ovr), ExpPP: expPP, BustPct: bust, Type: 'pitcher',
           IP: Math.round((r.Innings || 0) * 100) / 100,
           K: Math.round((r.Strikeouts || 0) * 100) / 100,
@@ -12578,11 +12580,11 @@ function PTLivePage() {
       return true;
     };
 
-    // ── Phase 1: Fill RP slots first (indices 13, 14) ──
-    // allRp is pre-sorted: sim ExpPP > 0 first, then win PCT, then OVR
+    // ── Phase 1: Fill RP slots with SP-as-RP only (ExpPP > 0) ──
+    // True RPs (ExpPP=0) deferred to Phase 4 so they don't consume Perfect/Diamond slots
     for (const rpIdx of [13, 14]) {
       for (const cand of slotCands[rpIdx]) {
-        if (tryPlace(rpIdx, cand)) break;
+        if ((cand.ExpPP || 0) > 0 && tryPlace(rpIdx, cand)) break;
       }
     }
 
@@ -12618,7 +12620,16 @@ function PTLivePage() {
       }
     }
 
-    // ── Phase 4: Backfill any empty slots ──
+    // ── Phase 4: Fill remaining empty RP slots with true RPs ──
+    // Deferred from Phase 1 so batters/SPs get first pick of tier slots
+    for (const rpIdx of [13, 14]) {
+      if (roster[rpIdx]) continue;
+      for (const cand of slotCands[rpIdx]) {
+        if (tryPlace(rpIdx, cand)) break;
+      }
+    }
+
+    // ── Phase 5: Backfill any empty slots ──
     // For batters/SP: try lower-tier players from card data
     // For RP: already sourced from full card list, but tier limits may have blocked — retry with any tier
     for (let idx = 0; idx < 15; idx++) {
@@ -12664,7 +12675,7 @@ function PTLivePage() {
       }
     }
 
-    // ── Phase 5: Iterative improvement ──
+    // ── Phase 6: Iterative improvement ──
     // Try swapping each slot with any better unused candidate to maximize total ExpPP
     let improved = true;
     let passes = 0;
@@ -12678,7 +12689,10 @@ function PTLivePage() {
         const curKey = pKey(cur);
 
         // Try all eligible candidates for this slot
-        const pool = i >= 13 ? slotCands[i] : (i >= 11 ? spCands : batPool.filter(b => slotDefs[i][1].includes(b.Position)));
+        // For RP slots, only consider SP-as-RP (ExpPP > 0) to avoid wasting tier slots on true RPs
+        const pool = i >= 13
+          ? slotCands[i].filter(c => (c.ExpPP || 0) > 0)
+          : (i >= 11 ? spCands : batPool.filter(b => slotDefs[i][1].includes(b.Position)));
         for (const raw of pool) {
           const cand = raw.slot ? raw : { slot: slotDefs[i][0], ...raw };
           if ((cand.ExpPP || 0) <= curPP) continue;
