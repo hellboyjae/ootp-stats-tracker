@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -255,6 +255,18 @@ function ThemeProvider({ children }) {
 
 function useTheme() { return useContext(ThemeContext); }
 
+function useIsMobile(query = '(max-width: 768px)') {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e) => setIsMobile(e.matches);
+    setIsMobile(mql.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return isMobile;
+}
+
 const AuthContext = createContext();
 
 function AuthProvider({ children }) {
@@ -453,10 +465,28 @@ function NewsBanner() {
   );
 }
 
+const NAV_ITEMS = [
+  { to: '/stats', label: 'Stats', end: true },
+  { to: '/draft-assistant', label: 'Draft Assistant' },
+  { to: '/re-viewer', label: 'RE Viewer' },
+  { to: '/pack-simulator', label: 'Pack Sim' },
+  { to: '/pt-live', label: 'PT Live' },
+  { to: '/live-spec', label: 'Live Spec' },
+  { to: '/videos', label: 'Videos' },
+  { to: '/articles', label: 'Articles' },
+  { to: '/info', label: 'Info' },
+  { to: '/submit', label: 'Submit Data' },
+];
+
 function Layout({ children, notification, pendingCount = 0 }) {
   const { theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
   const { isAdmin } = useAuth();
   const styles = getStyles(theme);
+  const isMobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => { if (!isMobile) setMenuOpen(false); }, [isMobile]);
 
   // Group teams by division for the dropdown
   const teamGroups = {
@@ -467,52 +497,92 @@ function Layout({ children, notification, pendingCount = 0 }) {
     'NL Central': ['brewers', 'cardinals', 'cubs', 'reds', 'pirates'],
     'NL West': ['dodgers', 'padres', 'giants', 'dbacks', 'rockies'],
   };
-  
+
+  const mobileNavLink = { display: 'block', padding: '13px 14px', color: theme.textMuted, textDecoration: 'none', fontWeight: 600, fontSize: 14, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', borderLeft: '3px solid transparent', borderRadius: 4 };
+  const mobileNavLinkActive = { color: theme.teamPrimary, borderLeftColor: theme.teamPrimary, background: `${theme.teamPrimary}12` };
+
+  const renderNav = (mobile) => (
+    <nav style={mobile ? { display: 'flex', flexDirection: 'column', gap: 2 } : styles.nav}>
+      {NAV_ITEMS.map(item => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          style={({isActive}) => mobile
+            ? {...mobileNavLink, ...(isActive ? mobileNavLinkActive : {})}
+            : {...styles.navLink, ...(isActive ? styles.navLinkActive : {})}}
+        >
+          {item.label}
+        </NavLink>
+      ))}
+      {isAdmin && (
+        <NavLink
+          to="/review"
+          style={({isActive}) => mobile
+            ? {...mobileNavLink, ...(isActive ? mobileNavLinkActive : {})}
+            : {...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})}}
+        >
+          Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
+        </NavLink>
+      )}
+    </nav>
+  );
+
+  const themeControls = (mobile) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...(mobile ? { width: '100%' } : {}) }}>
+      <select
+        value={team}
+        onChange={(e) => setTeamTheme(e.target.value)}
+        style={{...styles.teamSelect, ...(mobile ? { flex: 1, padding: '10px 12px', fontSize: 14 } : {})}}
+        title="Team Colors"
+      >
+        <option value="default">⚾ Default</option>
+        {Object.entries(teamGroups).map(([division, teams]) => (
+          <optgroup key={division} label={division}>
+            {teams.map(t => (
+              <option key={t} value={t}>{teamColors[t].name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(mobile ? { width: 44, height: 44 } : {}), ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
+    </div>
+  );
+
   return (
     <div style={styles.container}>
       {notification && <div style={{...styles.notification, background: notification.type === 'error' ? theme.error : theme.success}}>{notification.message}</div>}
-      <header style={styles.header}><div style={styles.headerContent}>
-        <div><h1 style={styles.title}>BeaneCounter</h1><p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p></div>
-        <div style={styles.headerRight}>
-          <nav style={styles.nav}>
-            <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
-            <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
-            <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
-            {/* Database tab hidden — archiving feature */}
-            {/* <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink> */}
-            <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
-            <NavLink to="/pt-live" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>PT Live</NavLink>
-            <NavLink to="/live-spec" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Live Spec</NavLink>
-            <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
-            <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
-            <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
-            <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
-            {isAdmin && (
-              <NavLink to="/review" style={({isActive}) => ({...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})})}>
-                Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
-              </NavLink>
-            )}
-          </nav>
-          <div style={styles.themeControls}>
-            <select 
-              value={team} 
-              onChange={(e) => setTeamTheme(e.target.value)} 
-              style={styles.teamSelect}
-              title="Team Colors"
-            >
-              <option value="default">⚾ Default</option>
-              {Object.entries(teamGroups).map(([division, teams]) => (
-                <optgroup key={division} label={division}>
-                  {teams.map(t => (
-                    <option key={t} value={t}>{teamColors[t].name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
+      <header style={{...styles.header, ...(isMobile ? { padding: '10px 16px' } : {})}}>
+        <div style={styles.headerContent}>
+          <div>
+            <h1 style={{...styles.title, ...(isMobile ? { fontSize: 20 } : {})}}>BeaneCounter</h1>
+            {!isMobile && <p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p>}
           </div>
+          {isMobile ? (
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label="Menu"
+              aria-expanded={menuOpen}
+              style={{ width: 44, height: 44, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', cursor: 'pointer', fontSize: 20, color: theme.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              {menuOpen ? '✕' : '☰'}
+            </button>
+          ) : (
+            <div style={styles.headerRight}>
+              {renderNav(false)}
+              {themeControls(false)}
+            </div>
+          )}
         </div>
-      </div></header>
+        {isMobile && menuOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
+            {renderNav(true)}
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
+              {themeControls(true)}
+            </div>
+          </div>
+        )}
+      </header>
       <NewsBanner />
       {children}
     </div>
@@ -522,6 +592,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
 function StatsPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
+  const isMobile = useIsMobile();
   const { isAdmin, requestAuth } = useAuth();
   const fileInputRef = React.useRef(null);
   const [tournaments, setTournaments] = useState([]);
@@ -1348,8 +1419,8 @@ function StatsPage() {
         onChange={handleFileUpload} 
         style={{ display: 'none' }} 
       />
-      <main style={styles.main}>
-        <aside style={styles.sidebar}>
+      <main style={isMobile ? {...styles.main, flexDirection: 'column'} : styles.main}>
+        <aside style={isMobile ? {...styles.sidebar, width: '100%', borderRight: 'none', borderBottom: `1px solid ${theme.border}`} : styles.sidebar}>
           <div style={styles.sidebarTabs}>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => {
               setSidebarTab('tournaments');
@@ -1374,7 +1445,7 @@ function StatsPage() {
             </div>
             <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => { setShowNewTournament(false); setNewTournamentType('daily'); }} style={styles.cancelBtn}>Cancel</button></div>
           </div>)}
-          <div style={styles.tournamentList}>
+          <div style={isMobile ? {...styles.tournamentList, maxHeight: 240} : styles.tournamentList}>
             {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
               filteredTournaments.map(t => {
                 const quality = getDataQuality(getCsvCount(t));
@@ -1481,7 +1552,7 @@ function StatsPage() {
             <button style={styles.newTournamentBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
           )}
         </aside>
-        <div style={styles.content}>
+        <div style={isMobile ? {...styles.content, padding: '14px 12px'} : styles.content}>
           {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : (<>
             <div style={styles.tournamentHeader}>
               <div style={styles.tournamentMeta}>
@@ -1701,7 +1772,7 @@ function StatsPage() {
                 theme={theme}
               />
             ) : (<>
-            <div style={styles.controlBar}>
+            <div style={isMobile ? {...styles.controlBar, flexWrap: 'wrap', gap: 8} : styles.controlBar}>
               {selectedTournament.rotatingFormat && (
                 <div 
                   onClick={() => alert('🔄 Rotating Format\n\nThis tournament/draft rotates its park and era runtime settings frequently.\n\nThis means player performance may vary significantly between uploads due to changing environmental factors, not just player skill.\n\nComparing stats across different dates should account for these runtime changes.')}
@@ -6327,7 +6398,8 @@ function ReviewQueuePage() {
 function DraftAssistantPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
-  
+  const isMobile = useIsMobile();
+
   // Check if in compact/popout mode via URL parameter
   const isCompactMode = new URLSearchParams(window.location.search).get('compact') === '1';
   
@@ -7087,7 +7159,7 @@ function DraftAssistantPage() {
           <h1 style={{ color: theme.textPrimary, marginBottom: 8 }}>Draft Assistant</h1>
           <p style={{ color: theme.textMuted, marginBottom: 32 }}>Choose how you want to draft — use the web assistant or download the desktop overlay.</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 24, alignItems: 'start' }}>
             {/* Left: Web Draft Assistant — under construction */}
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
@@ -8829,9 +8901,9 @@ function WelcomePage() {
       <div ref={particlesRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />
 
       {/* Main content */}
-      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600 }}>
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600, width: '100%' }}>
         <h1 style={{
-          fontSize: 'clamp(3rem, 10vw, 5rem)',
+          fontSize: 'clamp(2rem, 8.5vw, 5rem)',
           fontWeight: 700,
           letterSpacing: '0.04em',
           marginBottom: 8,
@@ -8848,7 +8920,7 @@ function WelcomePage() {
         </h1>
         
         <p style={{
-          fontSize: '1.1rem',
+          fontSize: 'clamp(0.78rem, 3vw, 1.1rem)',
           fontWeight: 500,
           color: '#5b9bd5',
           letterSpacing: '0.25em',
@@ -11057,6 +11129,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
 
 function LiveSpecPage() {
   const { theme } = useTheme();
+  const isMobile = useIsMobile();
   const [tab, setTab]         = useState('hitters');
   const [minPA, setMinPA]     = useState(50);
   const [minIP, setMinIP]     = useState(10);
@@ -11186,10 +11259,10 @@ function LiveSpecPage() {
 
   return (
     <Layout>
-      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
 
         {/* ── Sidebar ── */}
-        <div style={{ width: 220, flexShrink: 0, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+        <div style={{ width: isMobile ? '100%' : 248, flexShrink: 0, background: theme.sidebarBg, borderRight: isMobile ? 'none' : `1px solid ${theme.border}`, borderBottom: isMobile ? `1px solid ${theme.border}` : 'none', boxSizing: 'border-box', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
@@ -11301,7 +11374,7 @@ function LiveSpecPage() {
         </div>
 
         {/* ── Main Table ── */}
-        <div style={{ flex: 1, overflowX: 'auto', background: theme.mainBg, padding: '16px 20px' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', background: theme.mainBg, padding: isMobile ? '14px 12px' : '16px 20px' }}>
           {loading && (
             <div style={{ textAlign: 'center', padding: 60, color: '#fff', fontSize: 16 }}>Loading data from FanGraphs…</div>
           )}
@@ -11566,13 +11639,7 @@ function PTLivePage() {
 
   // ── Leaderboard state ──────────────────────────────────────────────────────
   const [activeTab, setActiveTab]           = useState('team');
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 768px)');
-    const handler = (e) => setIsMobile(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
+  const isMobile = useIsMobile();
   const [username, setUsername]             = useState(() => localStorage.getItem('ptlive_username') || '');
   const [groupCode, setGroupCode]           = useState(() => localStorage.getItem('ptlive_group_code') || '');
   const [lockTime, setLockTime]             = useState(null);
