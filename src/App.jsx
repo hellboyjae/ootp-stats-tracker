@@ -592,6 +592,7 @@ function Layout({ children, notification, pendingCount = 0 }) {
 function StatsPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
+  const isMobile = useIsMobile();
   const { isAdmin, requestAuth } = useAuth();
   const fileInputRef = React.useRef(null);
   const [tournaments, setTournaments] = useState([]);
@@ -1418,8 +1419,8 @@ function StatsPage() {
         onChange={handleFileUpload} 
         style={{ display: 'none' }} 
       />
-      <main style={styles.main}>
-        <aside style={styles.sidebar}>
+      <main style={isMobile ? {...styles.main, flexDirection: 'column'} : styles.main}>
+        <aside style={isMobile ? {...styles.sidebar, width: '100%', borderRight: 'none', borderBottom: `1px solid ${theme.border}`} : styles.sidebar}>
           <div style={styles.sidebarTabs}>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => {
               setSidebarTab('tournaments');
@@ -1444,7 +1445,7 @@ function StatsPage() {
             </div>
             <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => { setShowNewTournament(false); setNewTournamentType('daily'); }} style={styles.cancelBtn}>Cancel</button></div>
           </div>)}
-          <div style={styles.tournamentList}>
+          <div style={isMobile ? {...styles.tournamentList, maxHeight: 240} : styles.tournamentList}>
             {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
               filteredTournaments.map(t => {
                 const quality = getDataQuality(getCsvCount(t));
@@ -1551,7 +1552,7 @@ function StatsPage() {
             <button style={styles.newTournamentBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
           )}
         </aside>
-        <div style={styles.content}>
+        <div style={isMobile ? {...styles.content, padding: '14px 12px'} : styles.content}>
           {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : (<>
             <div style={styles.tournamentHeader}>
               <div style={styles.tournamentMeta}>
@@ -1771,7 +1772,7 @@ function StatsPage() {
                 theme={theme}
               />
             ) : (<>
-            <div style={styles.controlBar}>
+            <div style={isMobile ? {...styles.controlBar, flexWrap: 'wrap', gap: 8} : styles.controlBar}>
               {selectedTournament.rotatingFormat && (
                 <div 
                   onClick={() => alert('🔄 Rotating Format\n\nThis tournament/draft rotates its park and era runtime settings frequently.\n\nThis means player performance may vary significantly between uploads due to changing environmental factors, not just player skill.\n\nComparing stats across different dates should account for these runtime changes.')}
@@ -6397,7 +6398,8 @@ function ReviewQueuePage() {
 function DraftAssistantPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
-  
+  const isMobile = useIsMobile();
+
   // Check if in compact/popout mode via URL parameter
   const isCompactMode = new URLSearchParams(window.location.search).get('compact') === '1';
   
@@ -7157,7 +7159,7 @@ function DraftAssistantPage() {
           <h1 style={{ color: theme.textPrimary, marginBottom: 8 }}>Draft Assistant</h1>
           <p style={{ color: theme.textMuted, marginBottom: 32 }}>Choose how you want to draft — use the web assistant or download the desktop overlay.</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 24, alignItems: 'start' }}>
             {/* Left: Web Draft Assistant — under construction */}
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
@@ -8899,9 +8901,9 @@ function WelcomePage() {
       <div ref={particlesRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />
 
       {/* Main content */}
-      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600 }}>
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600, width: '100%' }}>
         <h1 style={{
-          fontSize: 'clamp(3rem, 10vw, 5rem)',
+          fontSize: 'clamp(2rem, 8.5vw, 5rem)',
           fontWeight: 700,
           letterSpacing: '0.04em',
           marginBottom: 8,
@@ -8918,10 +8920,10 @@ function WelcomePage() {
         </h1>
         
         <p style={{
-          fontSize: '1.1rem',
+          fontSize: 'clamp(0.78rem, 3vw, 1.1rem)',
           fontWeight: 500,
           color: '#5b9bd5',
-          letterSpacing: '0.25em',
+          letterSpacing: '0.22em',
           textTransform: 'uppercase',
           marginBottom: 30,
           fontFamily: "'Oswald', 'Inter', sans-serif"
