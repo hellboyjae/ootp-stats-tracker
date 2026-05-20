@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -255,6 +255,18 @@ function ThemeProvider({ children }) {
 
 function useTheme() { return useContext(ThemeContext); }
 
+function useIsMobile(query = '(max-width: 768px)') {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e) => setIsMobile(e.matches);
+    setIsMobile(mql.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return isMobile;
+}
+
 const AuthContext = createContext();
 
 function AuthProvider({ children }) {
@@ -453,10 +465,28 @@ function NewsBanner() {
   );
 }
 
+const NAV_ITEMS = [
+  { to: '/stats', label: 'Stats', end: true },
+  { to: '/draft-assistant', label: 'Draft Assistant' },
+  { to: '/re-viewer', label: 'RE Viewer' },
+  { to: '/pack-simulator', label: 'Pack Sim' },
+  { to: '/pt-live', label: 'PT Live' },
+  { to: '/live-spec', label: 'Live Spec' },
+  { to: '/videos', label: 'Videos' },
+  { to: '/articles', label: 'Articles' },
+  { to: '/info', label: 'Info' },
+  { to: '/submit', label: 'Submit Data' },
+];
+
 function Layout({ children, notification, pendingCount = 0 }) {
   const { theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
   const { isAdmin } = useAuth();
   const styles = getStyles(theme);
+  const isMobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => { if (!isMobile) setMenuOpen(false); }, [isMobile]);
 
   // Group teams by division for the dropdown
   const teamGroups = {
@@ -467,52 +497,92 @@ function Layout({ children, notification, pendingCount = 0 }) {
     'NL Central': ['brewers', 'cardinals', 'cubs', 'reds', 'pirates'],
     'NL West': ['dodgers', 'padres', 'giants', 'dbacks', 'rockies'],
   };
-  
+
+  const mobileNavLink = { display: 'block', padding: '13px 14px', color: theme.textMuted, textDecoration: 'none', fontWeight: 600, fontSize: 14, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', borderLeft: '3px solid transparent', borderRadius: 4 };
+  const mobileNavLinkActive = { color: theme.teamPrimary, borderLeftColor: theme.teamPrimary, background: `${theme.teamPrimary}12` };
+
+  const renderNav = (mobile) => (
+    <nav style={mobile ? { display: 'flex', flexDirection: 'column', gap: 2 } : styles.nav}>
+      {NAV_ITEMS.map(item => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          style={({isActive}) => mobile
+            ? {...mobileNavLink, ...(isActive ? mobileNavLinkActive : {})}
+            : {...styles.navLink, ...(isActive ? styles.navLinkActive : {})}}
+        >
+          {item.label}
+        </NavLink>
+      ))}
+      {isAdmin && (
+        <NavLink
+          to="/review"
+          style={({isActive}) => mobile
+            ? {...mobileNavLink, ...(isActive ? mobileNavLinkActive : {})}
+            : {...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})}}
+        >
+          Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
+        </NavLink>
+      )}
+    </nav>
+  );
+
+  const themeControls = (mobile) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...(mobile ? { width: '100%' } : {}) }}>
+      <select
+        value={team}
+        onChange={(e) => setTeamTheme(e.target.value)}
+        style={{...styles.teamSelect, ...(mobile ? { flex: 1, padding: '10px 12px', fontSize: 14 } : {})}}
+        title="Team Colors"
+      >
+        <option value="default">⚾ Default</option>
+        {Object.entries(teamGroups).map(([division, teams]) => (
+          <optgroup key={division} label={division}>
+            {teams.map(t => (
+              <option key={t} value={t}>{teamColors[t].name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(mobile ? { width: 44, height: 44 } : {}), ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
+    </div>
+  );
+
   return (
     <div style={styles.container}>
       {notification && <div style={{...styles.notification, background: notification.type === 'error' ? theme.error : theme.success}}>{notification.message}</div>}
-      <header style={styles.header}><div style={styles.headerContent}>
-        <div><h1 style={styles.title}>BeaneCounter</h1><p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p></div>
-        <div style={styles.headerRight}>
-          <nav style={styles.nav}>
-            <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
-            <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
-            <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
-            {/* Database tab hidden — archiving feature */}
-            {/* <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink> */}
-            <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
-            <NavLink to="/pt-live" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>PT Live</NavLink>
-            <NavLink to="/live-spec" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Live Spec</NavLink>
-            <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
-            <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
-            <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
-            <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
-            {isAdmin && (
-              <NavLink to="/review" style={({isActive}) => ({...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})})}>
-                Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
-              </NavLink>
-            )}
-          </nav>
-          <div style={styles.themeControls}>
-            <select 
-              value={team} 
-              onChange={(e) => setTeamTheme(e.target.value)} 
-              style={styles.teamSelect}
-              title="Team Colors"
-            >
-              <option value="default">⚾ Default</option>
-              {Object.entries(teamGroups).map(([division, teams]) => (
-                <optgroup key={division} label={division}>
-                  {teams.map(t => (
-                    <option key={t} value={t}>{teamColors[t].name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
+      <header style={{...styles.header, ...(isMobile ? { padding: '10px 16px' } : {})}}>
+        <div style={styles.headerContent}>
+          <div>
+            <h1 style={{...styles.title, ...(isMobile ? { fontSize: 20 } : {})}}>BeaneCounter</h1>
+            {!isMobile && <p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p>}
           </div>
+          {isMobile ? (
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label="Menu"
+              aria-expanded={menuOpen}
+              style={{ width: 44, height: 44, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', cursor: 'pointer', fontSize: 20, color: theme.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              {menuOpen ? '✕' : '☰'}
+            </button>
+          ) : (
+            <div style={styles.headerRight}>
+              {renderNav(false)}
+              {themeControls(false)}
+            </div>
+          )}
         </div>
-      </div></header>
+        {isMobile && menuOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
+            {renderNav(true)}
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
+              {themeControls(true)}
+            </div>
+          </div>
+        )}
+      </header>
       <NewsBanner />
       {children}
     </div>
@@ -11566,13 +11636,7 @@ function PTLivePage() {
 
   // ── Leaderboard state ──────────────────────────────────────────────────────
   const [activeTab, setActiveTab]           = useState('team');
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 768px)');
-    const handler = (e) => setIsMobile(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
+  const isMobile = useIsMobile();
   const [username, setUsername]             = useState(() => localStorage.getItem('ptlive_username') || '');
   const [groupCode, setGroupCode]           = useState(() => localStorage.getItem('ptlive_group_code') || '');
   const [lockTime, setLockTime]             = useState(null);
