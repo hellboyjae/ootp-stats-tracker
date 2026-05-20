@@ -11129,6 +11129,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
 
 function LiveSpecPage() {
   const { theme } = useTheme();
+  const isMobile = useIsMobile();
   const [tab, setTab]         = useState('hitters');
   const [minPA, setMinPA]     = useState(50);
   const [minIP, setMinIP]     = useState(10);
@@ -11258,10 +11259,10 @@ function LiveSpecPage() {
 
   return (
     <Layout>
-      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
 
         {/* ── Sidebar ── */}
-        <div style={{ width: 220, flexShrink: 0, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+        <div style={{ width: isMobile ? '100%' : 220, flexShrink: 0, background: theme.sidebarBg, borderRight: isMobile ? 'none' : `1px solid ${theme.border}`, borderBottom: isMobile ? `1px solid ${theme.border}` : 'none', boxSizing: 'border-box', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
@@ -11373,7 +11374,7 @@ function LiveSpecPage() {
         </div>
 
         {/* ── Main Table ── */}
-        <div style={{ flex: 1, overflowX: 'auto', background: theme.mainBg, padding: '16px 20px' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', background: theme.mainBg, padding: isMobile ? '14px 12px' : '16px 20px' }}>
           {loading && (
             <div style={{ textAlign: 'center', padding: 60, color: '#fff', fontSize: 16 }}>Loading data from FanGraphs…</div>
           )}
