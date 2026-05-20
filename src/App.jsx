@@ -8923,7 +8923,7 @@ function WelcomePage() {
           fontSize: 'clamp(0.78rem, 3vw, 1.1rem)',
           fontWeight: 500,
           color: '#5b9bd5',
-          letterSpacing: '0.22em',
+          letterSpacing: '0.25em',
           textTransform: 'uppercase',
           marginBottom: 30,
           fontFamily: "'Oswald', 'Inter', sans-serif"
@@ -11262,7 +11262,7 @@ function LiveSpecPage() {
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
 
         {/* ── Sidebar ── */}
-        <div style={{ width: isMobile ? '100%' : 220, flexShrink: 0, background: theme.sidebarBg, borderRight: isMobile ? 'none' : `1px solid ${theme.border}`, borderBottom: isMobile ? `1px solid ${theme.border}` : 'none', boxSizing: 'border-box', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+        <div style={{ width: isMobile ? '100%' : 248, flexShrink: 0, background: theme.sidebarBg, borderRight: isMobile ? 'none' : `1px solid ${theme.border}`, borderBottom: isMobile ? `1px solid ${theme.border}` : 'none', boxSizing: 'border-box', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
