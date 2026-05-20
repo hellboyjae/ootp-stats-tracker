@@ -11427,7 +11427,7 @@ function LiveSpecPage() {
 
 // ==================== PERF INFO MODAL ====================
 
-function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose }) {
+function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose, isMobile }) {
   const normName = normalizeName(name);
   const normNameNoHyphen = normName.replace(/-/g, '');
   const look = (map) => map ? (map[normName] || map[normNameNoHyphen] || null) : null;
@@ -11473,12 +11473,12 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
 
   return ReactDOM.createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '24px 32px', width: 680, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: isMobile ? '16px 14px' : '24px 32px', width: '95%', maxWidth: 680, maxHeight: '85vh', overflowY: 'auto', boxSizing: 'border-box', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isMobile ? 16 : 24 }}>
           <div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{name}</div>
+            <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{name}</div>
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>{roleLabel} · OVR {cardOvr}</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>✕</button>
@@ -11494,7 +11494,7 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
         {!fgLoading && season && (
           <>
             {/* Column headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, paddingBottom: 10, marginBottom: 4, borderBottom: `2px solid ${theme.border}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '52px 1fr 1fr 1fr' : '72px 1fr 1fr 1fr', gap: isMobile ? 8 : 12, paddingBottom: 10, marginBottom: 4, borderBottom: `2px solid ${theme.border}` }}>
               <div />
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#22c55e' }}>2026 Season</div>
@@ -11517,11 +11517,11 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose 
               const lv = l14    ? fgGet(l14,  s.key) : null;
               const sColor = seasonColor(sv, pv, s.higher);
               return (
-                <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, padding: '11px 0', borderBottom: `1px solid rgba(255,255,255,0.06)`, alignItems: 'center' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: sColor, fontFamily: "'Oswald',sans-serif" }}>{sv != null ? s.fmt(sv) : '—'}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#4b5563', fontFamily: "'Oswald',sans-serif" }}>{pv != null ? s.fmt(pv) : '—'}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{lv != null ? s.fmt(lv) : '—'}</div>
+                <div key={s.key} style={{ display: 'grid', gridTemplateColumns: isMobile ? '52px 1fr 1fr 1fr' : '72px 1fr 1fr 1fr', gap: isMobile ? 8 : 12, padding: '11px 0', borderBottom: `1px solid rgba(255,255,255,0.06)`, alignItems: 'center' }}>
+                  <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
+                  <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 700, color: sColor, fontFamily: "'Oswald',sans-serif" }}>{sv != null ? s.fmt(sv) : '—'}</div>
+                  <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 700, color: '#4b5563', fontFamily: "'Oswald',sans-serif" }}>{pv != null ? s.fmt(pv) : '—'}</div>
+                  <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{lv != null ? s.fmt(lv) : '—'}</div>
                 </div>
               );
             })}
@@ -11566,6 +11566,13 @@ function PTLivePage() {
 
   // ── Leaderboard state ──────────────────────────────────────────────────────
   const [activeTab, setActiveTab]           = useState('team');
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
   const [username, setUsername]             = useState(() => localStorage.getItem('ptlive_username') || '');
   const [groupCode, setGroupCode]           = useState(() => localStorage.getItem('ptlive_group_code') || '');
   const [lockTime, setLockTime]             = useState(null);
@@ -13184,11 +13191,11 @@ function PTLivePage() {
 
     return (
       <div key={slot.key} style={{ borderBottom: `1px solid ${theme.border}`, position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '50px 1fr 56px' : '90px 1fr 70px 200px 72px', alignItems: 'center', padding: isMobile ? '7px 10px' : '9px 16px', gap: 10 }}>
 
           {/* Slot label + team tag */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: 32 }}>{slot.label}</div>
+            <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: isMobile ? 24 : 32 }}>{slot.label}</div>
             {card && (() => {
               const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
               const tc = projTeamColor(bppTeam);
@@ -13249,28 +13256,39 @@ function PTLivePage() {
               )}
             </div>
           ) : (
-            <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {card
-                ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
-                : <span style={{ color: theme.textDim }}>—</span>}
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {card
+                  ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
+                  : <span style={{ color: theme.textDim }}>—</span>}
+              </div>
+              {isMobile && card && (
+                <div style={{ fontSize: 10, color: dotInfo?.color || theme.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {dotInfo?.label || ''}{statsText ? ` · ${statsText}` : ''}
+                </div>
+              )}
             </div>
           )}
 
           {/* Game status */}
-          <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {dotInfo?.label || ''}
-          </div>
+          {!isMobile && (
+            <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {dotInfo?.label || ''}
+            </div>
+          )}
 
           {/* Stats */}
-          <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {isLoadingStats
-              ? <span style={{ color: '#fff' }}>…</span>
-              : card
-                ? (statsText || (pd?.gameStatus === 'Preview'
-                    ? <span style={{ color: theme.textMuted }}>Upcoming</span>
-                    : <span style={{ color: theme.textDim }}>No game</span>))
-                : ''}
-          </div>
+          {!isMobile && (
+            <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isLoadingStats
+                ? <span style={{ color: '#fff' }}>…</span>
+                : card
+                  ? (statsText || (pd?.gameStatus === 'Preview'
+                      ? <span style={{ color: theme.textMuted }}>Upcoming</span>
+                      : <span style={{ color: theme.textDim }}>No game</span>))
+                  : ''}
+            </div>
+          )}
 
           {/* PP */}
           <div style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: (pp || 0) > 0 ? '#22c55e' : (pp || 0) < 0 ? '#ef4444' : '#fff' }}>
@@ -13285,31 +13303,33 @@ function PTLivePage() {
     <>
     <Layout>
       {/* Header */}
-      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: `4px solid ${theme.accent}` }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: isMobile ? '10px 12px' : '14px 24px', borderTop: `4px solid ${theme.accent}` }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 12 : 0 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h1 style={{ margin: 0, fontSize: isMobile ? 20 : 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent, display: 'flex', alignItems: 'center', gap: 12 }}>
               PT Live
               {lockCountdown && (
-                <span style={{ fontSize: 16, fontWeight: 600, color: lockCountdown === 'LOCKED' ? '#ef4444' : '#fff', letterSpacing: '0.04em', fontFamily: "'Inter', sans-serif" }}>
+                <span style={{ fontSize: isMobile ? 13 : 16, fontWeight: 600, color: lockCountdown === 'LOCKED' ? '#ef4444' : '#fff', letterSpacing: '0.04em', fontFamily: "'Inter', sans-serif" }}>
                   {lockCountdown === 'LOCKED' ? '— Locked' : `— Locks in ${lockCountdown}`}
                 </span>
               )}
             </h1>
             <div style={{ fontSize: 11, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ textAlign: 'right', fontSize: 12, color: '#fff' }}>
-              {isLoadingStats
-              ? 'Updating…'
-              : statsError
-                ? <span style={{ color: theme.error }}>{statsError}</span>
-                : lastRefreshed
-                  ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
-                  : 'Updates every 2 min'}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 16, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+            {!isMobile && (
+              <div style={{ textAlign: 'right', fontSize: 12, color: '#fff' }}>
+                {isLoadingStats
+                ? 'Updating…'
+                : statsError
+                  ? <span style={{ color: theme.error }}>{statsError}</span>
+                  : lastRefreshed
+                    ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
+                    : 'Updates every 2 min'}
+              </div>
+            )}
             {/* Leaderboard chip */}
-            {groupCode && hasSubmittedToday ? (
+            {!isMobile && (groupCode && hasSubmittedToday ? (
               <button onClick={() => { setActiveTab('leaderboard'); loadGroupLeaderboard(groupCode); }}
                 style={{ background: `${theme.accent}22`, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: theme.accent, cursor: 'pointer', letterSpacing: '0.04em' }}>
                 {groupCode}
@@ -13319,15 +13339,15 @@ function PTLivePage() {
                 style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: theme.textMuted, cursor: 'pointer' }}>
                 + Join Leaderboard
               </button>
-            ) : null}
+            ) : null)}
             {totalCost > 0 && (
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: '#fbbf24', lineHeight: 1 }}>{totalCost.toLocaleString()} PP</div>
+                <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: '#fbbf24', lineHeight: 1 }}>{totalCost.toLocaleString()} PP</div>
                 <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>L10 Team Cost</div>
               </div>
             )}
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
+              <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
               <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>Total Points</div>
             </div>
           </div>
@@ -13337,7 +13357,7 @@ function PTLivePage() {
       <div style={{ maxWidth: 1600, margin: '0 auto', padding: '20px 8px' }}>
 
         {/* Edit button above the flex row — keeps sidebar top flush with roster top */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: isMobile ? 'center' : 'flex-end', alignItems: 'center', gap: isMobile ? 6 : 10, marginBottom: 14, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
           {isEditing && (
             <button
               onClick={() => {
@@ -13409,13 +13429,14 @@ function PTLivePage() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 0 : 20, alignItems: 'flex-start' }}>
 
-          {/* Left sidebar — vertical tab nav */}
-          <div style={{ width: 160, flexShrink: 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Left sidebar — vertical tab nav (horizontal scroll on mobile) */}
+          <div style={{ width: isMobile ? '100%' : 160, flexShrink: 0, marginBottom: isMobile ? 12 : 0 }}>
+            {isMobile && <style>{`.ptlive-tabs::-webkit-scrollbar { display: none; } .ptlive-tabs { -ms-overflow-style: none; scrollbar-width: none; }`}</style>}
+            <div className={isMobile ? 'ptlive-tabs' : undefined} style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: 3, overflowX: isMobile ? 'auto' : undefined, WebkitOverflowScrolling: isMobile ? 'touch' : undefined }}>
               <button onClick={() => { setActiveTab('projections'); loadProjections(); }} style={{
-                textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
+                textAlign: isMobile ? 'center' : 'left', padding: isMobile ? '8px 12px' : '10px 14px', borderRadius: 7, cursor: 'pointer',
                 border: activeTab === 'projections' ? '1px solid #a855f7' : '1px solid transparent',
                 background: activeTab === 'projections'
                   ? 'linear-gradient(135deg, #a855f722, #ec489922)'
@@ -13424,6 +13445,7 @@ function PTLivePage() {
                 fontWeight: 700, fontSize: 13, letterSpacing: '0.02em',
                 backgroundClip: 'padding-box',
                 position: 'relative',
+                whiteSpace: 'nowrap',
               }}>
                 <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                   Projections
@@ -13449,14 +13471,15 @@ function PTLivePage() {
                   if (tab.id === 'alltime') loadAlltimeRankings();
                   if (tab.id === 'cumulative-pp') loadCumulativePP();
                 }} style={{
-                  textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
+                  textAlign: isMobile ? 'center' : 'left', padding: isMobile ? '8px 12px' : '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
                   background: activeTab === tab.id ? `${theme.accent}22` : 'transparent',
                   color: activeTab === tab.id ? theme.accent : theme.textMuted,
                   fontWeight: 600, fontSize: 13, letterSpacing: '0.02em',
+                  whiteSpace: 'nowrap',
                 }}>
                   {tab.label}
-                  {tab.id === 'leaderboard' && groupCode && (
+                  {!isMobile && tab.id === 'leaderboard' && groupCode && (
                     <div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>{groupCode}</div>
                   )}
                 </button>
@@ -13465,32 +13488,32 @@ function PTLivePage() {
           </div>
 
           {/* Center: content area */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : undefined }}>
 
             {/* ── MY TEAM TAB ─────────────────────────────────────────────── */}
             {activeTab === 'team' && (
               <div>
               {!teamEligible && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#ef444418', border: '1px solid #ef444466', borderRadius: 8, padding: '10px 16px', marginBottom: 10 }}>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 16, background: '#ef444418', border: '1px solid #ef444466', borderRadius: 8, padding: isMobile ? '8px 12px' : '10px 16px', marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>Ineligible Team</div>
                   <div style={{ fontSize: 12, color: '#ef4444' }}>Over limit: {tierViolations.join(' · ')}</div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginLeft: 'auto', whiteSpace: 'nowrap' }}>Max 2 Perfect · 5 Diamond+ · 9 Gold+</div>
+                  {!isMobile && <div style={{ fontSize: 11, color: '#6b7280', marginLeft: 'auto', whiteSpace: 'nowrap' }}>Max 2 Perfect · 5 Diamond+ · 9 Gold+</div>}
                 </div>
               )}
               <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${teamEligible ? theme.border : '#ef444466'}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '50px 1fr 56px' : '90px 1fr 70px 200px 72px', padding: isMobile ? '8px 10px' : '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
+                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>}
+                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>}
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
                 </div>
                 {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
-                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '50px 1fr 56px' : '90px 1fr 70px 200px 72px', padding: isMobile ? '8px 10px' : '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
+                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>}
+                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>}
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
                 </div>
                 {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
@@ -13500,11 +13523,11 @@ function PTLivePage() {
 
             {/* ── MY GROUP TAB ─────────────────────────────────────────────── */}
             {activeTab === 'leaderboard' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                 {!groupCode ? (
                   /* No group yet */
                   <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Join a Group</div>
+                    <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Join a Group</div>
                     <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 24 }}>Submit your team and track how you stack up against friends.</div>
                     <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(groupCode); setShowSubmitModal(true); }}
                       style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '10px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em' }}>
@@ -13514,9 +13537,9 @@ function PTLivePage() {
                 ) : (
                   <>
                     {/* Group header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', marginBottom: 20, gap: isMobile ? 10 : 0 }}>
                       <div>
-                        <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>{groupCode}</div>
+                        <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>{groupCode}</div>
                         <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
                           {isLocked
                             ? <span style={{ color: '#fbbf24' }}>First pitch {fmtTime(lockTime)} · Late submissions won't count toward group average</span>
@@ -13566,8 +13589,8 @@ function PTLivePage() {
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {/* Header row */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                            {['#', 'Username', 'L10 Cost', 'Submitted', 'Live PP'].map(h => (
+                          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 110px 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                            {(isMobile ? ['#', 'Username', 'Live PP'] : ['#', 'Username', 'L10 Cost', 'Submitted', 'Live PP']).map(h => (
                               <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                             ))}
                           </div>
@@ -13578,9 +13601,9 @@ function PTLivePage() {
                             return (
                               <div key={entry.username}>
                                 <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
-                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                                  style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {entry._isProjected
                                       ? <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', fontWeight: 700 }}>{entry.username}</span>
                                       : <>
@@ -13590,13 +13613,13 @@ function PTLivePage() {
                                         </>
                                     }
                                   </div>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
+                                  {!isMobile && <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
                                     {entry.teamCost > 0 ? entry.teamCost.toLocaleString() : '—'}
-                                  </div>
-                                  <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
+                                  </div>}
+                                  {!isMobile && <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                     {fmtTime(entry.submitted_at)}{isLate && ' · late'}
-                                  </div>
-                                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
+                                  </div>}
+                                  <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
                                     {entry.livePP} PP
                                   </div>
                                 </div>
@@ -13651,9 +13674,9 @@ function PTLivePage() {
 
             {/* ── GROUP RANKINGS TAB ──────────────────────────────────────── */}
             {activeTab === 'group-rankings' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Group Rankings</div>
+                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Group Rankings</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Average PP per member · today · min. 2 members · late submissions excluded from average</div>
                 </div>
                 {globalLoading ? (
@@ -13662,21 +13685,21 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No qualifying groups yet today.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                      {['#', 'Group', 'Members', 'Avg PP'].map(h => (
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 100px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {(isMobile ? ['#', 'Group', 'Avg PP'] : ['#', 'Group', 'Members', 'Avg PP']).map(h => (
                         <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                       ))}
                     </div>
                     {globalRankings.map((g, idx) => {
                       const isMyGroup = g.group_code === groupCode;
                       return (
-                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
+                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {g.group_code}{isMyGroup && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11, fontFamily: 'inherit' }}>you</span>}
                           </div>
-                          <div style={{ fontSize: 13, color: '#fff' }}>{g.member_count} members</div>
-                          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
+                          {!isMobile && <div style={{ fontSize: 13, color: '#fff' }}>{g.member_count} members</div>}
+                          <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
                         </div>
                       );
                     })}
@@ -13687,9 +13710,9 @@ function PTLivePage() {
 
             {/* ── GLOBAL RANKINGS TAB (individuals) ────────────────────────── */}
             {activeTab === 'global' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Rankings</div>
+                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Rankings</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>All players today · ranked by PP · group tag shown</div>
                 </div>
                 {individualLoading ? (
@@ -13708,8 +13731,8 @@ function PTLivePage() {
                     .sort((a, b) => b.livePP - a.livePP);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                        {['#', 'Player', 'Submitted', 'Live PP'].map(h => (
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {(isMobile ? ['#', 'Player', 'Live PP'] : ['#', 'Player', 'Submitted', 'Live PP']).map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                         ))}
                       </div>
@@ -13721,26 +13744,26 @@ function PTLivePage() {
                         return (
                           <div key={expandKey}>
                             <div onClick={() => setExpandedGlobal(isExpanded ? null : expandKey)}
-                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                              style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                               <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
                                 {entry._isProjected
                                   ? <span style={{ fontSize: 14, fontWeight: 700, background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{entry.username}</span>
                                   : <>
-                                      <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                      <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
                                       </span>
                                       {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
-                                      <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                                      {!isMobile && <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>}
                                       {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
                                       {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
                                     </>
                                 }
                               </div>
-                              <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
+                              {!isMobile && <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                 {fmtTime(entry.submitted_at)}{isLate && ' · late'}
-                              </div>
-                              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
+                              </div>}
+                              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
                                 {entry.livePP} PP
                               </div>
                             </div>
@@ -13793,9 +13816,9 @@ function PTLivePage() {
 
             {/* ── MOST USED TAB ───────────────────────────────────────────── */}
             {activeTab === 'most-used' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Most Used Players</div>
+                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Most Used Players</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>{showYesterday ? 'Yesterday' : 'Today'} · ranked by roster usage</div>
                 </div>
                 {individualLoading ? (
@@ -13826,19 +13849,19 @@ function PTLivePage() {
                   const sorted = Object.values(playerMap).sort((a, b) => b.count - a.count);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                        {['#', 'POS', 'Player', 'Usage', 'PP'].map(h => (
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 55px 55px' : '36px 60px 1fr 80px 80px', gap: isMobile ? 6 : 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {(isMobile ? ['#', 'Player', 'Usage', 'PP'] : ['#', 'POS', 'Player', 'Usage', 'PP']).map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                         ))}
                       </div>
                       {sorted.map((p, idx) => (
-                        <div key={p.displayName} style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                        <div key={p.displayName} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 55px 55px' : '36px 60px 1fr 80px 80px', gap: isMobile ? 6 : 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{p.displayName}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: theme.accent, fontFamily: "'Oswald',sans-serif" }}>
+                          {!isMobile && <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>}
+                          <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.displayName}</div>
+                          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: theme.accent, fontFamily: "'Oswald',sans-serif" }}>
                             {Math.round(p.count / total * 100)}%
-                            <span style={{ fontSize: 10, fontWeight: 400, color: '#fff', marginLeft: 4 }}>{p.count}/{total}</span>
+                            {!isMobile && <span style={{ fontSize: 10, fontWeight: 400, color: '#fff', marginLeft: 4 }}>{p.count}/{total}</span>}
                           </div>
                           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: p.pp > 0 ? '#22c55e' : p.pp < 0 ? '#ef4444' : '#fff' }}>
                             {p.pp !== null ? `${p.pp >= 0 ? '+' : ''}${p.pp}` : '—'}
@@ -13853,10 +13876,10 @@ function PTLivePage() {
 
             {/* ── BEST POSSIBLE ROSTER TAB ────────────────────────────────── */}
             {activeTab === 'best-roster' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', marginBottom: 20, gap: isMobile ? 10 : 0 }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Best Possible Roster</div>
+                    <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Best Possible Roster</div>
                     <div style={{ fontSize: 12, color: theme.textMuted }}>Highest-PP card per slot for the selected date (respects tier limits)</div>
                   </div>
                   <input
@@ -13880,7 +13903,7 @@ function PTLivePage() {
                   const totalBestPP = bestRoster.reduce((s, r) => s + (r.pp || 0), 0);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '44px 1fr 44px 60px' : '60px 1fr 60px 80px', gap: isMobile ? 6 : 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
                         {['Slot', 'Player', 'OVR', 'PP'].map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' ? 'right' : 'left' }}>{h}</div>
                         ))}
@@ -13892,7 +13915,7 @@ function PTLivePage() {
                         return (
                           <React.Fragment key={r.slotKey}>
                             {isSep && <div style={{ borderTop: `1px solid ${theme.border}`, margin: '4px 0' }} />}
-                            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '44px 1fr 44px 60px' : '60px 1fr 60px 80px', gap: isMobile ? 6 : 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                               <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                                 {r.card ? `${r.card.first_name} ${r.card.last_name}` : '—'}
@@ -13909,7 +13932,7 @@ function PTLivePage() {
                           </React.Fragment>
                         );
                       })}
-                      <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '12px 12px 6px', borderTop: `2px solid ${theme.border}` }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '44px 1fr 44px 60px' : '60px 1fr 60px 80px', gap: isMobile ? 6 : 10, padding: '12px 12px 6px', borderTop: `2px solid ${theme.border}` }}>
                         <div />
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total</div>
                         <div />
@@ -13925,9 +13948,9 @@ function PTLivePage() {
 
             {/* ── ALL-TIME TOP 25 TAB ─────────────────────────────────────── */}
             {activeTab === 'alltime' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>All-Time Top 25</div>
+                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>All-Time Top 25</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Greatest single-day individual PP performances · 2026 season</div>
                 </div>
                 {alltimeLoading ? (
@@ -13936,8 +13959,8 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No data yet.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                      {['#', 'Player', 'OVR', 'Date', 'Pos', 'PP'].map(h => (
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 60px' : '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {(isMobile ? ['#', 'Player', 'PP'] : ['#', 'Player', 'OVR', 'Date', 'Pos', 'PP']).map(h => (
                         <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' ? 'right' : 'left' }}>{h}</div>
                       ))}
                     </div>
@@ -13945,14 +13968,14 @@ function PTLivePage() {
                       const ovr = r.card_value || 0;
                       const tc = tierColor(ovr);
                       return (
-                        <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                        <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 60px' : '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: idx < 3 ? '#fbbf24' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
-                          <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player_name}</div>
+                          {!isMobile && <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
-                          </div>
-                          <div style={{ fontSize: 12, color: '#fff' }}>{r.date}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
+                          </div>}
+                          {!isMobile && <div style={{ fontSize: 12, color: '#fff' }}>{r.date}</div>}
+                          {!isMobile && <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>}
                           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : '#fff' }}>
                             {r.pp >= 0 ? '+' : ''}{Number(r.pp)}
                           </div>
@@ -13966,9 +13989,9 @@ function PTLivePage() {
 
             {/* ── CUMULATIVE PP TAB ───────────────────────────────────────── */}
             {activeTab === 'cumulative-pp' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Points Earned</div>
+                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Points Earned</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Cumulative PP earned across the 2026 season</div>
                 </div>
 
@@ -14001,8 +14024,8 @@ function PTLivePage() {
                   );
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                        {['#', 'Player', 'OVR', 'Pos', 'Games', 'PP'].map(h => (
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 44px 70px' : '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {(isMobile ? ['#', 'Player', 'OVR', 'PP'] : ['#', 'Player', 'OVR', 'Pos', 'Games', 'PP']).map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' || h === 'Games' ? 'right' : 'left' }}>{h}</div>
                         ))}
                       </div>
@@ -14012,14 +14035,14 @@ function PTLivePage() {
                         const isTop3 = cumulativeSearchResults === null && idx < 3;
                         const pp = Number(r.total_pp);
                         return (
-                          <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                          <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 44px 70px' : '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: isTop3 ? '#fbbf24' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
+                            <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player_name}</div>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
                             </div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
-                            <div style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{r.days_played}</div>
+                            {!isMobile && <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>}
+                            {!isMobile && <div style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{r.days_played}</div>}
                             <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: pp > 0 ? '#22c55e' : pp < 0 ? '#ef4444' : '#fff' }}>
                               {pp >= 0 ? '+' : ''}{pp}
                             </div>
@@ -14095,11 +14118,11 @@ function PTLivePage() {
               const bustColor = pct => pct < 15 ? '#4ade80' : pct < 30 ? '#fbbf24' : '#ef4444';
 
               return (
-                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                   {/* Header + Admin */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', marginBottom: 20, gap: isMobile ? 12 : 0 }}>
                     <div>
-                      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
+                      <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
                         <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
                         <span style={{ fontSize: '0.5em', fontWeight: 400, color: '#fff', letterSpacing: '0.03em', margin: '0 8px' }}>brought to you by</span>
                         <span style={{ fontSize: '0.9em', background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>KOBA</span>
@@ -14206,10 +14229,10 @@ function PTLivePage() {
                       )}
 
                       {/* Type filters + Cheat Sheet button */}
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: isMobile ? 6 : 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                         {['all', 'batter', 'pitcher'].map(t => (
                           <button key={t} onClick={() => setProjTypeFilter(t)} style={{
-                            padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                            padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 600, cursor: 'pointer',
                             border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projTypeFilter === t ? theme.accent : theme.inputBg,
                             color: projTypeFilter === t ? '#fff' : theme.textMuted,
@@ -14218,13 +14241,13 @@ function PTLivePage() {
                           </button>
                         ))}
                         <button onClick={() => setShowCheatSheet(true)} style={{
-                          padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                          padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 700, cursor: 'pointer',
                           background: '#2a1a33', border: '1px solid #6b3fa0', color: '#c89dff',
                         }}>
                           Cheat Sheet
                         </button>
                         <button onClick={loadYesterdayGuess} disabled={yesterdayGuessLoading} style={{
-                          padding: '6px 18px', borderRadius: 16, fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                          padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 700, cursor: 'pointer',
                           background: '#2a1a08', border: '1px solid #b8860b', color: '#fbbf24',
                           opacity: yesterdayGuessLoading ? 0.6 : 1,
                         }}>
@@ -14233,16 +14256,16 @@ function PTLivePage() {
                       </div>
 
                       {/* Position filters */}
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: isMobile ? 4 : 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
                         <button onClick={() => setProjFilter('all')} style={{
-                          padding: '5px 16px', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                          padding: isMobile ? '4px 10px' : '5px 16px', borderRadius: 14, fontSize: isMobile ? 11 : 15, fontWeight: 600, cursor: 'pointer',
                           border: projFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                           background: projFilter === 'all' ? theme.accent : theme.inputBg,
                           color: projFilter === 'all' ? '#fff' : theme.textMuted,
                         }}>All</button>
                         {allPositions.map(pos => (
                           <button key={pos} onClick={() => setProjFilter(pos)} style={{
-                            padding: '5px 16px', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                            padding: isMobile ? '4px 10px' : '5px 16px', borderRadius: 14, fontSize: isMobile ? 11 : 15, fontWeight: 600, cursor: 'pointer',
                             border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projFilter === pos ? theme.accent : theme.inputBg,
                             color: projFilter === pos ? '#fff' : theme.textMuted,
@@ -14252,7 +14275,7 @@ function PTLivePage() {
 
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 17, tableLayout: 'fixed' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 13 : 17, tableLayout: 'fixed' }}>
                           <thead>
                             <tr>
                               {[
@@ -14270,7 +14293,7 @@ function PTLivePage() {
                                 { col: '_matchup', label: 'Matchup', w: 130 },
                               ].map(h => (
                                 <th key={h.col} onClick={() => !h.col.startsWith('_') && handleProjSort(h.col)} style={{
-                                  padding: '10px 12px', textAlign: h.align || 'center', fontWeight: 600, fontSize: 14,
+                                  padding: isMobile ? '6px 4px' : '10px 12px', textAlign: h.align || 'center', fontWeight: 600, fontSize: isMobile ? 11 : 14,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
                                   borderBottom: `2px solid ${theme.border}`, cursor: !h.col.startsWith('_') ? 'pointer' : 'default',
                                   whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
@@ -14293,56 +14316,58 @@ function PTLivePage() {
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
                               const rowBg = isIL ? 'rgba(239,68,68,0.10)' : isOut ? 'rgba(239,68,68,0.15)' : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
                               const blurStyle = isOut ? { filter: 'blur(4px)', userSelect: 'none' } : {};
+                              const tdPad = isMobile ? '6px 4px' : '10px 12px';
                               return (
                                 <tr key={idx} title={isOut ? 'Not in confirmed lineup' : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
                                   onMouseEnter={e => { if (!isOut) e.currentTarget.style.background = theme.tableRowHover; }}
                                   onMouseLeave={e => e.currentTarget.style.background = rowBg}>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 16 }}>{idx + 1}</td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 17 }}>{p.Team}</td>
-                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: 17, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <td style={{ padding: tdPad, textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: isMobile ? 12 : 16 }}>{idx + 1}</td>
+                                  <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, color: tc, fontSize: isMobile ? 13 : 17 }}>{p.Team}</td>
+                                  <td style={{ padding: tdPad, fontWeight: 600, color: isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: isMobile ? 13 : 17, maxWidth: isMobile ? 120 : 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {p.Player}
-                                    {isIL && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IL</span>}
-                                    {isOut && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
+                                    {isIL && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IL</span>}
+                                    {isOut && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
                                   </td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                  <td style={{ padding: tdPad, textAlign: 'center' }}>
                                     <span style={{
                                       ...blurStyle,
-                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 700,
+                                      display: 'inline-block', padding: isMobile ? '2px 6px' : '3px 10px', borderRadius: 12, fontSize: isMobile ? 11 : 15, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
                                     }}>{p.Position}</span>
                                   </td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                  <td style={{ padding: tdPad, textAlign: 'center' }}>
                                     <span style={{
                                       ...blurStyle,
-                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 16, fontWeight: 700,
+                                      display: 'inline-block', padding: isMobile ? '2px 6px' : '3px 10px', borderRadius: 12, fontSize: isMobile ? 12 : 16, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.ExpPP}</td>
+                                  <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 700, fontSize: isMobile ? 15 : 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.ExpPP}</td>
                                   {projTypeFilter !== 'pitcher' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#f97316' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
+                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'batter' ? '#f97316' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'batter' ? `${Math.round(p.HR * 100)}%` : 'N/A'}
                                     </td>
                                   )}
                                   {projTypeFilter !== 'pitcher' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'batter' ? '#a78bfa' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
+                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'batter' ? '#a78bfa' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'batter' ? `${Math.round(p.SB * 100)}%` : 'N/A'}
                                     </td>
                                   )}
                                   {projTypeFilter !== 'batter' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#38bdf8' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
+                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'pitcher' ? '#38bdf8' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'pitcher' ? p.K : 'N/A'}
                                     </td>
                                   )}
                                   {projTypeFilter !== 'batter' && (
-                                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 16, color: p.Type === 'pitcher' ? '#fbbf24' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
+                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'pitcher' ? '#fbbf24' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
                                       {p.Type === 'pitcher' ? p.IP : 'N/A'}
                                     </td>
                                   )}
-                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.BustPct}%</td>
-                                  <td title="" style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 15, ...blurStyle }}
+                                  <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 13 : 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.BustPct}%</td>
+                                  <td title="" style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 11 : 15, ...blurStyle }}
                                     onMouseEnter={e => {
+                                      if (isMobile) return;
                                       const opp = (p.Opponent || '').trim();
                                       if ((p.Type === 'batter' && opposingSPByTeam[opp]) || (p.Type === 'pitcher' && opposingBatsByTeam[opp]?.length)) {
                                         setHoveredMatchup(idx); setMatchupRect(e.currentTarget.getBoundingClientRect());
@@ -14433,9 +14458,9 @@ function PTLivePage() {
                       {/* Cheat Sheet Modal */}
                       {showCheatSheet && projData?.cheatSheet && ReactDOM.createPortal(
                         <div onClick={() => setShowCheatSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: `1px solid ${theme.border}`, borderRadius: 16, maxWidth: 800, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
+                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: `1px solid ${theme.border}`, borderRadius: 16, maxWidth: 800, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: isMobile ? 16 : 28 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                              <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>Cheat Sheet</div>
+                              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>Cheat Sheet</div>
                               <button onClick={() => setShowCheatSheet(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
                             </div>
 
@@ -14462,13 +14487,13 @@ function PTLivePage() {
                                 );
                               };
                               return (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, tableLayout: 'fixed', marginBottom: 16 }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 12 : 14, tableLayout: 'fixed', marginBottom: 16 }}>
                                   <colgroup>
-                                    <col style={{ width: 55 }} />
+                                    <col style={{ width: isMobile ? 40 : 55 }} />
                                     <col />
-                                    <col style={{ width: 70 }} />
-                                    <col style={{ width: 60 }} />
-                                    <col style={{ width: 80 }} />
+                                    <col style={{ width: isMobile ? 50 : 70 }} />
+                                    <col style={{ width: isMobile ? 45 : 60 }} />
+                                    <col style={{ width: isMobile ? 60 : 80 }} />
                                   </colgroup>
                                   <thead>
                                     <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
@@ -14509,9 +14534,9 @@ function PTLivePage() {
                       {/* Yesterday's Best Guess Modal */}
                       {showYesterdayGuess && ReactDOM.createPortal(
                         <div onClick={() => setShowYesterdayGuess(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: '1px solid #b8860b', borderRadius: 16, maxWidth: 900, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
+                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: '1px solid #b8860b', borderRadius: 16, maxWidth: 900, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: isMobile ? 16 : 28 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                              <div style={{ fontSize: 24, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>Yesterday's Best Guess</div>
+                              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>Yesterday's Best Guess</div>
                               <button onClick={() => setShowYesterdayGuess(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
                             </div>
                             {yesterdayGuessLoading ? (
@@ -14554,15 +14579,15 @@ function PTLivePage() {
                               return (
                                 <>
                                   <div style={{ fontSize: 12, color: '#8899aa', marginBottom: 12 }}>Date: {yesterdayGuess.gameDate}</div>
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, tableLayout: 'fixed', marginBottom: 16 }}>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 12 : 14, tableLayout: 'fixed', marginBottom: 16 }}>
                                     <colgroup>
-                                      <col style={{ width: 55 }} />
+                                      <col style={{ width: isMobile ? 40 : 55 }} />
                                       <col />
-                                      <col style={{ width: 70 }} />
-                                      <col style={{ width: 60 }} />
-                                      <col style={{ width: 80 }} />
-                                      <col style={{ width: 80 }} />
-                                      <col style={{ width: 70 }} />
+                                      <col style={{ width: isMobile ? 50 : 70 }} />
+                                      <col style={{ width: isMobile ? 45 : 60 }} />
+                                      <col style={{ width: isMobile ? 55 : 80 }} />
+                                      <col style={{ width: isMobile ? 55 : 80 }} />
+                                      <col style={{ width: isMobile ? 50 : 70 }} />
                                     </colgroup>
                                     <thead>
                                       <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
@@ -14610,8 +14635,8 @@ function PTLivePage() {
 
           </div>
 
-          {/* Right: scoring key — only on My Team tab */}
-          {activeTab === 'team' && (
+          {/* Right: scoring key — only on My Team tab, hidden on mobile */}
+          {activeTab === 'team' && !isMobile && (
             <div style={{ width: 180, flexShrink: 0 }}>
               <PTLiveScoringKey theme={theme} />
             </div>
@@ -14629,13 +14654,14 @@ function PTLivePage() {
         fgLoading={fgLoading}
         theme={theme}
         onClose={() => setPerfModal(null)}
+        isMobile={isMobile}
       />
     )}
 
     {/* ── Submit / Join Modal ──────────────────────────────────────────────── */}
     {showSubmitModal && ReactDOM.createPortal(
       <div onClick={() => setShowSubmitModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '28px 32px', width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: isMobile ? '20px 16px' : '28px 32px', width: isMobile ? '92%' : 420, maxWidth: 420, boxSizing: 'border-box', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
           <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 20 }}>
             {hasSubmittedToday ? 'Update Submission' : 'Join / Create Group'}
           </div>
