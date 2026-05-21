@@ -2039,7 +2039,6 @@ function InfoPage() {
           'Card Badge': 'card_badge',
           'Last 10 Price': 'last_10_price',
           'packs': 'packs',
-          'Franchise': 'franchise',
         };
 
         console.log('PapaParse headers:', parsed.meta?.fields?.slice(0, 15));
@@ -12301,7 +12300,6 @@ function PTLivePage() {
   const PROJ_SP_WIN = 20, PROJ_SP_IP = 4, PROJ_SP_K = 2, PROJ_SP_K_BONUS = 40, PROJ_SP_QS = 5, PROJ_SP_ER = -2, PROJ_SP_BB = -1;
 
   const PROJ_TEAM_CODE_MAP = { ATH: 'OAK', KC: 'KCR', LAA: 'ANA', NYY: 'NYA', SD: 'SDP', SF: 'SFG', TB: 'TBD', WAS: 'WSN', MIA: 'FLA' };
-  const PROJ_FRANCHISE_TO_BPP = Object.fromEntries(Object.entries(PROJ_TEAM_CODE_MAP).map(([k, v]) => [v, k]));
   const PROJ_NAME_FIXES = {
     'Louis Varland': 'Louie Varland', 'Louie Varland': 'Louie Varland',
     'C.J. Abrams': 'CJ Abrams', 'Jazz Chisholm': 'Jazz Chisholm Jr.',
@@ -12427,8 +12425,11 @@ function PTLivePage() {
         const matches = cardsByName[name];
         if (!matches || matches.length === 0) return null;
         if (matches.length === 1) return matches[0];
-        // Disambiguate by team first, then by player type
-        const teamMatch = matches.filter(m => m.franchise === ptTeam);
+        // Disambiguate by team first (via storedTeamMap, since franchise column is never populated), then by player type
+        const teamMatch = matches.filter(m => {
+          const nn = normalizeName(`${(m.first_name || '').trim()} ${(m.last_name || '').trim()}`);
+          return storedTeamMap && storedTeamMap[nn] === ptTeam;
+        });
         const pool = teamMatch.length > 0 ? teamMatch : matches;
         if (playerType === 'batter') {
           const typed = pool.filter(m => !m.pitcher_role || Number(m.pitcher_role) === 0);
@@ -12637,7 +12638,7 @@ function PTLivePage() {
       .filter(c => Number(c.position) === 1 && [12, 13].includes(Number(c.pitcher_role)))
       .map(c => {
         const name = `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`;
-        const bppTeam = PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '';
+        const bppTeam = (storedTeamMap && storedTeamMap[normalizeName(name)]) || '';
         return {
           Player: name, Team: bppTeam, Opponent: '',
           Position: PROJ_PITCHER_ROLE_MAP[Number(c.pitcher_role)] || 'RP',
@@ -12769,7 +12770,7 @@ function PTLivePage() {
           .map(c => ({
             slot: slotName,
             Player: `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`,
-            Team: PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '',
+            Team: (storedTeamMap && storedTeamMap[normalizeName(`${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`)]) || '',
             Position: BATTER_POS[Number(c.position) - 2] || '?',
             OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
             ExpPP: 0, BustPct: 0, Type: 'batter', Opponent: '', Side: '', GameTime: '', HasSim: false,
@@ -12782,7 +12783,7 @@ function PTLivePage() {
           .map(c => ({
             slot: slotName,
             Player: `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`,
-            Team: PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '',
+            Team: (storedTeamMap && storedTeamMap[normalizeName(`${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`)]) || '',
             Position: 'SP', OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
             ExpPP: 0, BustPct: 0, Type: 'pitcher', Opponent: '', Side: '', GameTime: '', HasSim: false,
           }));
@@ -14859,6 +14860,7 @@ function LeaderboardsPage() {
   const [lbSort, setLbSort] = useState({ col: 'totalWins', dir: 'desc' });
   const [lbView, setLbView] = useState('leaderboard');
   const [lbSelectedEvent, setLbSelectedEvent] = useState(null);
+  const [lbSelectedInstance, setLbSelectedInstance] = useState(null);
   const [lbMinPlayed, setLbMinPlayed] = useState(0);
   const [lbPage, setLbPage] = useState(0);
   const LB_PAGE_SIZE = 50;
@@ -14869,9 +14871,15 @@ function LeaderboardsPage() {
     try {
       const { data: cached } = await supabase.from('site_content').select('content').eq('id', 'leaderboards_data').single();
       if (cached?.content?.data) {
-        const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
         const updatedAt = cached.content.updatedAt ? new Date(cached.content.updatedAt) : null;
-        if (updatedAt && updatedAt > weekAgo) {
+        // Fresh if fetched after the most recent Monday (dumps publish Monday, we fetch Tuesday+)
+        const now = new Date();
+        const day = now.getDay();
+        const diffToMonday = day === 0 ? 6 : day - 1;
+        const lastMonday = new Date(now);
+        lastMonday.setDate(now.getDate() - diffToMonday);
+        lastMonday.setHours(0, 0, 0, 0);
+        if (updatedAt && updatedAt > lastMonday) {
           setLbData(cached.content.data);
           setLbLastUpdated(cached.content.updatedAt);
           setLbLoading(false);
@@ -15043,7 +15051,7 @@ function LeaderboardsPage() {
         {/* Category tabs */}
         <div style={{ display: 'flex', gap: isMobile ? 0 : 6, marginBottom: 16, overflowX: isMobile ? 'auto' : undefined, WebkitOverflowScrolling: 'touch' }}>
           {LEADERBOARD_CSV_CONFIGS.map(cfg => (
-            <button key={cfg.id} onClick={() => { setLbCategory(cfg.id); setLbPage(0); setLbEventType('all'); setLbSelectedEvent(null); }} style={{
+            <button key={cfg.id} onClick={() => { setLbCategory(cfg.id); setLbPage(0); setLbEventType('all'); setLbSelectedEvent(null); setLbSelectedInstance(null); }} style={{
               padding: isMobile ? '8px 12px' : '9px 18px', background: lbCategory === cfg.id ? theme.accent : 'transparent',
               color: lbCategory === cfg.id ? '#fff' : theme.textSecondary, border: `1px solid ${lbCategory === cfg.id ? theme.accent : theme.border}`,
               borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
@@ -15063,7 +15071,7 @@ function LeaderboardsPage() {
             ))}
             <div style={{ display: 'flex', gap: 4, marginLeft: hasEventTypes ? 12 : 0 }}>
               {['leaderboard', 'events'].map(v => (
-                <button key={v} onClick={() => { setLbView(v); setLbSelectedEvent(null); }} style={{
+                <button key={v} onClick={() => { setLbView(v); setLbSelectedEvent(null); setLbSelectedInstance(null); }} style={{
                   padding: '5px 12px', background: lbView === v ? theme.cardBg : 'transparent',
                   color: lbView === v ? theme.textPrimary : theme.textDim, border: `1px solid ${lbView === v ? theme.border : 'transparent'}`,
                   borderRadius: 4, fontSize: 12, cursor: 'pointer', textTransform: 'capitalize',
@@ -15149,42 +15157,37 @@ function LeaderboardsPage() {
         {/* Events view */}
         {!lbLoading && lbData && lbView === 'events' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {lbSelectedEvent ? (
+            {lbSelectedInstance ? (
+              /* Level 3: Individual event results */
               <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
                 <div style={{ padding: isMobile ? '12px 10px' : '14px 18px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button onClick={() => setLbSelectedEvent(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Back</button>
-                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 16, color: theme.textPrimary }}>{lbSelectedEvent}</span>
+                    <button onClick={() => setLbSelectedInstance(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Back</button>
+                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 16, color: theme.textPrimary }}>{lbSelectedInstance.title}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: theme.textMuted }}>{groupedEvents.find(g => g.title === lbSelectedEvent)?.events.length || 0} events · {eventLeaderboard.length} players</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>{fmtEventDate(lbSelectedInstance.starttime)} · {lbSelectedInstance.placements.length} players</div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        <th style={{ ...headerStyle, width: isMobile ? 28 : 36 }} onClick={() => toggleSort('rank')}>#</th>
-                        <th style={headerStyle} onClick={() => toggleSort('username')}>Username{sortArrow('username')}</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalWins')}>W{sortArrow('totalWins')}</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalLosses')}>L{sortArrow('totalLosses')}</th>
-                        {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('winRate')}>Win%{sortArrow('winRate')}</th>}
-                        {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('eventsPlayed')}>Played{sortArrow('eventsPlayed')}</th>}
-                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 36 : 50 }} onClick={() => toggleSort('championships')}>Titles{sortArrow('championships')}</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('bestFinish')}>Best{sortArrow('bestFinish')}</th>
+                        <th style={{ ...headerStyle, width: 50, cursor: 'default' }}>Place</th>
+                        <th style={{ ...headerStyle, cursor: 'default' }}>Username</th>
+                        <th style={{ ...headerStyle, textAlign: 'center', width: 50, cursor: 'default' }}>W</th>
+                        <th style={{ ...headerStyle, textAlign: 'center', width: 50, cursor: 'default' }}>L</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {eventLeaderboard.map((p, i) => {
-                        const pc = podiumColor(i + 1);
+                      {lbSelectedInstance.placements.map((name, idx) => {
+                        const pos = idx + 1;
+                        const { wins, losses } = calcBracketStats(pos, lbSelectedInstance.placements.length);
+                        const pc = podiumColor(pos);
                         return (
-                          <tr key={p.username} style={{ transition: 'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover} onMouseLeave={e => e.currentTarget.style.background = ''}>
-                            <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim, fontSize: isMobile ? 11 : 13 }}>{i + 1}</td>
-                            <td style={{ ...cellStyle, fontWeight: 600 }}>{p.username}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>{p.totalWins}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: '#ef4444' }}>{p.totalLosses}</td>
-                            {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{(p.winRate * 100).toFixed(1)}%</td>}
-                            {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{p.eventsPlayed}</td>}
-                            <td style={{ ...cellStyle, textAlign: 'center', color: p.championships > 0 ? '#d4a843' : theme.textDim, fontWeight: p.championships > 0 ? 700 : 400 }}>{p.championships}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: pc || theme.textSecondary, fontWeight: p.bestFinish <= 3 ? 600 : 400 }}>{p.bestFinish === Infinity ? '—' : ordinal(p.bestFinish)}</td>
+                          <tr key={idx} style={{ background: pc ? `${pc}10` : '' }}>
+                            <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim }}>{ordinal(pos)}</td>
+                            <td style={{ ...cellStyle, fontWeight: pos <= 3 ? 700 : 400, color: pc || theme.textPrimary }}>{name}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e' }}>{wins}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center', color: losses > 0 ? '#ef4444' : theme.textDim }}>{losses}</td>
                           </tr>
                         );
                       })}
@@ -15192,11 +15195,79 @@ function LeaderboardsPage() {
                   </table>
                 </div>
               </div>
+            ) : lbSelectedEvent ? (
+              /* Level 2: Individual instances within a grouped event + mini-leaderboard */
+              <>
+                <div style={{ padding: isMobile ? '10px 10px' : '12px 18px', background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={() => setLbSelectedEvent(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Back</button>
+                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 18, color: theme.textPrimary }}>{lbSelectedEvent}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>{groupedEvents.find(g => g.title === lbSelectedEvent)?.events.length || 0} events</div>
+                </div>
+                {/* Mini-leaderboard for this event */}
+                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+                  <div style={{ padding: isMobile ? '8px 10px' : '10px 16px', borderBottom: `1px solid ${theme.border}` }}>
+                    <span style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: theme.textPrimary }}>Leaderboard — {eventLeaderboard.length} players</span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...headerStyle, width: isMobile ? 28 : 36 }} onClick={() => toggleSort('rank')}>#</th>
+                          <th style={headerStyle} onClick={() => toggleSort('username')}>Username{sortArrow('username')}</th>
+                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalWins')}>W{sortArrow('totalWins')}</th>
+                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalLosses')}>L{sortArrow('totalLosses')}</th>
+                          {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('winRate')}>Win%{sortArrow('winRate')}</th>}
+                          {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('eventsPlayed')}>Played{sortArrow('eventsPlayed')}</th>}
+                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 36 : 50 }} onClick={() => toggleSort('championships')}>Titles{sortArrow('championships')}</th>
+                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('bestFinish')}>Best{sortArrow('bestFinish')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {eventLeaderboard.slice(0, 50).map((p, i) => {
+                          const pc = podiumColor(i + 1);
+                          return (
+                            <tr key={p.username} style={{ transition: 'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                              <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim, fontSize: isMobile ? 11 : 13 }}>{i + 1}</td>
+                              <td style={{ ...cellStyle, fontWeight: 600 }}>{p.username}</td>
+                              <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>{p.totalWins}</td>
+                              <td style={{ ...cellStyle, textAlign: 'center', color: '#ef4444' }}>{p.totalLosses}</td>
+                              {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{(p.winRate * 100).toFixed(1)}%</td>}
+                              {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{p.eventsPlayed}</td>}
+                              <td style={{ ...cellStyle, textAlign: 'center', color: p.championships > 0 ? '#d4a843' : theme.textDim, fontWeight: p.championships > 0 ? 700 : 400 }}>{p.championships}</td>
+                              <td style={{ ...cellStyle, textAlign: 'center', color: pc || theme.textSecondary, fontWeight: p.bestFinish <= 3 ? 600 : 400 }}>{p.bestFinish === Infinity ? '—' : ordinal(p.bestFinish)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                {/* Individual event instances */}
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 8 }}>Individual Events</div>
+                  {(groupedEvents.find(g => g.title === lbSelectedEvent)?.events || []).map((event, i) => (
+                    <div key={i} onClick={() => setLbSelectedInstance(event)} style={{
+                      padding: isMobile ? '8px 10px' : '10px 18px', background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}`,
+                      cursor: 'pointer', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 4,
+                    }} onMouseEnter={e => { e.currentTarget.style.background = theme.tableRowHover; e.currentTarget.style.borderColor = theme.accent; }}
+                       onMouseLeave={e => { e.currentTarget.style.background = theme.cardBg; e.currentTarget.style.borderColor = theme.border; }}>
+                      <div style={{ fontSize: isMobile ? 12 : 14, color: theme.textPrimary }}>{fmtEventDate(event.starttime)}</div>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 12, color: theme.textMuted }}>{event.placements.length}p</span>
+                        <span style={{ fontSize: 12, color: '#d4a843', fontWeight: 600 }}>{event.placements[0]}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
+              /* Level 1: Grouped event list */
               <>
                 {groupedEvents.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>No events found</div>}
                 {groupedEvents.map((group, i) => (
-                  <div key={i} onClick={() => { setLbSelectedEvent(group.title); setLbPage(0); }} style={{
+                  <div key={i} onClick={() => { setLbSelectedEvent(group.title); setLbSelectedInstance(null); }} style={{
                     padding: isMobile ? '10px 10px' : '12px 18px', background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}`,
                     cursor: 'pointer', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
                   }} onMouseEnter={e => { e.currentTarget.style.background = theme.tableRowHover; e.currentTarget.style.borderColor = theme.accent; }}
