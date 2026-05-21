@@ -14859,6 +14859,7 @@ function LeaderboardsPage() {
   const [lbSort, setLbSort] = useState({ col: 'totalWins', dir: 'desc' });
   const [lbView, setLbView] = useState('leaderboard');
   const [lbSelectedEvent, setLbSelectedEvent] = useState(null);
+  const [lbMinPlayed, setLbMinPlayed] = useState(0);
   const [lbPage, setLbPage] = useState(0);
   const LB_PAGE_SIZE = 50;
 
@@ -14937,6 +14938,7 @@ function LeaderboardsPage() {
     });
     let arr = Object.values(agg);
     arr.forEach(p => { p.winRate = p.totalWins + p.totalLosses > 0 ? p.totalWins / (p.totalWins + p.totalLosses) : 0; });
+    if (lbMinPlayed > 0) arr = arr.filter(p => p.eventsPlayed >= lbMinPlayed);
     if (lbSearch) {
       const q = lbSearch.toLowerCase();
       arr = arr.filter(p => p.username.toLowerCase().includes(q));
@@ -14948,7 +14950,7 @@ function LeaderboardsPage() {
       return lbSort.dir === 'asc' ? va - vb : vb - va;
     });
     return arr;
-  }, [activeEvents, lbSearch, lbSort]);
+  }, [activeEvents, lbSearch, lbSort, lbMinPlayed]);
 
   const paginatedLeaderboard = useMemo(() => {
     const start = lbPage * LB_PAGE_SIZE;
@@ -14972,6 +14974,50 @@ function LeaderboardsPage() {
 
   const podiumColor = (pos) => pos === 1 ? '#d4a843' : pos === 2 ? '#c0c0c0' : pos === 3 ? '#cd7f32' : null;
   const fmtEventDate = (ts) => { const n = Number(ts); if (!n) return ts; return new Date(n * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+
+  const groupedEvents = useMemo(() => {
+    const groups = {};
+    activeEvents.forEach(event => {
+      const key = event.title;
+      if (!groups[key]) groups[key] = { title: key, events: [], totalPlayers: 0 };
+      groups[key].events.push(event);
+      groups[key].totalPlayers += event.placements.length;
+    });
+    return Object.values(groups).sort((a, b) => b.events.length - a.events.length);
+  }, [activeEvents]);
+
+  const eventLeaderboard = useMemo(() => {
+    if (!lbSelectedEvent) return [];
+    const group = groupedEvents.find(g => g.title === lbSelectedEvent);
+    if (!group) return [];
+    const agg = {};
+    group.events.forEach(event => {
+      const total = event.placements.length;
+      event.placements.forEach((username, idx) => {
+        const name = username.trim();
+        if (!name) return;
+        const pos = idx + 1;
+        const { wins, losses } = calcBracketStats(pos, total);
+        if (!agg[name]) agg[name] = { username: name, totalWins: 0, totalLosses: 0, eventsPlayed: 0, bestFinish: Infinity, championships: 0 };
+        agg[name].totalWins += wins;
+        agg[name].totalLosses += losses;
+        agg[name].eventsPlayed += 1;
+        if (pos < agg[name].bestFinish) agg[name].bestFinish = pos;
+        if (pos === 1) agg[name].championships += 1;
+      });
+    });
+    let arr = Object.values(agg);
+    arr.forEach(p => { p.winRate = p.totalWins + p.totalLosses > 0 ? p.totalWins / (p.totalWins + p.totalLosses) : 0; });
+    if (lbMinPlayed > 0) arr = arr.filter(p => p.eventsPlayed >= lbMinPlayed);
+    if (lbSearch) { const q = lbSearch.toLowerCase(); arr = arr.filter(p => p.username.toLowerCase().includes(q)); }
+    arr.sort((a, b) => {
+      let va = a[lbSort.col], vb = b[lbSort.col];
+      if (lbSort.col === 'bestFinish') { va = va === Infinity ? 9999 : va; vb = vb === Infinity ? 9999 : vb; }
+      if (lbSort.col === 'username') return lbSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return lbSort.dir === 'asc' ? va - vb : vb - va;
+    });
+    return arr;
+  }, [lbSelectedEvent, groupedEvents, lbSearch, lbSort, lbMinPlayed]);
 
   const hasEventTypes = lbCategory.startsWith('competitive');
 
@@ -15025,10 +15071,19 @@ function LeaderboardsPage() {
               ))}
             </div>
           </div>
-          <input value={lbSearch} onChange={e => { setLbSearch(e.target.value); setLbPage(0); }} placeholder="Search username…" style={{
-            padding: '7px 12px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6,
-            color: theme.textPrimary, fontSize: 13, width: isMobile ? '100%' : 220,
-          }} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : undefined }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 11, color: theme.textMuted, whiteSpace: 'nowrap' }}>Min Played:</span>
+              <input type="number" min="0" value={lbMinPlayed || ''} onChange={e => { setLbMinPlayed(Number(e.target.value) || 0); setLbPage(0); }} placeholder="0" style={{
+                padding: '6px 8px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 4,
+                color: theme.textPrimary, fontSize: 12, width: 52, textAlign: 'center',
+              }} />
+            </div>
+            <input value={lbSearch} onChange={e => { setLbSearch(e.target.value); setLbPage(0); }} placeholder="Search username…" style={{
+              padding: '7px 12px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6,
+              color: theme.textPrimary, fontSize: 13, flex: isMobile ? 1 : undefined, width: isMobile ? undefined : 220,
+            }} />
+          </div>
         </div>
 
         {/* Error */}
@@ -15038,7 +15093,7 @@ function LeaderboardsPage() {
         {lbLoading && <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted }}>Loading leaderboard data…</div>}
 
         {/* No data */}
-        {!lbLoading && !lbData && !lbError && <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted }}>No leaderboard data available. Use admin upload to import CSV files.</div>}
+        {!lbLoading && !lbData && !lbError && <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted }}>No leaderboard data available. Try refreshing.</div>}
 
         {/* Leaderboard view */}
         {!lbLoading && lbData && lbView === 'leaderboard' && (
@@ -15097,33 +15152,39 @@ function LeaderboardsPage() {
             {lbSelectedEvent ? (
               <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
                 <div style={{ padding: isMobile ? '12px 10px' : '14px 18px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <div>
-                    <button onClick={() => setLbSelectedEvent(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer', marginRight: 10 }}>Back</button>
-                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 16, color: theme.textPrimary }}>{lbSelectedEvent.title}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={() => setLbSelectedEvent(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Back</button>
+                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 16, color: theme.textPrimary }}>{lbSelectedEvent}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: theme.textMuted }}>{fmtEventDate(lbSelectedEvent.starttime)} · {lbSelectedEvent.placements.length} players</div>
+                  <div style={{ fontSize: 12, color: theme.textMuted }}>{groupedEvents.find(g => g.title === lbSelectedEvent)?.events.length || 0} events · {eventLeaderboard.length} players</div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        <th style={{ ...headerStyle, width: 50, cursor: 'default' }}>Place</th>
-                        <th style={{ ...headerStyle, cursor: 'default' }}>Username</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: 50, cursor: 'default' }}>W</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: 50, cursor: 'default' }}>L</th>
+                        <th style={{ ...headerStyle, width: isMobile ? 28 : 36 }} onClick={() => toggleSort('rank')}>#</th>
+                        <th style={headerStyle} onClick={() => toggleSort('username')}>Username{sortArrow('username')}</th>
+                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalWins')}>W{sortArrow('totalWins')}</th>
+                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalLosses')}>L{sortArrow('totalLosses')}</th>
+                        {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('winRate')}>Win%{sortArrow('winRate')}</th>}
+                        {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('eventsPlayed')}>Played{sortArrow('eventsPlayed')}</th>}
+                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 36 : 50 }} onClick={() => toggleSort('championships')}>Titles{sortArrow('championships')}</th>
+                        <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('bestFinish')}>Best{sortArrow('bestFinish')}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {lbSelectedEvent.placements.map((name, idx) => {
-                        const pos = idx + 1;
-                        const { wins, losses } = calcBracketStats(pos, lbSelectedEvent.placements.length);
-                        const pc = podiumColor(pos);
+                      {eventLeaderboard.map((p, i) => {
+                        const pc = podiumColor(i + 1);
                         return (
-                          <tr key={idx} style={{ background: pc ? `${pc}10` : '' }}>
-                            <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim }}>{ordinal(pos)}</td>
-                            <td style={{ ...cellStyle, fontWeight: pos <= 3 ? 700 : 400, color: pc || theme.textPrimary }}>{name}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e' }}>{wins}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: losses > 0 ? '#ef4444' : theme.textDim }}>{losses}</td>
+                          <tr key={p.username} style={{ transition: 'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                            <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim, fontSize: isMobile ? 11 : 13 }}>{i + 1}</td>
+                            <td style={{ ...cellStyle, fontWeight: 600 }}>{p.username}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>{p.totalWins}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center', color: '#ef4444' }}>{p.totalLosses}</td>
+                            {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{(p.winRate * 100).toFixed(1)}%</td>}
+                            {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{p.eventsPlayed}</td>}
+                            <td style={{ ...cellStyle, textAlign: 'center', color: p.championships > 0 ? '#d4a843' : theme.textDim, fontWeight: p.championships > 0 ? 700 : 400 }}>{p.championships}</td>
+                            <td style={{ ...cellStyle, textAlign: 'center', color: pc || theme.textSecondary, fontWeight: p.bestFinish <= 3 ? 600 : 400 }}>{p.bestFinish === Infinity ? '—' : ordinal(p.bestFinish)}</td>
                           </tr>
                         );
                       })}
@@ -15133,21 +15194,20 @@ function LeaderboardsPage() {
               </div>
             ) : (
               <>
-                {activeEvents.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>No events found</div>}
-                {(lbSearch ? activeEvents.filter(e => e.placements.some(p => p.toLowerCase().includes(lbSearch.toLowerCase()))) : activeEvents).map((event, i) => (
-                  <div key={i} onClick={() => setLbSelectedEvent(event)} style={{
+                {groupedEvents.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>No events found</div>}
+                {groupedEvents.map((group, i) => (
+                  <div key={i} onClick={() => { setLbSelectedEvent(group.title); setLbPage(0); }} style={{
                     padding: isMobile ? '10px 10px' : '12px 18px', background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}`,
                     cursor: 'pointer', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
                   }} onMouseEnter={e => { e.currentTarget.style.background = theme.tableRowHover; e.currentTarget.style.borderColor = theme.accent; }}
                      onMouseLeave={e => { e.currentTarget.style.background = theme.cardBg; e.currentTarget.style.borderColor = theme.border; }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 15, color: theme.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</div>
-                      <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{fmtEventDate(event.starttime)}</div>
+                      <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 15, color: theme.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.title}</div>
+                      <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{group.events.length} events · avg {Math.round(group.totalPlayers / group.events.length)} players</div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: `${theme.accent}20`, color: theme.accent }}>{getEventType(event.title)}</span>
-                      <span style={{ fontSize: 12, color: theme.textMuted }}>{event.placements.length}p</span>
-                      <span style={{ fontSize: 12, color: '#d4a843', fontWeight: 600 }}>{event.placements[0]}</span>
+                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: `${theme.accent}20`, color: theme.accent }}>{getEventType(group.title)}</span>
+                      <span style={{ fontSize: 12, color: theme.textMuted }}>{group.events.length}x</span>
                     </div>
                   </div>
                 ))}
