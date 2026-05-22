@@ -12303,7 +12303,7 @@ function PTLivePage() {
     if (!weatherApiKey) return;
     const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-    fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`)
+    fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=team`)
       .then(r => r.json())
       .then(d => { const games = d.dates?.[0]?.games || []; if (games.length) fetchWeatherData(games, weatherApiKey); })
       .catch(e => console.error('[PTLive] Weather trigger error:', e));
