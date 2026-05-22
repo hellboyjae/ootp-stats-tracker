@@ -13064,7 +13064,7 @@ function PTLivePage() {
           fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=imperial`)
             .then(r => r.json())
             .then(data => {
-              if (data.cod !== '200' || !data.list?.length) return;
+              if (String(data.cod) !== '200' || !data.list?.length) return;
               // Find forecast closest to game time
               let closest = data.list[0];
               let minDiff = Math.abs(new Date(closest.dt_txt + ' UTC').getTime() - gameTime);
@@ -14585,7 +14585,6 @@ function PTLivePage() {
                       {(() => {
                         const items = [];
                         if (!weatherData && !postponedTeams.size) return null;
-                        // Collect unique games (home@away pairs)
                         const seen = new Set();
                         for (const player of (projData?.players || [])) {
                           const team = (player.Team || '').trim();
@@ -14596,12 +14595,10 @@ function PTLivePage() {
                           const homeTeam = player.Side === 'A' ? opp : team;
                           if (postponedTeams.has(team) || postponedTeams.has(opp)) {
                             items.push({ key, type: 'ppd', label: key });
-                          } else if (DOME_STADIUMS.has(homeTeam)) {
-                            items.push({ key, type: 'dome', label: key });
-                          } else {
+                          } else if (!DOME_STADIUMS.has(homeTeam)) {
                             const wx = weatherData?.[homeTeam];
                             if (wx && wx.pop >= 0.20) {
-                              items.push({ key, type: 'rain', label: key, pct: Math.round(wx.pop * 100), temp: wx.temp });
+                              items.push({ key, type: 'rain', label: key, pct: Math.round(wx.pop * 100) });
                             }
                           }
                         }
@@ -14610,14 +14607,10 @@ function PTLivePage() {
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 6 : 10, justifyContent: 'center', marginBottom: 14, padding: '8px 12px', background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
                             {items.map(it => (
                               <span key={it.key} style={{ fontSize: isMobile ? 11 : 13, fontWeight: 600, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap',
-                                background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : it.type === 'rain' ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.05)',
-                                color: it.type === 'ppd' ? '#ef4444' : it.type === 'rain' ? '#60a5fa' : theme.textMuted,
+                                background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : 'rgba(96,165,250,0.12)',
+                                color: it.type === 'ppd' ? '#ef4444' : '#60a5fa',
                               }}>
-                                {it.type === 'ppd' && <span style={{ marginRight: 4 }}>[PPD]</span>}
-                                {it.type === 'rain' && <span style={{ marginRight: 4 }}>{it.pct}%</span>}
-                                {it.type === 'dome' && <span style={{ marginRight: 4 }}>&#127983;</span>}
-                                {it.label}
-                                {it.type === 'rain' && it.temp && <span style={{ marginLeft: 4, color: theme.textMuted }}>{it.temp}°F</span>}
+                                {it.type === 'ppd' ? `[PPD] ${it.label}` : `${it.label} - ${it.pct}%`}
                               </span>
                             ))}
                             {weatherLoading && <span style={{ fontSize: 11, color: theme.textMuted }}>Loading weather...</span>}
@@ -14823,7 +14816,7 @@ function PTLivePage() {
                       })()}
 
                       {/* Cheat Sheet Modal */}
-                      {showCheatSheet && projData?.cheatSheet && ReactDOM.createPortal(
+                      {showCheatSheet && projData?.players && ReactDOM.createPortal(
                         <div onClick={() => setShowCheatSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: `1px solid ${theme.border}`, borderRadius: 16, maxWidth: 800, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: isMobile ? 16 : 28 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -14832,6 +14825,18 @@ function PTLivePage() {
                             </div>
 
                             {(() => {
+                              // Rebuild cheat sheet live with current weather + PPD + confirmedOut exclusions
+                              const liveExclude = new Set(projData.confirmedOut || []);
+                              for (const player of projData.players) {
+                                const t = (player.Team || '').trim();
+                                const n = normalizeName(player.Player);
+                                if (postponedTeams.has(t)) { liveExclude.add(n); continue; }
+                                const w = weatherData?.[t];
+                                if (w && !w.dome && w.pop >= 0.30) liveExclude.add(n);
+                              }
+                              const allCards = [...batters, ...sps, ...rps];
+                              const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
+
                               const csRow = (entry, i) => {
                                 if (!entry) return (
                                   <tr key={`cs-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
@@ -14873,25 +14878,32 @@ function PTLivePage() {
                                   </thead>
                                   <tbody>
                                     <tr><td colSpan={5} style={{ padding: '10px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Starting Lineup</td></tr>
-                                    {projData.cheatSheet.slice(0, 11).map((entry, i) => csRow(entry, i))}
+                                    {liveCS.roster.slice(0, 11).map((entry, i) => csRow(entry, i))}
                                     <tr><td colSpan={5} style={{ padding: '14px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Pitching</td></tr>
-                                    {projData.cheatSheet.slice(11, 15).map((entry, i) => csRow(entry, 11 + i))}
+                                    {liveCS.roster.slice(11, 15).map((entry, i) => csRow(entry, 11 + i))}
                                   </tbody>
                                 </table>
                               );
                             })()}
 
-                            {/* Footer */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16 }}>
-                              <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>
-                                Total: {projData.cheatSheet.filter(r => r && r.HasSim !== false).reduce((s, r) => s + (r?.ExpPP || 0), 0).toFixed(1)} PP
-                              </div>
-                              {projData.tierCounts && (
-                                <div style={{ color: '#8899aa', fontSize: 13 }}>
-                                  {projData.tierCounts.perfect}P / {projData.tierCounts.diamond}D / {projData.tierCounts.gold}G
+                            {/* Footer — uses liveCS from above IIFE, re-read via closure isn't possible so recalc inline */}
+                            {(() => {
+                              const liveExcludeF = new Set(projData.confirmedOut || []);
+                              for (const pl of projData.players) {
+                                const t = (pl.Team || '').trim();
+                                if (postponedTeams.has(t)) { liveExcludeF.add(normalizeName(pl.Player)); continue; }
+                                const w = weatherData?.[t];
+                                if (w && !w.dome && w.pop >= 0.30) liveExcludeF.add(normalizeName(pl.Player));
+                              }
+                              const csF = projBuildCheatSheet(projData.players, [...batters, ...sps, ...rps], null, null, liveExcludeF, storedILPlayers);
+                              const total = csF.roster.filter(r => r && r.HasSim !== false).reduce((s, r) => s + (r?.ExpPP || 0), 0).toFixed(1);
+                              return (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16 }}>
+                                  <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>Total: {total} PP</div>
+                                  <div style={{ color: '#8899aa', fontSize: 13 }}>{csF.tierCounts.perfect}P / {csF.tierCounts.diamond}D / {csF.tierCounts.gold}G</div>
                                 </div>
-                              )}
-                            </div>
+                              );
+                            })()}
                             <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots prioritize SPs listed as RP, then teams with highest win chance and shortest SP outings, then highest OVR.</div>
                           </div>
                         </div>,
