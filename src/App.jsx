@@ -13085,8 +13085,8 @@ function PTLivePage() {
               const rainVol = closest.rain?.['3h'] || 0; // mm in 3-hour window
               const isThunderstorm = condId >= 200 && condId < 300;
               const isHeavyRain = condId === 502 || condId === 503 || condId === 504 || condId === 522;
-              const isSevere = isThunderstorm || isHeavyRain || rainVol >= 7.5;
-              const isModerate = rainVol >= 2.5 || condId === 501 || condId === 521;
+              const isSevere = isThunderstorm || isHeavyRain || rainVol >= 5;
+              const isModerate = !isSevere && (rainVol >= 2.5 || condId === 501 || condId === 521);
               const wx = {
                 temp: Math.round(closest.main?.temp || 0),
                 pop: closest.pop || 0,
