@@ -12653,7 +12653,7 @@ function PTLivePage() {
           continue;
         }
         const wx = weatherData?.[team];
-        if (wx && !wx.dome && wx.pop >= 0.30) {
+        if (wx && !wx.dome && wx.severe) {
           excludeSet.add(name);
           weatherExcluded.push(name);
         }
@@ -13079,10 +13079,22 @@ function PTLivePage() {
                 const diff = Math.abs((entry.dt * 1000) - gameTime);
                 if (diff < minDiff) { closest = entry; minDiff = diff; }
               }
+              // Weather condition IDs: 2xx=Thunderstorm, 3xx=Drizzle, 5xx=Rain
+              // 502+=Heavy rain, 503=Very heavy, 504=Extreme
+              const condId = closest.weather?.[0]?.id || 800;
+              const rainVol = closest.rain?.['3h'] || 0; // mm in 3-hour window
+              const isThunderstorm = condId >= 200 && condId < 300;
+              const isHeavyRain = condId === 502 || condId === 503 || condId === 504 || condId === 522;
+              const isSevere = isThunderstorm || isHeavyRain || rainVol >= 7.5;
+              const isModerate = rainVol >= 2.5 || condId === 501 || condId === 521;
               const wx = {
                 temp: Math.round(closest.main?.temp || 0),
-                pop: closest.pop || 0, // 0-1 probability
+                pop: closest.pop || 0,
                 condition: closest.weather?.[0]?.main || 'Clear',
+                conditionId: condId,
+                rainVol,
+                severe: isSevere,   // thunderstorm / heavy rain / 7.5mm+ — exclude from cheat sheet
+                moderate: isModerate, // moderate rain — warning only
                 windSpeed: Math.round(closest.wind?.speed || 0),
                 dome: false,
               };
@@ -14606,8 +14618,10 @@ function PTLivePage() {
                             items.push({ key, type: 'ppd', label: key });
                           } else if (!DOME_STADIUMS.has(homeTeam)) {
                             const wx = weatherData?.[homeTeam];
-                            if (wx && wx.pop >= 0.20) {
-                              items.push({ key, type: 'rain', label: key, pct: Math.round(wx.pop * 100) });
+                            if (wx && wx.severe) {
+                              items.push({ key, type: 'severe', label: key, condition: wx.condition });
+                            } else if (wx && wx.moderate) {
+                              items.push({ key, type: 'moderate', label: key, condition: wx.condition });
                             }
                           }
                         }
@@ -14616,10 +14630,10 @@ function PTLivePage() {
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 6 : 10, justifyContent: 'center', marginBottom: 14, padding: '8px 12px', background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
                             {items.map(it => (
                               <span key={it.key} style={{ fontSize: isMobile ? 11 : 13, fontWeight: 600, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap',
-                                background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : 'rgba(96,165,250,0.12)',
+                                background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : it.type === 'severe' ? 'rgba(96,165,250,0.15)' : 'rgba(96,165,250,0.08)',
                                 color: it.type === 'ppd' ? '#ef4444' : '#60a5fa',
                               }}>
-                                {it.type === 'ppd' ? `[PPD] ${it.label}` : `${it.label} - ${it.pct}%`}
+                                {it.type === 'ppd' ? `[PPD] ${it.label}` : `${it.label} - ${it.condition}`}
                               </span>
                             ))}
                             {weatherLoading && <span style={{ fontSize: 11, color: theme.textMuted }}>Loading weather...</span>}
@@ -14669,23 +14683,23 @@ function PTLivePage() {
                               const isPPD = postponedTeams.has(pTeam);
                               const isDelayed = delayedTeams.has(pTeam);
                               const wx = weatherData?.[pTeam];
-                              const rainPct = wx && !wx.dome ? Math.round(wx.pop * 100) : 0;
-                              const isRainWarning = rainPct >= 20 && rainPct < 30;
-                              const isRainExclude = rainPct >= 30;
+                              const wxSevere = wx && !wx.dome && wx.severe; // thunderstorm / heavy rain
+                              const wxModerate = wx && !wx.dome && wx.moderate && !wx.severe;
+                              const wxLabel = wx && !wx.dome ? wx.condition : null;
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
                               const rowBg = isIL ? 'rgba(239,68,68,0.10)'
                                 : isPPD ? 'rgba(239,68,68,0.15)'
                                 : isOut ? 'rgba(239,68,68,0.15)'
-                                : isRainExclude ? 'rgba(96,165,250,0.10)'
-                                : isRainWarning ? 'rgba(96,165,250,0.10)'
+                                : wxSevere ? 'rgba(96,165,250,0.10)'
+                                : wxModerate ? 'rgba(96,165,250,0.06)'
                                 : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
                               const blurStyle = (isOut || isPPD) ? { filter: 'blur(4px)', userSelect: 'none' } : {};
                               const tdPad = isMobile ? '6px 4px' : '10px 12px';
                               return (
-                                <tr key={idx} title={isPPD ? 'Game postponed' : isOut ? 'Not in confirmed lineup' : isRainExclude ? `${rainPct}% rain — excluded` : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
-                                  onMouseEnter={e => { if (!isOut && !isPPD && !isRainExclude) e.currentTarget.style.background = theme.tableRowHover; }}
+                                <tr key={idx} title={isPPD ? 'Game postponed' : isOut ? 'Not in confirmed lineup' : wxSevere ? `Severe weather: ${wxLabel}` : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
+                                  onMouseEnter={e => { if (!isOut && !isPPD) e.currentTarget.style.background = theme.tableRowHover; }}
                                   onMouseLeave={e => e.currentTarget.style.background = rowBg}>
                                   <td style={{ padding: tdPad, textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: isMobile ? 12 : 16 }}>{idx + 1}</td>
                                   <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, color: tc, fontSize: isMobile ? 13 : 17 }}>{p.Team}</td>
@@ -14695,7 +14709,7 @@ function PTLivePage() {
                                     {isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PPD</span>}
                                     {isDelayed && !isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(251,191,36,0.25)', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DLY</span>}
                                     {!isPPD && isOut && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
-                                    {(isRainWarning || isRainExclude) && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(96,165,250,0.25)', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{rainPct}%</span>}
+                                    {wxSevere && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(96,165,250,0.25)', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{wxLabel}</span>}
                                   </td>
                                   <td style={{ padding: tdPad, textAlign: 'center' }}>
                                     <span style={{
@@ -14841,7 +14855,7 @@ function PTLivePage() {
                                 const n = normalizeName(player.Player);
                                 if (postponedTeams.has(t)) { liveExclude.add(n); continue; }
                                 const w = weatherData?.[t];
-                                if (w && !w.dome && w.pop >= 0.30) liveExclude.add(n);
+                                if (w && !w.dome && w.severe) liveExclude.add(n);
                               }
                               const allCards = [...batters, ...sps, ...rps];
                               const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
@@ -14902,7 +14916,7 @@ function PTLivePage() {
                                 const t = (pl.Team || '').trim();
                                 if (postponedTeams.has(t)) { liveExcludeF.add(normalizeName(pl.Player)); continue; }
                                 const w = weatherData?.[t];
-                                if (w && !w.dome && w.pop >= 0.30) liveExcludeF.add(normalizeName(pl.Player));
+                                if (w && !w.dome && w.severe) liveExcludeF.add(normalizeName(pl.Player));
                               }
                               const csF = projBuildCheatSheet(projData.players, [...batters, ...sps, ...rps], null, null, liveExcludeF, storedILPlayers);
                               const total = csF.roster.filter(r => r && r.HasSim !== false).reduce((s, r) => s + (r?.ExpPP || 0), 0).toFixed(1);
