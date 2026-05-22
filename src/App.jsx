@@ -13036,7 +13036,7 @@ function PTLivePage() {
     if (!apiKey || !games?.length) return;
     setWeatherLoading(true); setWeatherError(null);
     try {
-      const MLB_TO_BPP_W = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
+      const MLB_TO_BPP_W = { AZ: 'ARI', CWS: 'CHW', WSH: 'WAS' };
       const mlbToBppW = abbr => MLB_TO_BPP_W[abbr] || abbr;
       const now = Date.now();
       const weatherMap = {};
@@ -13108,12 +13108,12 @@ function PTLivePage() {
     try {
       const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
       const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
+      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=team`);
       const schedData = await schedRes.json();
       const games = schedData.dates?.[0]?.games || [];
 
       // ── Postponement & delay detection ──────────────────────────────────────
-      const MLB_TO_BPP_PPD = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
+      const MLB_TO_BPP_PPD = { AZ: 'ARI', CWS: 'CHW', WSH: 'WAS' };
       const mlbToBppPpd = abbr => MLB_TO_BPP_PPD[abbr] || abbr;
       const ppd = new Set();
       const dly = new Set();
