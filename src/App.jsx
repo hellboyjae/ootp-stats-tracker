@@ -12298,16 +12298,31 @@ function PTLivePage() {
   // Keep ref in sync so interval callbacks always read latest key
   useEffect(() => { weatherApiKeyRef.current = weatherApiKey; }, [weatherApiKey]);
 
-  // Fetch weather when API key first becomes available
+  // Fetch weather + postponement for the projection date (not necessarily today)
   useEffect(() => {
-    if (!weatherApiKey) return;
-    const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-    const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-    fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=team`)
+    if (!weatherApiKey || !projData?.gameDate) return;
+    fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${projData.gameDate}&hydrate=team`)
       .then(r => r.json())
-      .then(d => { const games = d.dates?.[0]?.games || []; if (games.length) fetchWeatherData(games, weatherApiKey); })
+      .then(d => {
+        const games = d.dates?.[0]?.games || [];
+        // Postponement & delay detection for projection date
+        const MLB_TO_BPP_WX = { AZ: 'ARI', CWS: 'CHW', WSH: 'WAS' };
+        const toBpp = abbr => MLB_TO_BPP_WX[abbr] || abbr;
+        const ppd = new Set();
+        const dly = new Set();
+        for (const game of games) {
+          const code = game.status?.statusCode || '';
+          const home = toBpp(game.teams?.home?.team?.abbreviation || '');
+          const away = toBpp(game.teams?.away?.team?.abbreviation || '');
+          if (POSTPONED_CODES.has(code)) { ppd.add(home); ppd.add(away); }
+          if (DELAYED_CODES.has(code)) { dly.add(home); dly.add(away); }
+        }
+        setPostponedTeams(ppd);
+        setDelayedTeams(dly);
+        if (games.length) fetchWeatherData(games, weatherApiKey);
+      })
       .catch(e => console.error('[PTLive] Weather trigger error:', e));
-  }, [weatherApiKey]);
+  }, [weatherApiKey, projData?.gameDate]);
 
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
@@ -13126,28 +13141,9 @@ function PTLivePage() {
     try {
       const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
       const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=team`);
+      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
       const schedData = await schedRes.json();
       const games = schedData.dates?.[0]?.games || [];
-
-      // ── Postponement & delay detection ──────────────────────────────────────
-      const MLB_TO_BPP_PPD = { AZ: 'ARI', CWS: 'CHW', WSH: 'WAS' };
-      const mlbToBppPpd = abbr => MLB_TO_BPP_PPD[abbr] || abbr;
-      const ppd = new Set();
-      const dly = new Set();
-      for (const game of games) {
-        const code = game.status?.statusCode || '';
-        const home = mlbToBppPpd(game.teams?.home?.team?.abbreviation || '');
-        const away = mlbToBppPpd(game.teams?.away?.team?.abbreviation || '');
-        if (POSTPONED_CODES.has(code)) { ppd.add(home); ppd.add(away); }
-        if (DELAYED_CODES.has(code)) { dly.add(home); dly.add(away); }
-      }
-      setPostponedTeams(ppd);
-      setDelayedTeams(dly);
-
-      // ── Weather fetch (fire and forget, non-blocking) ───────────────────────
-      const wxKey = weatherApiKeyRef.current;
-      if (wxKey) fetchWeatherData(games, wxKey);
 
       // Extract first game time for submission lock
       const gameTimes = games.map(g => new Date(g.gameDate).getTime()).filter(t => !isNaN(t));
@@ -13441,6 +13437,22 @@ function PTLivePage() {
     }
     return map;
   }, [batters, sps, rps]);
+
+  // Live projected team — rebuilds with current weather/PPD/confirmedOut exclusions (matches cheat sheet modal)
+  const liveProjTeam = useMemo(() => {
+    if (!projData?.players?.length || !batters.length) return null;
+    const liveExclude = new Set(projData.confirmedOut || []);
+    for (const player of projData.players) {
+      const t = (player.Team || '').trim();
+      const n = normalizeName(player.Player);
+      if (postponedTeams.has(t)) { liveExclude.add(n); continue; }
+      const w = weatherData?.[t];
+      if (w && !w.dome && w.severe) liveExclude.add(n);
+    }
+    const allCards = [...batters, ...sps, ...rps];
+    const cs = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
+    return cs?.roster ? cheatSheetToTeam(cs.roster) : null;
+  }, [projData, batters, sps, rps, postponedTeams, weatherData, storedILPlayers]);
 
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
@@ -13896,7 +13908,7 @@ function PTLivePage() {
                       const activeStats = showYesterday ? yesterdayStats : mlbStats;
                       const entries = [...groupEntries];
                       // Inject projected team — use yesterday's snapshot when viewing yesterday
-                      const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
+                      const projTeam = showYesterday ? yesterdayProjGuess : liveProjTeam;
                       if ((showYesterday || isLocked) && projTeam) {
                         entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                       }
@@ -14043,7 +14055,7 @@ function PTLivePage() {
                 ) : (() => {
                   const activeStats = showYesterday ? yesterdayStats : mlbStats;
                   const entries = [...individualRankings];
-                  const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
+                  const projTeam = showYesterday ? yesterdayProjGuess : liveProjTeam;
                   if ((showYesterday || isLocked) && projTeam) {
                     entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                   }
@@ -14881,7 +14893,6 @@ function PTLivePage() {
                                 const w = weatherData?.[t];
                                 if (w && !w.dome && w.severe) { liveExclude.add(n); wxTeamsExcluded.add(t); }
                               }
-                              console.log('[PTLive CS] weatherData:', weatherData, 'teams excluded:', [...wxTeamsExcluded], 'total excluded:', liveExclude.size);
                               const allCards = [...batters, ...sps, ...rps];
                               const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
 
