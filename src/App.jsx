@@ -14681,7 +14681,7 @@ function PTLivePage() {
                                 : isRainExclude ? 'rgba(96,165,250,0.10)'
                                 : isRainWarning ? 'rgba(96,165,250,0.10)'
                                 : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
-                              const blurStyle = (isOut || isPPD || isRainExclude) ? { filter: 'blur(4px)', userSelect: 'none' } : {};
+                              const blurStyle = (isOut || isPPD) ? { filter: 'blur(4px)', userSelect: 'none' } : {};
                               const tdPad = isMobile ? '6px 4px' : '10px 12px';
                               return (
                                 <tr key={idx} title={isPPD ? 'Game postponed' : isOut ? 'Not in confirmed lineup' : isRainExclude ? `${rainPct}% rain — excluded` : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
