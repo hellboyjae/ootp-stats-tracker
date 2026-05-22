@@ -11778,6 +11778,7 @@ function PTLivePage() {
   const [postponedTeams, setPostponedTeams] = useState(new Set());
   const [delayedTeams, setDelayedTeams] = useState(new Set());
   const [weatherApiKey, setWeatherApiKey] = useState(null);
+  const weatherApiKeyRef = useRef(null); // ref mirror so interval callbacks read latest
   const weatherCacheRef = useRef({}); // { [venue]: { data, fetchedAt } }
 
   const isLocked = lockTime && new Date() >= lockTime;
@@ -12294,19 +12295,18 @@ function PTLivePage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Re-fetch weather when API key first loads (in case fetchMLBToday ran before key was ready)
-  const weatherKeyTriggered = useRef(false);
+  // Keep ref in sync so interval callbacks always read latest key
+  useEffect(() => { weatherApiKeyRef.current = weatherApiKey; }, [weatherApiKey]);
+
+  // Fetch weather when API key first becomes available
   useEffect(() => {
-    if (weatherApiKey && !weatherKeyTriggered.current) {
-      weatherKeyTriggered.current = true;
-      // Re-trigger schedule fetch to get game list for weather
-      const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-      const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-      fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`)
-        .then(r => r.json())
-        .then(d => { const games = d.dates?.[0]?.games || []; if (games.length) fetchWeatherData(games, weatherApiKey); })
-        .catch(() => {});
-    }
+    if (!weatherApiKey) return;
+    const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
+    fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`)
+      .then(r => r.json())
+      .then(d => { const games = d.dates?.[0]?.games || []; if (games.length) fetchWeatherData(games, weatherApiKey); })
+      .catch(e => console.error('[PTLive] Weather trigger error:', e));
   }, [weatherApiKey]);
 
   const loadPTLiveCards = async () => {
@@ -13051,7 +13051,7 @@ function PTLivePage() {
           continue;
         }
         const coords = VENUE_COORDS[homeAbbr];
-        if (!coords) continue;
+        if (!coords) { console.warn('[PTLive] No coords for', homeAbbr); continue; }
         // Check cache (30 min)
         const cached = weatherCacheRef.current[homeAbbr];
         if (cached && (now - cached.fetchedAt) < 30 * 60 * 1000) {
@@ -13062,14 +13062,21 @@ function PTLivePage() {
         const gameTime = new Date(game.gameDate).getTime();
         fetches.push(
           fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=imperial`)
-            .then(r => r.json())
+            .then(r => {
+              if (!r.ok) { console.error('[PTLive] Weather API HTTP', r.status, 'for', homeAbbr); return null; }
+              return r.json();
+            })
             .then(data => {
-              if (String(data.cod) !== '200' || !data.list?.length) return;
-              // Find forecast closest to game time
+              if (!data || !data.list?.length) {
+                if (data?.message) console.error('[PTLive] Weather API error:', data.message);
+                return;
+              }
+              // Find forecast entry closest to game time
+              // dt_txt format: "2026-05-22 18:00:00" (UTC). Use dt (unix) instead for reliable parsing.
               let closest = data.list[0];
-              let minDiff = Math.abs(new Date(closest.dt_txt + ' UTC').getTime() - gameTime);
+              let minDiff = Math.abs((closest.dt * 1000) - gameTime);
               for (const entry of data.list) {
-                const diff = Math.abs(new Date(entry.dt_txt + ' UTC').getTime() - gameTime);
+                const diff = Math.abs((entry.dt * 1000) - gameTime);
                 if (diff < minDiff) { closest = entry; minDiff = diff; }
               }
               const wx = {
@@ -13083,10 +13090,11 @@ function PTLivePage() {
               weatherMap[awayAbbr] = wx;
               weatherCacheRef.current[homeAbbr] = { data: wx, fetchedAt: now };
             })
-            .catch(() => {})
+            .catch(e => console.error('[PTLive] Weather fetch failed for', homeAbbr, e))
         );
       }
       await Promise.all(fetches);
+      console.log('[PTLive] Weather loaded:', Object.keys(weatherMap).length, 'teams', weatherMap);
       setWeatherData(weatherMap);
     } catch (e) {
       console.error('[PTLive] Weather fetch error:', e);
@@ -13120,7 +13128,8 @@ function PTLivePage() {
       setDelayedTeams(dly);
 
       // ── Weather fetch (fire and forget, non-blocking) ───────────────────────
-      if (weatherApiKey) fetchWeatherData(games, weatherApiKey);
+      const wxKey = weatherApiKeyRef.current;
+      if (wxKey) fetchWeatherData(games, wxKey);
 
       // Extract first game time for submission lock
       const gameTimes = games.map(g => new Date(g.gameDate).getTime()).filter(t => !isNaN(t));
