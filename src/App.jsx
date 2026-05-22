@@ -13426,6 +13426,22 @@ function PTLivePage() {
     return map;
   }, [storedTeamMap, projData]);
 
+  // Handedness lookup: normalizedName → '(R)' / '(L)' / '(S)' for batters, '(R)' / '(L)' for pitchers
+  const playerHandLookup = useMemo(() => {
+    const map = {};
+    const allCards = [...batters, ...sps, ...rps];
+    for (const c of allCards) {
+      const key = normalizeName(`${c.first_name || ''} ${c.last_name || ''}`);
+      const isPitcher = Number(c.pitcher_role) === 11 || Number(c.pitcher_role) === 12;
+      if (isPitcher) {
+        map[key] = THROWS_MAP[parseInt(c.throws)] || '';
+      } else {
+        map[key] = BATS_MAP[parseInt(c.bats)] || '';
+      }
+    }
+    return map;
+  }, [batters, sps, rps]);
+
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
     if (slot.pos) pool = pool.filter(c => Number(c.position) === slot.pos);
@@ -14711,6 +14727,7 @@ function PTLivePage() {
                                   <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, color: tc, fontSize: isMobile ? 13 : 17 }}>{p.Team}</td>
                                   <td style={{ padding: tdPad, fontWeight: 600, color: isPPD ? '#ef4444' : isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: isMobile ? 13 : 17, maxWidth: isMobile ? 120 : 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {p.Player}
+                                    {(() => { const h = playerHandLookup[normalizeName(p.Player)]; return h ? <span style={{ marginLeft: 4, fontSize: isMobile ? 10 : 12, fontWeight: 500, color: '#8899aa' }}>({h})</span> : null; })()}
                                     {isIL && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IL</span>}
                                     {isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PPD</span>}
                                     {isDelayed && !isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(251,191,36,0.25)', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DLY</span>}
