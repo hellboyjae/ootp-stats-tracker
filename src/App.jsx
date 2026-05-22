@@ -13438,22 +13438,6 @@ function PTLivePage() {
     return map;
   }, [batters, sps, rps]);
 
-  // Live projected team — rebuilds with current weather/PPD/confirmedOut exclusions (matches cheat sheet modal)
-  const liveProjTeam = useMemo(() => {
-    if (!projData?.players?.length || !batters.length) return null;
-    const liveExclude = new Set(projData.confirmedOut || []);
-    for (const player of projData.players) {
-      const t = (player.Team || '').trim();
-      const n = normalizeName(player.Player);
-      if (postponedTeams.has(t)) { liveExclude.add(n); continue; }
-      const w = weatherData?.[t];
-      if (w && !w.dome && w.severe) liveExclude.add(n);
-    }
-    const allCards = [...batters, ...sps, ...rps];
-    const cs = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
-    return cs?.roster ? cheatSheetToTeam(cs.roster) : null;
-  }, [projData, batters, sps, rps, postponedTeams, weatherData, storedILPlayers]);
-
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
     if (slot.pos) pool = pool.filter(c => Number(c.position) === slot.pos);
@@ -13908,7 +13892,7 @@ function PTLivePage() {
                       const activeStats = showYesterday ? yesterdayStats : mlbStats;
                       const entries = [...groupEntries];
                       // Inject projected team — use yesterday's snapshot when viewing yesterday
-                      const projTeam = showYesterday ? yesterdayProjGuess : liveProjTeam;
+                      const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
                       if ((showYesterday || isLocked) && projTeam) {
                         entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                       }
@@ -14055,7 +14039,7 @@ function PTLivePage() {
                 ) : (() => {
                   const activeStats = showYesterday ? yesterdayStats : mlbStats;
                   const entries = [...individualRankings];
-                  const projTeam = showYesterday ? yesterdayProjGuess : liveProjTeam;
+                  const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
                   if ((showYesterday || isLocked) && projTeam) {
                     entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
                   }
