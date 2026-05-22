@@ -10858,6 +10858,28 @@ const normalizeName = (s) => {
   const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-.]/g, '').replace(/\s+/g, ' ').toLowerCase().trim();
   return NAME_ALIASES[n] || n;
 };
+// ── Weather & postponement constants ──────────────────────────────────────────
+const DOME_STADIUMS = new Set(['MIL', 'ARI', 'TEX', 'MIA', 'HOU', 'TOR', 'SEA', 'TB']);
+const POSTPONED_CODES = new Set(['DR','DS','DG','DV','DF','DC','DD','DB','DI','DP','DL','DE','DO','DA','D9']);
+const DELAYED_CODES = new Set(['PR','PS','PL','PO','IR','IS','IL','IO']);
+const VENUE_COORDS = {
+  ARI: { lat: 33.4455, lon: -112.0667 }, ATH: { lat: 37.7516, lon: -122.2005 },
+  ATL: { lat: 33.8907, lon: -84.4677 }, BAL: { lat: 39.2838, lon: -76.6216 },
+  BOS: { lat: 42.3467, lon: -71.0972 }, CHC: { lat: 41.9484, lon: -87.6553 },
+  CHW: { lat: 41.8299, lon: -87.6338 }, CIN: { lat: 39.0974, lon: -84.5082 },
+  CLE: { lat: 41.4962, lon: -81.6852 }, COL: { lat: 39.7559, lon: -104.9942 },
+  DET: { lat: 42.3390, lon: -83.0485 }, HOU: { lat: 29.7572, lon: -95.3555 },
+  KC:  { lat: 39.0517, lon: -94.4803 }, LAA: { lat: 33.8003, lon: -117.8827 },
+  LAD: { lat: 34.0739, lon: -118.2400 }, MIA: { lat: 25.7781, lon: -80.2196 },
+  MIL: { lat: 43.0280, lon: -87.9712 }, MIN: { lat: 44.9817, lon: -93.2776 },
+  NYM: { lat: 40.7571, lon: -73.8458 }, NYY: { lat: 40.8296, lon: -73.9262 },
+  PHI: { lat: 39.9061, lon: -75.1665 }, PIT: { lat: 40.4469, lon: -80.0057 },
+  SD:  { lat: 32.7076, lon: -117.1570 }, SF:  { lat: 37.7786, lon: -122.3893 },
+  SEA: { lat: 47.5914, lon: -122.3325 }, STL: { lat: 38.6226, lon: -90.1928 },
+  TB:  { lat: 27.7682, lon: -82.6534 }, TEX: { lat: 32.7512, lon: -97.0832 },
+  TOR: { lat: 43.6414, lon: -79.3894 }, WAS: { lat: 38.8730, lon: -77.0074 },
+};
+
 // MLB player IDs that need disambiguation (same name, different player)
 const MLB_ID_OVERRIDES = { 695825: 'max muncy oak' }; // A's Muncy
 // Card-side: resolve the correct stats key for a card
@@ -11749,6 +11771,15 @@ function PTLivePage() {
   const [storedTeamMap, setStoredTeamMap] = useState(null);
   const [storedILPlayers, setStoredILPlayers] = useState({});
 
+  // ── Weather & postponement state ────────────────────────────────────────────
+  const [weatherData, setWeatherData] = useState(null); // { [teamAbbr]: { temp, pop, condition, windSpeed } }
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState(null);
+  const [postponedTeams, setPostponedTeams] = useState(new Set());
+  const [delayedTeams, setDelayedTeams] = useState(new Set());
+  const [weatherApiKey, setWeatherApiKey] = useState(null);
+  const weatherCacheRef = useRef({}); // { [venue]: { data, fetchedAt } }
+
   const isLocked = lockTime && new Date() >= lockTime;
   const [lockCountdown, setLockCountdown] = useState('');
 
@@ -12238,15 +12269,45 @@ function PTLivePage() {
     setStoredILPlayers(ilMap);
   };
 
+  // Load weather API key from site_content (seed on first deploy)
+  const loadWeatherApiKey = async () => {
+    try {
+      const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_weather_key').single();
+      if (data?.content?.key) { setWeatherApiKey(data.content.key); return; }
+    } catch (e) { /* no key stored yet */ }
+    // Seed default key if none exists
+    const defaultKey = '078018d788d8e15eaa3cc02505937260';
+    try {
+      await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key: defaultKey } }, { onConflict: 'id' });
+      setWeatherApiKey(defaultKey);
+    } catch (e) { /* seed failed, admin can set manually */ }
+  };
+
   useEffect(() => {
     loadPTLiveCards();
     fetchMLBToday();
     fetchFgData();
     loadProjections();
     loadPlayerTeams();
+    loadWeatherApiKey();
     const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Re-fetch weather when API key first loads (in case fetchMLBToday ran before key was ready)
+  const weatherKeyTriggered = useRef(false);
+  useEffect(() => {
+    if (weatherApiKey && !weatherKeyTriggered.current) {
+      weatherKeyTriggered.current = true;
+      // Re-trigger schedule fetch to get game list for weather
+      const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+      const dateStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
+      fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`)
+        .then(r => r.json())
+        .then(d => { const games = d.dates?.[0]?.games || []; if (games.length) fetchWeatherData(games, weatherApiKey); })
+        .catch(() => {});
+    }
+  }, [weatherApiKey]);
 
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
@@ -12580,7 +12641,25 @@ function PTLivePage() {
 
       const excludeSet = new Set(confirmedOut);
 
-      // Rebuild cheat sheet excluding confirmed-out players
+      // ── Weather & postponement exclusions ──────────────────────────────────
+      const weatherExcluded = []; // names excluded due to weather/postponement
+      const postponedPlayers = [];
+      for (const player of projData.players) {
+        const team = (player.Team || '').trim();
+        const name = normalizeName(player.Player);
+        if (postponedTeams.has(team)) {
+          excludeSet.add(name);
+          postponedPlayers.push(name);
+          continue;
+        }
+        const wx = weatherData?.[team];
+        if (wx && !wx.dome && wx.pop >= 0.30) {
+          excludeSet.add(name);
+          weatherExcluded.push(name);
+        }
+      }
+
+      // Rebuild cheat sheet excluding confirmed-out + postponed + rain 30%+ players
       const allCards = [...batters, ...sps, ...rps];
       const cheatSheet = projBuildCheatSheet(projData.players, allCards, null, null, excludeSet, storedILPlayers);
 
@@ -12589,6 +12668,8 @@ function PTLivePage() {
         cheatSheet: cheatSheet.roster,
         tierCounts: cheatSheet.tierCounts,
         confirmedOut,
+        postponedPlayers,
+        weatherExcluded,
         lineupsRefreshedAt: new Date().toISOString(),
       };
 
@@ -12598,7 +12679,8 @@ function PTLivePage() {
         { onConflict: 'id' }
       );
       setProjData(content);
-      alert(`Lineups refreshed! ${confirmedOut.length} player(s) confirmed out. ${teamsWithLineups.size} team(s) have posted lineups.`);
+      const wxCount = weatherExcluded.length + postponedPlayers.length;
+      alert(`Lineups refreshed! ${confirmedOut.length} player(s) confirmed out. ${wxCount > 0 ? wxCount + ' weather/PPD excluded. ' : ''}${teamsWithLineups.size} team(s) have posted lineups.`);
     } catch (e) {
       console.error('Lineup refresh error:', e);
       alert('Error refreshing lineups: ' + e.message);
@@ -12949,6 +13031,70 @@ function PTLivePage() {
     setYesterdayGuessLoading(false);
   };
 
+  // ── Weather fetch for PT Live ─────────────────────────────────────────────
+  const fetchWeatherData = async (games, apiKey) => {
+    if (!apiKey || !games?.length) return;
+    setWeatherLoading(true); setWeatherError(null);
+    try {
+      const MLB_TO_BPP_W = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
+      const mlbToBppW = abbr => MLB_TO_BPP_W[abbr] || abbr;
+      const now = Date.now();
+      const weatherMap = {};
+      const fetches = [];
+
+      for (const game of games) {
+        const homeAbbr = mlbToBppW(game.teams?.home?.team?.abbreviation || '');
+        const awayAbbr = mlbToBppW(game.teams?.away?.team?.abbreviation || '');
+        if (DOME_STADIUMS.has(homeAbbr)) {
+          weatherMap[homeAbbr] = { temp: null, pop: 0, condition: 'Dome', windSpeed: 0, dome: true };
+          weatherMap[awayAbbr] = { temp: null, pop: 0, condition: 'Dome', windSpeed: 0, dome: true };
+          continue;
+        }
+        const coords = VENUE_COORDS[homeAbbr];
+        if (!coords) continue;
+        // Check cache (30 min)
+        const cached = weatherCacheRef.current[homeAbbr];
+        if (cached && (now - cached.fetchedAt) < 30 * 60 * 1000) {
+          weatherMap[homeAbbr] = cached.data;
+          weatherMap[awayAbbr] = cached.data;
+          continue;
+        }
+        const gameTime = new Date(game.gameDate).getTime();
+        fetches.push(
+          fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=imperial`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.cod !== '200' || !data.list?.length) return;
+              // Find forecast closest to game time
+              let closest = data.list[0];
+              let minDiff = Math.abs(new Date(closest.dt_txt + ' UTC').getTime() - gameTime);
+              for (const entry of data.list) {
+                const diff = Math.abs(new Date(entry.dt_txt + ' UTC').getTime() - gameTime);
+                if (diff < minDiff) { closest = entry; minDiff = diff; }
+              }
+              const wx = {
+                temp: Math.round(closest.main?.temp || 0),
+                pop: closest.pop || 0, // 0-1 probability
+                condition: closest.weather?.[0]?.main || 'Clear',
+                windSpeed: Math.round(closest.wind?.speed || 0),
+                dome: false,
+              };
+              weatherMap[homeAbbr] = wx;
+              weatherMap[awayAbbr] = wx;
+              weatherCacheRef.current[homeAbbr] = { data: wx, fetchedAt: now };
+            })
+            .catch(() => {})
+        );
+      }
+      await Promise.all(fetches);
+      setWeatherData(weatherMap);
+    } catch (e) {
+      console.error('[PTLive] Weather fetch error:', e);
+      setWeatherError('Could not load weather data.');
+    }
+    setWeatherLoading(false);
+  };
+
   const fetchMLBToday = async () => {
     setIsLoadingStats(true); setStatsError(null);
     try {
@@ -12957,6 +13103,24 @@ function PTLivePage() {
       const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}`);
       const schedData = await schedRes.json();
       const games = schedData.dates?.[0]?.games || [];
+
+      // ── Postponement & delay detection ──────────────────────────────────────
+      const MLB_TO_BPP_PPD = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
+      const mlbToBppPpd = abbr => MLB_TO_BPP_PPD[abbr] || abbr;
+      const ppd = new Set();
+      const dly = new Set();
+      for (const game of games) {
+        const code = game.status?.statusCode || '';
+        const home = mlbToBppPpd(game.teams?.home?.team?.abbreviation || '');
+        const away = mlbToBppPpd(game.teams?.away?.team?.abbreviation || '');
+        if (POSTPONED_CODES.has(code)) { ppd.add(home); ppd.add(away); }
+        if (DELAYED_CODES.has(code)) { dly.add(home); dly.add(away); }
+      }
+      setPostponedTeams(ppd);
+      setDelayedTeams(dly);
+
+      // ── Weather fetch (fire and forget, non-blocking) ───────────────────────
+      if (weatherApiKey) fetchWeatherData(games, weatherApiKey);
 
       // Extract first game time for submission lock
       const gameTimes = games.map(g => new Date(g.gameDate).getTime()).filter(t => !isNaN(t));
@@ -14308,6 +14472,36 @@ function PTLivePage() {
                             Lock
                           </button>
                         </div>
+                        {/* Weather API Key */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10 }}>
+                          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>Weather Key:</span>
+                          <input
+                            ref={el => { if (el) el._wxRef = true; }}
+                            type="text"
+                            defaultValue={weatherApiKey || ''}
+                            placeholder="OpenWeatherMap API key"
+                            style={{ flex: 1, maxWidth: 280, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 11, color: '#fff', outline: 'none' }}
+                            onKeyDown={async e => {
+                              if (e.key === 'Enter') {
+                                const key = e.target.value.trim();
+                                if (!key) return;
+                                await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key } }, { onConflict: 'id' });
+                                setWeatherApiKey(key);
+                                alert('Weather API key saved!');
+                              }
+                            }}
+                          />
+                          <button onClick={async e => {
+                            const input = e.target.parentElement.querySelector('input');
+                            const key = input?.value?.trim();
+                            if (!key) return;
+                            await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key } }, { onConflict: 'id' });
+                            setWeatherApiKey(key);
+                            alert('Weather API key saved!');
+                          }} style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                            Save
+                          </button>
+                        </div>
                       </div>
                   </div>}
 
@@ -14387,6 +14581,50 @@ function PTLivePage() {
                         ))}
                       </div>
 
+                      {/* Weather Summary Bar */}
+                      {(() => {
+                        const items = [];
+                        if (!weatherData && !postponedTeams.size) return null;
+                        // Collect unique games (home@away pairs)
+                        const seen = new Set();
+                        for (const player of (projData?.players || [])) {
+                          const team = (player.Team || '').trim();
+                          const opp = (player.Opponent || '').trim();
+                          const key = player.Side === 'A' ? `${team}@${opp}` : `${opp}@${team}`;
+                          if (seen.has(key)) continue;
+                          seen.add(key);
+                          const homeTeam = player.Side === 'A' ? opp : team;
+                          if (postponedTeams.has(team) || postponedTeams.has(opp)) {
+                            items.push({ key, type: 'ppd', label: key });
+                          } else if (DOME_STADIUMS.has(homeTeam)) {
+                            items.push({ key, type: 'dome', label: key });
+                          } else {
+                            const wx = weatherData?.[homeTeam];
+                            if (wx && wx.pop >= 0.20) {
+                              items.push({ key, type: 'rain', label: key, pct: Math.round(wx.pop * 100), temp: wx.temp });
+                            }
+                          }
+                        }
+                        if (items.length === 0) return null;
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 6 : 10, justifyContent: 'center', marginBottom: 14, padding: '8px 12px', background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
+                            {items.map(it => (
+                              <span key={it.key} style={{ fontSize: isMobile ? 11 : 13, fontWeight: 600, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap',
+                                background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : it.type === 'rain' ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.05)',
+                                color: it.type === 'ppd' ? '#ef4444' : it.type === 'rain' ? '#60a5fa' : theme.textMuted,
+                              }}>
+                                {it.type === 'ppd' && <span style={{ marginRight: 4 }}>[PPD]</span>}
+                                {it.type === 'rain' && <span style={{ marginRight: 4 }}>{it.pct}%</span>}
+                                {it.type === 'dome' && <span style={{ marginRight: 4 }}>&#127983;</span>}
+                                {it.label}
+                                {it.type === 'rain' && it.temp && <span style={{ marginLeft: 4, color: theme.textMuted }}>{it.temp}°F</span>}
+                              </span>
+                            ))}
+                            {weatherLoading && <span style={{ fontSize: 11, color: theme.textMuted }}>Loading weather...</span>}
+                          </div>
+                        );
+                      })()}
+
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 13 : 17, tableLayout: 'fixed' }}>
@@ -14425,22 +14663,37 @@ function PTLivePage() {
                               const isHome = p.Side !== 'A';
                               const isOut = (projData?.confirmedOut || []).includes(normalizeName(p.Player));
                               const isIL = storedILPlayers[normalizeName(p.Player)] === (p.Team || '').trim();
+                              const pTeam = (p.Team || '').trim();
+                              const isPPD = postponedTeams.has(pTeam);
+                              const isDelayed = delayedTeams.has(pTeam);
+                              const wx = weatherData?.[pTeam];
+                              const rainPct = wx && !wx.dome ? Math.round(wx.pop * 100) : 0;
+                              const isRainWarning = rainPct >= 20 && rainPct < 30;
+                              const isRainExclude = rainPct >= 30;
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
-                              const rowBg = isIL ? 'rgba(239,68,68,0.10)' : isOut ? 'rgba(239,68,68,0.15)' : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
-                              const blurStyle = isOut ? { filter: 'blur(4px)', userSelect: 'none' } : {};
+                              const rowBg = isIL ? 'rgba(239,68,68,0.10)'
+                                : isPPD ? 'rgba(239,68,68,0.15)'
+                                : isOut ? 'rgba(239,68,68,0.15)'
+                                : isRainExclude ? 'rgba(96,165,250,0.10)'
+                                : isRainWarning ? 'rgba(96,165,250,0.10)'
+                                : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
+                              const blurStyle = (isOut || isPPD || isRainExclude) ? { filter: 'blur(4px)', userSelect: 'none' } : {};
                               const tdPad = isMobile ? '6px 4px' : '10px 12px';
                               return (
-                                <tr key={idx} title={isOut ? 'Not in confirmed lineup' : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
-                                  onMouseEnter={e => { if (!isOut) e.currentTarget.style.background = theme.tableRowHover; }}
+                                <tr key={idx} title={isPPD ? 'Game postponed' : isOut ? 'Not in confirmed lineup' : isRainExclude ? `${rainPct}% rain — excluded` : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
+                                  onMouseEnter={e => { if (!isOut && !isPPD && !isRainExclude) e.currentTarget.style.background = theme.tableRowHover; }}
                                   onMouseLeave={e => e.currentTarget.style.background = rowBg}>
                                   <td style={{ padding: tdPad, textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: isMobile ? 12 : 16 }}>{idx + 1}</td>
                                   <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, color: tc, fontSize: isMobile ? 13 : 17 }}>{p.Team}</td>
-                                  <td style={{ padding: tdPad, fontWeight: 600, color: isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: isMobile ? 13 : 17, maxWidth: isMobile ? 120 : 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <td style={{ padding: tdPad, fontWeight: 600, color: isPPD ? '#ef4444' : isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: isMobile ? 13 : 17, maxWidth: isMobile ? 120 : 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {p.Player}
                                     {isIL && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IL</span>}
-                                    {isOut && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
+                                    {isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PPD</span>}
+                                    {isDelayed && !isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(251,191,36,0.25)', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DLY</span>}
+                                    {!isPPD && isOut && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
+                                    {(isRainWarning || isRainExclude) && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(96,165,250,0.25)', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{rainPct}%</span>}
                                   </td>
                                   <td style={{ padding: tdPad, textAlign: 'center' }}>
                                     <span style={{
