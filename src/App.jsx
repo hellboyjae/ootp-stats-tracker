@@ -13091,17 +13091,22 @@ function PTLivePage() {
                 if (data?.message) console.error('[PTLive] Weather API error:', data.message);
                 return;
               }
-              // Find forecast entry closest to game time (use dt unix timestamp)
-              let closest = data.list[0];
-              let minDiff = Math.abs((closest.dt * 1000) - gameTime);
-              for (const entry of data.list) {
-                const diff = Math.abs((entry.dt * 1000) - gameTime);
-                if (diff < minDiff) { closest = entry; minDiff = diff; }
+              // Find WORST weather within ±3 hours of game time
+              const windowMs = 3 * 60 * 60 * 1000;
+              const nearby = data.list.filter(e => Math.abs((e.dt * 1000) - gameTime) <= windowMs);
+              if (!nearby.length) nearby.push(data.list[0]);
+              // Pick the entry with worst weather (highest severity, then highest rainVol)
+              let worst = nearby[0];
+              let worstWx = buildWx(worst);
+              for (const entry of nearby) {
+                const ewx = buildWx(entry);
+                if (ewx.severe && !worstWx.severe) { worst = entry; worstWx = ewx; }
+                else if (ewx.severe === worstWx.severe && ewx.rainVol > worstWx.rainVol) { worst = entry; worstWx = ewx; }
               }
-              const wx = buildWx(closest);
+              const wx = worstWx;
               weatherMap[homeAbbr] = wx;
               weatherMap[awayAbbr] = wx;
-              weatherCacheRef.current[homeAbbr] = { raw: closest, fetchedAt: now };
+              weatherCacheRef.current[homeAbbr] = { raw: worst, fetchedAt: now };
             })
             .catch(e => console.error('[PTLive] Weather fetch failed for', homeAbbr, e))
         );
@@ -14634,7 +14639,7 @@ function PTLivePage() {
                                 background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : it.type === 'severe' ? 'rgba(96,165,250,0.15)' : 'rgba(96,165,250,0.08)',
                                 color: it.type === 'ppd' ? '#ef4444' : '#60a5fa',
                               }}>
-                                {it.type === 'ppd' ? `[PPD] ${it.label}` : `${it.label} - ${it.condition}`}
+                                {it.type === 'ppd' ? `[PPD] ${it.label}` : `${it.label} - ${it.condition}, ${it.type}`}
                               </span>
                             ))}
                             {weatherLoading && <span style={{ fontSize: 11, color: theme.textMuted }}>Loading weather...</span>}
@@ -14686,7 +14691,7 @@ function PTLivePage() {
                               const wx = weatherData?.[pTeam];
                               const wxSevere = wx && !wx.dome && wx.severe; // thunderstorm / heavy rain
                               const wxModerate = wx && !wx.dome && wx.moderate && !wx.severe;
-                              const wxLabel = wx && !wx.dome ? wx.condition : null;
+                              const wxLabel = wx && !wx.dome ? (wxSevere ? `${wx.condition}, severe` : wxModerate ? `${wx.condition}, moderate` : wx.condition) : null;
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
@@ -14851,13 +14856,15 @@ function PTLivePage() {
                             {(() => {
                               // Rebuild cheat sheet live with current weather + PPD + confirmedOut exclusions
                               const liveExclude = new Set(projData.confirmedOut || []);
+                              const wxTeamsExcluded = new Set();
                               for (const player of projData.players) {
                                 const t = (player.Team || '').trim();
                                 const n = normalizeName(player.Player);
                                 if (postponedTeams.has(t)) { liveExclude.add(n); continue; }
                                 const w = weatherData?.[t];
-                                if (w && !w.dome && w.severe) liveExclude.add(n);
+                                if (w && !w.dome && w.severe) { liveExclude.add(n); wxTeamsExcluded.add(t); }
                               }
+                              console.log('[PTLive CS] weatherData:', weatherData, 'teams excluded:', [...wxTeamsExcluded], 'total excluded:', liveExclude.size);
                               const allCards = [...batters, ...sps, ...rps];
                               const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
 
