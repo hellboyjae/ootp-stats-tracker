@@ -13042,6 +13042,25 @@ function PTLivePage() {
       const weatherMap = {};
       const fetches = [];
 
+      // Build weather object from raw forecast entry — severity always computed fresh
+      const buildWx = (entry) => {
+        const condId = entry.weather?.[0]?.id || 800;
+        const rainVol = entry.rain?.['3h'] || 0;
+        const isThunderstorm = condId >= 200 && condId < 300;
+        const isHeavyRain = condId === 502 || condId === 503 || condId === 504 || condId === 522;
+        return {
+          temp: Math.round(entry.main?.temp || 0),
+          pop: entry.pop || 0,
+          condition: entry.weather?.[0]?.main || 'Clear',
+          conditionId: condId,
+          rainVol,
+          severe: isThunderstorm || isHeavyRain || rainVol >= 5,
+          moderate: !(isThunderstorm || isHeavyRain || rainVol >= 5) && (rainVol >= 2.5 || condId === 501 || condId === 521),
+          windSpeed: Math.round(entry.wind?.speed || 0),
+          dome: false,
+        };
+      };
+
       for (const game of games) {
         const homeAbbr = mlbToBppW(game.teams?.home?.team?.abbreviation || '');
         const awayAbbr = mlbToBppW(game.teams?.away?.team?.abbreviation || '');
@@ -13052,11 +13071,12 @@ function PTLivePage() {
         }
         const coords = VENUE_COORDS[homeAbbr];
         if (!coords) { console.warn('[PTLive] No coords for', homeAbbr); continue; }
-        // Check cache (30 min)
+        // Check cache (30 min) — cache stores raw forecast data, severity computed fresh each time
         const cached = weatherCacheRef.current[homeAbbr];
         if (cached && (now - cached.fetchedAt) < 30 * 60 * 1000) {
-          weatherMap[homeAbbr] = cached.data;
-          weatherMap[awayAbbr] = cached.data;
+          const cw = buildWx(cached.raw);
+          weatherMap[homeAbbr] = cw;
+          weatherMap[awayAbbr] = cw;
           continue;
         }
         const gameTime = new Date(game.gameDate).getTime();
@@ -13071,36 +13091,17 @@ function PTLivePage() {
                 if (data?.message) console.error('[PTLive] Weather API error:', data.message);
                 return;
               }
-              // Find forecast entry closest to game time
-              // dt_txt format: "2026-05-22 18:00:00" (UTC). Use dt (unix) instead for reliable parsing.
+              // Find forecast entry closest to game time (use dt unix timestamp)
               let closest = data.list[0];
               let minDiff = Math.abs((closest.dt * 1000) - gameTime);
               for (const entry of data.list) {
                 const diff = Math.abs((entry.dt * 1000) - gameTime);
                 if (diff < minDiff) { closest = entry; minDiff = diff; }
               }
-              // Weather condition IDs: 2xx=Thunderstorm, 3xx=Drizzle, 5xx=Rain
-              // 502+=Heavy rain, 503=Very heavy, 504=Extreme
-              const condId = closest.weather?.[0]?.id || 800;
-              const rainVol = closest.rain?.['3h'] || 0; // mm in 3-hour window
-              const isThunderstorm = condId >= 200 && condId < 300;
-              const isHeavyRain = condId === 502 || condId === 503 || condId === 504 || condId === 522;
-              const isSevere = isThunderstorm || isHeavyRain || rainVol >= 5;
-              const isModerate = !isSevere && (rainVol >= 2.5 || condId === 501 || condId === 521);
-              const wx = {
-                temp: Math.round(closest.main?.temp || 0),
-                pop: closest.pop || 0,
-                condition: closest.weather?.[0]?.main || 'Clear',
-                conditionId: condId,
-                rainVol,
-                severe: isSevere,   // thunderstorm / heavy rain / 7.5mm+ — exclude from cheat sheet
-                moderate: isModerate, // moderate rain — warning only
-                windSpeed: Math.round(closest.wind?.speed || 0),
-                dome: false,
-              };
+              const wx = buildWx(closest);
               weatherMap[homeAbbr] = wx;
               weatherMap[awayAbbr] = wx;
-              weatherCacheRef.current[homeAbbr] = { data: wx, fetchedAt: now };
+              weatherCacheRef.current[homeAbbr] = { raw: closest, fetchedAt: now };
             })
             .catch(e => console.error('[PTLive] Weather fetch failed for', homeAbbr, e))
         );
