@@ -12361,7 +12361,10 @@ function PTLivePage() {
     setProjLoading(true);
     try {
       const { data } = await supabase.from('site_content').select('*').eq('id', 'ptlive_projections').single();
-      if (data?.content) setProjData(data.content);
+      if (data?.content) {
+        if (data.content.players?.length) data.content.players = mergeProjectionPlayers(data.content.players);
+        setProjData(data.content);
+      }
     } catch (e) { console.error('Load projections error:', e); }
     setProjLoading(false);
   };
@@ -12398,6 +12401,39 @@ function PTLivePage() {
   const PROJ_PITCHER_ROLE_MAP = { 11: 'SP', 12: 'RP', 13: 'CL' };
   const projDisplayPos = (pos, role) => pos === 1 ? (PROJ_PITCHER_ROLE_MAP[role] || 'P') : (PROJ_POS_MAP[pos] || '?');
   const TWO_WAY_PLAYERS = new Set(['Shohei Ohtani']);
+
+  // ── Merge doubleheader duplicate players (display-level) ──────────────────
+  const mergeProjectionPlayers = (players) => {
+    if (!players?.length) return players;
+    const grouped = {};
+    players.forEach(p => {
+      const key = `${normalizeName(p.Player)}|${(p.Team || '').trim()}|${p.Type}`;
+      if (!grouped[key]) {
+        grouped[key] = { ...p };
+      } else {
+        const g = grouped[key];
+        g.ExpPP = Math.round(((g.ExpPP || 0) + (p.ExpPP || 0)) * 10) / 10;
+        g.BustPct = Math.round(((g.BustPct || 0) / 100) * ((p.BustPct || 0) / 100) * 1000) / 10;
+        if (p.Type === 'batter') {
+          ['Singles', 'Doubles', 'Triples', 'HR', 'Runs', 'RBI', 'BB', 'SB'].forEach(f => {
+            g[f] = Math.round(((g[f] || 0) + (p[f] || 0)) * 100) / 100;
+          });
+        } else {
+          ['IP', 'K', 'ER', 'BB'].forEach(f => {
+            g[f] = Math.round(((g[f] || 0) + (p[f] || 0)) * 100) / 100;
+          });
+          ['WinPct', 'QS'].forEach(f => {
+            g[f] = Math.round(((g[f] || 0) + (p[f] || 0)) * 10) / 10;
+          });
+        }
+        const opp = (p.Opponent || '').trim();
+        if (opp && !(g.Opponent || '').includes(opp)) g.Opponent = `${g.Opponent} / ${opp}`;
+        const gt = (p.GameTime || '').trim();
+        if (gt && !(g.GameTime || '').includes(gt)) g.GameTime = `${g.GameTime} / ${gt}`;
+      }
+    });
+    return Object.values(grouped);
+  };
 
   // ── Projections: math helpers ─────────────────────────────────────────────
   const projPoissonPmf = (k, lam) => {
@@ -12595,16 +12631,17 @@ function PTLivePage() {
         });
       });
 
-      results.sort((a, b) => b.ExpPP - a.ExpPP);
+      const mergedResults = mergeProjectionPlayers(results);
+      mergedResults.sort((a, b) => b.ExpPP - a.ExpPP);
 
       // Build cheat sheet
-      const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers, null, storedILPlayers);
+      const cheatSheet = projBuildCheatSheet(mergedResults, allCards, simBatters, simPitchers, null, storedILPlayers);
 
       const gameDate = simBatters.length > 0 && simBatters[0].GameDate
         ? String(simBatters[0].GameDate).slice(0, 10) : todayStr;
 
       const content = {
-        players: results,
+        players: mergedResults,
         cheatSheet: cheatSheet.roster,
         gameDate,
         updatedAt: new Date().toISOString(),
