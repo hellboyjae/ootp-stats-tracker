@@ -12476,10 +12476,39 @@ function PTLivePage() {
         reader.readAsArrayBuffer(file);
       });
 
-      const [simBatters, simPitchers] = await Promise.all([
+      const [rawBatters, rawPitchers] = await Promise.all([
         readXlsx(projUploadFiles.batters),
         readXlsx(projUploadFiles.pitchers),
       ]);
+
+      // ── Merge doubleheader entries (same player, same team → sum stats) ──
+      const mergeSimRows = (rows, numericFields, isHitter) => {
+        const grouped = {};
+        rows.forEach(r => {
+          const key = `${(r.FullName || '').trim()}|${(r.Team || '').trim()}`;
+          if (!grouped[key]) {
+            grouped[key] = { ...r };
+            if (isHitter) grouped[key]._hitProbs = [r.HitProbability || 0];
+          } else {
+            const g = grouped[key];
+            numericFields.forEach(f => { g[f] = (g[f] || 0) + (r[f] || 0); });
+            if (isHitter) g._hitProbs.push(r.HitProbability || 0);
+            const opp = (r.Opponent || '').trim();
+            if (opp && !(g.Opponent || '').includes(opp)) g.Opponent = `${g.Opponent} / ${opp}`;
+            const gt = (r.GameTime || '').trim();
+            if (gt && !(g.GameTime || '').includes(gt)) g.GameTime = `${g.GameTime} / ${gt}`;
+          }
+        });
+        return Object.values(grouped).map(r => {
+          if (r._hitProbs?.length > 1) r.HitProbability = 1 - r._hitProbs.reduce((acc, p) => acc * (1 - p), 1);
+          delete r._hitProbs;
+          return r;
+        });
+      };
+      const simBatters = mergeSimRows(rawBatters,
+        ['Singles', 'Doubles', 'Triples', 'HomeRuns', 'Hits', 'Runs', 'RBIs', 'Walks', 'StolenBaseSuccesses', 'StolenBaseAttempts'], true);
+      const simPitchers = mergeSimRows(rawPitchers,
+        ['Innings', 'Strikeouts', 'RunsAllowed', 'Walks', 'WinPct', 'QualityStart'], false);
 
       // Build card lookup from existing PT card data
       const allCards = [...batters, ...sps, ...rps];
