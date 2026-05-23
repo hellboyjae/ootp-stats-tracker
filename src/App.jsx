@@ -12550,9 +12550,9 @@ function PTLivePage() {
       const allCards = [...batters, ...sps, ...rps];
       const cardsByName = {};
       allCards.forEach(c => {
-        const name = `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`;
-        if (!cardsByName[name]) cardsByName[name] = [];
-        cardsByName[name].push(c);
+        const nn = normalizeName(`${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`);
+        if (!cardsByName[nn]) cardsByName[nn] = [];
+        cardsByName[nn].push(c);
       });
 
       const matchCard = (simName, simTeam, playerType) => {
@@ -12563,7 +12563,7 @@ function PTLivePage() {
         // General name fix
         name = PROJ_NAME_FIXES[name] || name;
         const ptTeam = PROJ_TEAM_CODE_MAP[(simTeam || '').trim()] || (simTeam || '').trim();
-        const matches = cardsByName[name];
+        const matches = cardsByName[normalizeName(name)];
         if (!matches || matches.length === 0) return null;
         if (matches.length === 1) return matches[0];
         // Disambiguate by team first (via storedTeamMap, since franchise column is never populated), then by player type
