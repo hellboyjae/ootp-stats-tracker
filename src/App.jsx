@@ -15277,22 +15277,15 @@ function LeaderboardsPage() {
 
   const fetchAndCacheCSVs = async () => {
     try {
-      // Recompute configs at fetch time so Refresh always targets the current week's CSVs
-      const freshConfigs = getLeaderboardCSVConfigs();
-      const results = {};
-      for (const cfg of freshConfigs) {
-        const resp = await fetch(cfg.url);
-        if (!resp.ok) throw new Error(`Failed to fetch ${cfg.label}`);
-        const text = await resp.text();
-        results[cfg.id] = parseLeaderboardCSV(text);
+      // Fetch via Supabase Edge Function to avoid CORS (OOTP site blocks cross-origin requests)
+      const { data, error } = await supabase.functions.invoke('leaderboard-csv-fetch');
+      if (error) throw new Error(error.message || 'Edge function error');
+      const results = data?.data;
+      if (!results || !Object.values(results).some(arr => Array.isArray(arr) && arr.length > 0)) {
+        throw new Error(data?.error || 'Edge function returned no event data');
       }
-      // Only cache if we actually got meaningful data
-      const hasEvents = Object.values(results).some(arr => Array.isArray(arr) && arr.length > 0);
-      if (!hasEvents) throw new Error('CSVs returned no event data');
-      const now = new Date().toISOString();
-      await supabase.from('site_content').upsert({ id: 'leaderboards_data', content: { data: results, updatedAt: now } }, { onConflict: 'id' });
       setLbData(results);
-      setLbLastUpdated(now);
+      setLbLastUpdated(data.updatedAt);
     } catch (e) {
       setLbError('Failed to fetch CSV data: ' + e.message);
     }
