@@ -12812,7 +12812,10 @@ function PTLivePage() {
       .filter(c => !isIL(normalizeName(c.Player), c.Team));
 
     const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !skip(normalizeName(p.Player), p.Team));
-    const allRp = [...simRps, ...rpCandidates]
+    // Dedup simRps + rpCandidates by normalized name — sim entries (ExpPP > 0) win over card-only
+    const rpSeen = new Set(simRps.map(p => normalizeName(p.Player)));
+    const dedupedRpCandidates = rpCandidates.filter(c => !rpSeen.has(normalizeName(c.Player)));
+    const allRp = [...simRps, ...dedupedRpCandidates]
       .filter(p => !skip(normalizeName(p.Player), p.Team))
       .sort((a, b) => {
         // 1. SP-as-RP with sim data first (ExpPP > 0)
@@ -12844,7 +12847,7 @@ function PTLivePage() {
       r.forEach(p => { if (p && c[p.Tier] !== undefined) c[p.Tier]++; });
       return c.Perfect <= TIER_MAX.Perfect && c.Diamond <= TIER_MAX.Diamond && c.Gold <= TIER_MAX.Gold;
     };
-    const pKey = p => `${p.Player}|${p.Team}`;
+    const pKey = p => `${normalizeName(p.Player)}|${(p.Team || '').trim()}`;
 
     // Build per-slot candidate lists preserving source sort order
     const slotCands = slotDefs.map(([slotName, eligPos, source]) => {
@@ -15239,25 +15242,30 @@ function LeaderboardsPage() {
   const [lbPage, setLbPage] = useState(0);
   const LB_PAGE_SIZE = 50;
 
-  const loadLeaderboardData = async () => {
+  const loadLeaderboardData = async (forceRefresh = false) => {
     setLbLoading(true);
     setLbError('');
     try {
-      const { data: cached } = await supabase.from('site_content').select('content').eq('id', 'leaderboards_data').single();
-      if (cached?.content?.data) {
-        const updatedAt = cached.content.updatedAt ? new Date(cached.content.updatedAt) : null;
-        // Fresh if fetched after the most recent Monday (dumps publish Monday, we fetch Tuesday+)
-        const now = new Date();
-        const day = now.getDay();
-        const diffToMonday = day === 0 ? 6 : day - 1;
-        const lastMonday = new Date(now);
-        lastMonday.setDate(now.getDate() - diffToMonday);
-        lastMonday.setHours(0, 0, 0, 0);
-        if (updatedAt && updatedAt > lastMonday) {
-          setLbData(cached.content.data);
-          setLbLastUpdated(cached.content.updatedAt);
-          setLbLoading(false);
-          return;
+      if (!forceRefresh) {
+        const { data: cached } = await supabase.from('site_content').select('content').eq('id', 'leaderboards_data').single();
+        // Validate cache has actual event data, not just an empty shell
+        const cachedData = cached?.content?.data;
+        const hasEvents = cachedData && Object.values(cachedData).some(arr => Array.isArray(arr) && arr.length > 0);
+        if (hasEvents) {
+          const updatedAt = cached.content.updatedAt ? new Date(cached.content.updatedAt) : null;
+          // Fresh if fetched after the most recent Monday (dumps publish Monday, we fetch Tuesday+)
+          const now = new Date();
+          const day = now.getDay();
+          const diffToMonday = day === 0 ? 6 : day - 1;
+          const lastMonday = new Date(now);
+          lastMonday.setDate(now.getDate() - diffToMonday);
+          lastMonday.setHours(0, 0, 0, 0);
+          if (updatedAt && updatedAt > lastMonday) {
+            setLbData(cachedData);
+            setLbLastUpdated(cached.content.updatedAt);
+            setLbLoading(false);
+            return;
+          }
         }
       }
       await fetchAndCacheCSVs();
@@ -15269,13 +15277,18 @@ function LeaderboardsPage() {
 
   const fetchAndCacheCSVs = async () => {
     try {
+      // Recompute configs at fetch time so Refresh always targets the current week's CSVs
+      const freshConfigs = getLeaderboardCSVConfigs();
       const results = {};
-      for (const cfg of LEADERBOARD_CSV_CONFIGS) {
+      for (const cfg of freshConfigs) {
         const resp = await fetch(cfg.url);
         if (!resp.ok) throw new Error(`Failed to fetch ${cfg.label}`);
         const text = await resp.text();
         results[cfg.id] = parseLeaderboardCSV(text);
       }
+      // Only cache if we actually got meaningful data
+      const hasEvents = Object.values(results).some(arr => Array.isArray(arr) && arr.length > 0);
+      if (!hasEvents) throw new Error('CSVs returned no event data');
       const now = new Date().toISOString();
       await supabase.from('site_content').upsert({ id: 'leaderboards_data', content: { data: results, updatedAt: now } }, { onConflict: 'id' });
       setLbData(results);
@@ -15418,7 +15431,7 @@ function LeaderboardsPage() {
             {lbLastUpdated && <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>Last updated: {new Date(lbLastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={() => { setLbData(null); loadLeaderboardData(); }} style={{ padding: '7px 16px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Refresh</button>
+            <button onClick={() => { setLbData(null); loadLeaderboardData(true); }} style={{ padding: '7px 16px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Refresh</button>
           </div>
         </div>
 
