@@ -11174,13 +11174,13 @@ function LiveSpecPage() {
     const todayStr = today.toISOString().slice(0, 10);
 
     const WINDOWS_2026 = [
-      ['2026-10-30', null],          // Oct 30+ → off-season (Nov 2 first Monday)
-      ['2026-10-02', '2026-10-01'],  // Oct 2–29  → October  (Oct 5 first Monday)
-      ['2026-09-04', '2026-09-01'],  // Sep 4–Oct 1 → September (Sep 7 first Monday)
-      ['2026-07-31', '2026-08-01'],  // Jul 31–Sep 3 → August  (Aug 3 first Monday)
-      ['2026-07-03', '2026-07-01'],  // Jul 3–Jul 30 → July    (Jul 6 first Monday)
-      ['2026-05-29', '2026-06-01'],  // May 29–Jul 2 → June    (Jun 1 first Monday)
-      ['2026-05-01', '2026-05-01'],  // May 1–May 28 → May     (May 4 first Monday)
+      ['2026-10-30', null],          // Oct 30+ → off-season
+      ['2026-10-01', '2026-10-01'],  // October
+      ['2026-09-01', '2026-09-01'],  // September
+      ['2026-08-01', '2026-08-01'],  // August
+      ['2026-07-01', '2026-07-01'],  // July
+      ['2026-06-01', '2026-06-01'],  // June
+      ['2026-05-01', '2026-05-01'],  // May
     ];
 
     for (const [cutoff, start] of WINDOWS_2026) {
@@ -11732,7 +11732,7 @@ function PTLivePage() {
   const [yesterdayTeam, setYesterdayTeam]   = useState(null);
 
   // ── Best Possible Roster state ──────────────────────────────────────────────
-  const [bestRosterDate, setBestRosterDate] = useState(null); // defaults to yesterdayStr on first load
+  const [bestRosterDate, setBestRosterDate] = useState(null); // defaults to todayStr on first load
   const [bestRosterStats, setBestRosterStats] = useState(null);
   const [bestRosterLoading, setBestRosterLoading] = useState(false);
   const [bestRoster, setBestRoster] = useState([]);
@@ -13853,7 +13853,7 @@ function PTLivePage() {
                   if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode, date);
                   if (tab.id === 'group-rankings') loadGlobalRankings(date);
                   if (tab.id === 'global' || tab.id === 'most-used') loadIndividualRankings(date);
-                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || yesterdayStr);
+                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || todayStr);
                   if (tab.id === 'alltime') loadAlltimeRankings();
                   if (tab.id === 'cumulative-pp') loadCumulativePP();
                 }} style={{
@@ -14272,7 +14272,7 @@ function PTLivePage() {
                     type="date"
                     min={SEASON_START}
                     max={todayStr}
-                    value={bestRosterDate || yesterdayStr}
+                    value={bestRosterDate || todayStr}
                     onChange={e => {
                       const d = e.target.value;
                       setBestRosterDate(d);
