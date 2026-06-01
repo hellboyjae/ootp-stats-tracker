@@ -11291,14 +11291,14 @@ function LiveSpecPage() {
             <button onClick={() => setShowInfo(!showInfo)} style={{ fontSize: 13, color: theme.accent, background: 'none', border: `1px solid ${theme.accent}`, borderRadius: 4, padding: '6px 10px', cursor: 'pointer', fontWeight: 600 }}>How Accurate Is This?</button>
             {showInfo && (
               <div style={{ marginTop: 10, fontSize: 12, color: '#d1d5db', lineHeight: 1.6, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: 12 }}>
-                <strong style={{ color: '#fff' }}>Pred Δ</strong> predicts the expected OVR change at the next Live roster update, based on a regression model trained on the April→May 2026 update.
+                <strong style={{ color: '#fff' }}>Pred Δ</strong> predicts the expected OVR change at the next Live roster update, based on a regression model trained on the April + May 2026 eval windows (~1100 players).
                 <br /><br />
                 The model measures how much each player over/underperforms their uZIPS projection, then weights those differences by how predictive each stat is of actual OVR changes.
                 <br /><br />
-                <strong style={{ color: '#fff' }}>Hitters:</strong> wRC+, OPS, ISO, BABIP, K%, BB% vs uZIPS + current OVR (R=0.70)
-                <br /><strong style={{ color: '#fff' }}>Pitchers:</strong> K/9, HR/9, BB/9, BABIP vs uZIPS (R=0.75)
+                <strong style={{ color: '#fff' }}>Hitters:</strong> wRC+, OPS, ISO, BABIP, K%, BB% vs uZIPS + current OVR (R=0.67)
+                <br /><strong style={{ color: '#fff' }}>Pitchers:</strong> K/9, HR/9, BB/9, BABIP vs uZIPS (R=0.77)
                 <br /><br />
-                <strong style={{ color: '#fff' }}>Pitcher weights:</strong> HR/9 (2.4x) &gt; BB/9 (1.6x) &gt; BABIP (1.2x) &gt; K/9 (1x)
+                <strong style={{ color: '#fff' }}>Pitcher weights:</strong> HR/9 (2.2x) &gt; BB/9 (1.5x) &gt; BABIP (1.1x) &gt; K/9 (1x)
                 <br />Suppressing HRs and walks matters far more than racking up strikeouts for OVR upgrades.
                 <br /><br />
                 The % in parentheses shows regression-weighted over/underperformance vs uZIPS.
