@@ -15138,7 +15138,7 @@ function PTLivePage() {
                     display: 'flex', flexDirection: 'column',
                   }}>
                     <button onClick={() => setProjTeamFilter('all')} style={{
-                      padding: '8px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      padding: '7px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       border: 'none', borderBottom: `1px solid ${theme.border}`,
                       background: projTeamFilter === 'all' ? theme.accent : 'transparent',
                       color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
@@ -15151,7 +15151,7 @@ function PTLivePage() {
                         const isLeftCol = i % 2 === 0;
                         return (
                           <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
-                            writingMode: 'vertical-lr', textOrientation: 'upright', padding: '11px 0',
+                            writingMode: 'vertical-lr', textOrientation: 'upright', padding: '10px 0',
                             fontSize: 12, fontWeight: 700, cursor: 'pointer',
                             textAlign: 'center', letterSpacing: '0.05em',
                             border: 'none',
