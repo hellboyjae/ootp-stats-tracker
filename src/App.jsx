@@ -15166,7 +15166,7 @@ function PTLivePage() {
                     </div>
                   </div>
                 )}
-                </div>{/* end outer flex */}
+                </div>
               );
             })()}
 
