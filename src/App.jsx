@@ -15132,13 +15132,13 @@ function PTLivePage() {
                 {/* Notebook tabs — pop out from right side */}
                 {allTeams.length > 0 && !isMobile && (
                   <div style={{
-                    marginLeft: -1, width: 68, flexShrink: 0,
+                    marginLeft: -1, width: 61, flexShrink: 0,
                     border: `1px solid ${theme.border}`, borderLeft: 'none',
                     borderRadius: '0 10px 10px 0', overflow: 'hidden',
                     display: 'flex', flexDirection: 'column',
                   }}>
                     <button onClick={() => setProjTeamFilter('all')} style={{
-                      padding: '9px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      padding: '8px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       border: 'none', borderBottom: `1px solid ${theme.border}`,
                       background: projTeamFilter === 'all' ? theme.accent : 'transparent',
                       color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
