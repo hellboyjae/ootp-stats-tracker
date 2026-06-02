@@ -15151,8 +15151,8 @@ function PTLivePage() {
                         const isLeftCol = i % 2 === 0;
                         return (
                           <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
-                            writingMode: 'vertical-lr', textOrientation: 'upright', padding: '12px 0',
-                            fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                            writingMode: 'vertical-lr', textOrientation: 'upright', padding: '11px 0',
+                            fontSize: 12, fontWeight: 700, cursor: 'pointer',
                             textAlign: 'center', letterSpacing: '0.05em',
                             border: 'none',
                             borderRight: isLeftCol ? `1px solid ${theme.border}55` : 'none',
