@@ -14507,7 +14507,8 @@ function PTLivePage() {
               const bustColor = pct => pct < 15 ? '#4ade80' : pct < 30 ? '#fbbf24' : '#ef4444';
 
               return (
-                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0, background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
                   {/* Header + Admin */}
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', marginBottom: 20, gap: isMobile ? 12 : 0 }}>
                     <div>
@@ -14683,7 +14684,11 @@ function PTLivePage() {
                           color: projFilter === 'all' ? '#fff' : theme.textMuted,
                         }}>All</button>
                         {allPositions.map(pos => (
-                          <button key={pos} onClick={() => setProjFilter(pos)} style={{
+                          <button key={pos} onClick={() => {
+                            setProjFilter(pos);
+                            if (PROJ_BATTER_POSITIONS.has(pos) && projTypeFilter === 'pitcher') setProjTypeFilter('batter');
+                            if (PROJ_PITCHER_POSITIONS.has(pos) && projTypeFilter === 'batter') setProjTypeFilter('pitcher');
+                          }} style={{
                             padding: isMobile ? '4px 10px' : '5px 16px', borderRadius: 14, fontSize: isMobile ? 11 : 15, fontWeight: 600, cursor: 'pointer',
                             border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projFilter === pos ? theme.accent : theme.inputBg,
@@ -14731,38 +14736,8 @@ function PTLivePage() {
                         );
                       })()}
 
-                      {/* Table + Team Sidebar */}
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                        {/* Team sidebar — 2-per-row colored tabs */}
-                        {allTeams.length > 0 && !isMobile && (
-                          <div style={{ flexShrink: 0, width: 96 }}>
-                            <button onClick={() => setProjTeamFilter('all')} style={{
-                              display: 'block', width: '100%', marginBottom: 6, padding: '5px 0',
-                              borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
-                              border: projTeamFilter === 'all' ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
-                              background: projTeamFilter === 'all' ? theme.accent : 'transparent',
-                              color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
-                              letterSpacing: '0.04em',
-                            }}>ALL</button>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-                              {allTeams.map(t => {
-                                const c = projTeamColor(t);
-                                const active = projTeamFilter === t;
-                                return (
-                                  <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
-                                    padding: '5px 2px', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                    textAlign: 'center', letterSpacing: '0.03em',
-                                    border: `1px solid ${active ? c : c + '55'}`,
-                                    background: active ? c + '2a' : 'transparent',
-                                    color: active ? c : c + 'bb',
-                                    transition: 'all 0.12s',
-                                  }}>{t}</button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
+                      {/* Table */}
+                      <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 13 : 17, tableLayout: 'fixed' }}>
                           <thead>
                             <tr>
@@ -14886,8 +14861,7 @@ function PTLivePage() {
                             })}
                           </tbody>
                         </table>
-                        </div>{/* end overflowX */}
-                      </div>{/* end sidebar+table flex */}
+                      </div>{/* end overflowX */}
 
                       {/* Matchup hover popover — fixed position to avoid clipping */}
                       {hoveredMatchup !== null && matchupRect && (() => {
@@ -15154,7 +15128,45 @@ function PTLivePage() {
                       )}
                     </>
                   )}
-                </div>
+                </div>{/* end card */}
+                {/* Notebook tabs — pop out from right side */}
+                {allTeams.length > 0 && !isMobile && (
+                  <div style={{
+                    marginLeft: -1, width: 52, flexShrink: 0,
+                    border: `1px solid ${theme.border}`, borderLeft: 'none',
+                    borderRadius: '0 10px 10px 0', overflow: 'hidden',
+                    display: 'flex', flexDirection: 'column',
+                  }}>
+                    <button onClick={() => setProjTeamFilter('all')} style={{
+                      padding: '7px 0', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                      border: 'none', borderBottom: `1px solid ${theme.border}`,
+                      background: projTeamFilter === 'all' ? theme.accent : 'transparent',
+                      color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
+                      letterSpacing: '0.08em', flexShrink: 0, textAlign: 'center',
+                    }}>ALL</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1 }}>
+                      {allTeams.map((t, i) => {
+                        const c = projTeamColor(t);
+                        const active = projTeamFilter === t;
+                        const isLeftCol = i % 2 === 0;
+                        return (
+                          <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
+                            writingMode: 'vertical-lr', padding: '9px 0',
+                            fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                            textAlign: 'center', letterSpacing: '0.05em',
+                            border: 'none',
+                            borderRight: isLeftCol ? `1px solid ${theme.border}55` : 'none',
+                            borderBottom: `1px solid ${theme.border}44`,
+                            background: active ? c : c + '1c',
+                            color: active ? '#fff' : c,
+                            transition: 'background 0.12s',
+                          }}>{t}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                </div>{/* end outer flex */}
               );
             })()}
 
