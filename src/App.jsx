@@ -14692,26 +14692,6 @@ function PTLivePage() {
                         ))}
                       </div>
 
-                      {/* Team filters */}
-                      {allTeams.length > 0 && (
-                        <div style={{ display: 'flex', gap: isMobile ? 4 : 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-                          <button onClick={() => setProjTeamFilter('all')} style={{
-                            padding: isMobile ? '4px 10px' : '5px 14px', borderRadius: 14, fontSize: isMobile ? 11 : 13, fontWeight: 600, cursor: 'pointer',
-                            border: projTeamFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
-                            background: projTeamFilter === 'all' ? theme.accent : theme.inputBg,
-                            color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
-                          }}>All Teams</button>
-                          {allTeams.map(t => (
-                            <button key={t} onClick={() => setProjTeamFilter(projTeamFilter === t ? 'all' : t)} style={{
-                              padding: isMobile ? '4px 10px' : '5px 14px', borderRadius: 14, fontSize: isMobile ? 11 : 13, fontWeight: 700, cursor: 'pointer',
-                              border: projTeamFilter === t ? `1px solid ${projTeamColor(t)}` : `1px solid ${theme.border}`,
-                              background: projTeamFilter === t ? projTeamColor(t) + '33' : theme.inputBg,
-                              color: projTeamFilter === t ? projTeamColor(t) : theme.textMuted,
-                            }}>{t}</button>
-                          ))}
-                        </div>
-                      )}
-
                       {/* Weather Summary Bar */}
                       {(() => {
                         const items = [];
@@ -14751,8 +14731,38 @@ function PTLivePage() {
                         );
                       })()}
 
-                      {/* Table */}
-                      <div style={{ overflowX: 'auto' }}>
+                      {/* Table + Team Sidebar */}
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        {/* Team sidebar — 2-per-row colored tabs */}
+                        {allTeams.length > 0 && !isMobile && (
+                          <div style={{ flexShrink: 0, width: 96 }}>
+                            <button onClick={() => setProjTeamFilter('all')} style={{
+                              display: 'block', width: '100%', marginBottom: 6, padding: '5px 0',
+                              borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
+                              border: projTeamFilter === 'all' ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
+                              background: projTeamFilter === 'all' ? theme.accent : 'transparent',
+                              color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
+                              letterSpacing: '0.04em',
+                            }}>ALL</button>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                              {allTeams.map(t => {
+                                const c = projTeamColor(t);
+                                const active = projTeamFilter === t;
+                                return (
+                                  <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
+                                    padding: '5px 2px', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                    textAlign: 'center', letterSpacing: '0.03em',
+                                    border: `1px solid ${active ? c : c + '55'}`,
+                                    background: active ? c + '2a' : 'transparent',
+                                    color: active ? c : c + 'bb',
+                                    transition: 'all 0.12s',
+                                  }}>{t}</button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 13 : 17, tableLayout: 'fixed' }}>
                           <thead>
                             <tr>
@@ -14876,7 +14886,8 @@ function PTLivePage() {
                             })}
                           </tbody>
                         </table>
-                      </div>
+                        </div>{/* end overflowX */}
+                      </div>{/* end sidebar+table flex */}
 
                       {/* Matchup hover popover — fixed position to avoid clipping */}
                       {hoveredMatchup !== null && matchupRect && (() => {
