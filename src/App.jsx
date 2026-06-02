@@ -15132,13 +15132,13 @@ function PTLivePage() {
                 {/* Notebook tabs — pop out from right side */}
                 {allTeams.length > 0 && !isMobile && (
                   <div style={{
-                    marginLeft: -1, width: 52, flexShrink: 0,
+                    marginLeft: -1, width: 68, flexShrink: 0,
                     border: `1px solid ${theme.border}`, borderLeft: 'none',
                     borderRadius: '0 10px 10px 0', overflow: 'hidden',
                     display: 'flex', flexDirection: 'column',
                   }}>
                     <button onClick={() => setProjTeamFilter('all')} style={{
-                      padding: '7px 0', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                      padding: '9px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                       border: 'none', borderBottom: `1px solid ${theme.border}`,
                       background: projTeamFilter === 'all' ? theme.accent : 'transparent',
                       color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
@@ -15151,8 +15151,8 @@ function PTLivePage() {
                         const isLeftCol = i % 2 === 0;
                         return (
                           <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
-                            writingMode: 'vertical-lr', padding: '9px 0',
-                            fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                            writingMode: 'vertical-lr', textOrientation: 'upright', padding: '12px 0',
+                            fontSize: 13, fontWeight: 700, cursor: 'pointer',
                             textAlign: 'center', letterSpacing: '0.05em',
                             border: 'none',
                             borderRight: isLeftCol ? `1px solid ${theme.border}55` : 'none',
