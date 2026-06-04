@@ -10995,6 +10995,14 @@ function PTLiveScoringKey({ theme }) {
 
 // ==================== LIVE SPEC PAGE ====================
 
+// Reverse-index uZIPS by MLBAM ID (Baseball Savant player_id) for actuals matching
+const UZIPS_BAT_BY_MLBAM = Object.fromEntries(
+  Object.values(UZIPS_BAT).filter(p => p.xMLBAMID).map(p => [String(p.xMLBAMID), p])
+);
+const UZIPS_PIT_BY_MLBAM = Object.fromEntries(
+  Object.values(UZIPS_PIT).filter(p => p.xMLBAMID).map(p => [String(p.xMLBAMID), p])
+);
+
 const LIVESPEC_HITTER_STATS = [
   { key: 'wOBA',  label: 'wOBA',  higherBetter: true,  fmt: v => v.toFixed(3), excludeFromComposite: true },
   { key: 'Kpct',  label: 'K%',    higherBetter: false, fmt: v => (v * 100).toFixed(1) + '%' },
@@ -11046,7 +11054,7 @@ function fgGet(obj, key) {
 function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
   const rows = [];
   actualArr.forEach(player => {
-    const pid = player.playerid;
+    const pid = player.player_id || player.playerid;
     if (!pid) return;
     const proj = projMap[String(pid)];
     if (!proj) return;
@@ -11138,7 +11146,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
     rows.push({
       playerid: String(pid),
       name: fgStripHtml(player.Name || player.name || '—'),
-      team: fgStripHtml(player.Team || player.team || ''),
+      team: fgStripHtml(player.Team || player.team || proj?.Team || ''),
       vol,
       stats: statResults,
       composite: predictedDelta !== null ? predictedDelta : totalPct / validCount,
@@ -11202,22 +11210,24 @@ function LiveSpecPage() {
     try {
       const evalWindow = getEvalWindow();
       if (!evalWindow) { setLoading(false); return; } // off-season
-      const { startdate, enddate } = evalWindow;
-      const season = new Date().getFullYear();
-      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=1000&pageItems=2000`;
-      const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
 
-      // Actual stats from FanGraphs (live); uZIPS from static snapshot
-      const [aBat, aPit] = await Promise.all([
-        fetch(fgProxy(`${fgBase}&stats=bat`)).then(r => r.json()),
-        fetch(fgProxy(`${fgBase}&stats=pit`)).then(r => r.json()),
-      ]);
-      const toArr = x => Array.isArray(x) ? x : (x?.data || []);
-      const aBatArr = toArr(aBat), aPitArr = toArr(aPit);
-      setRawHitters({ actualArr: aBatArr, projMap: UZIPS_BAT });
-      setRawPitchers({ actualArr: aPitArr, projMap: UZIPS_PIT });
+      const { data, error } = await supabase
+        .from('site_content')
+        .select('content')
+        .eq('id', 'fangraphs_actuals')
+        .single();
+
+      if (error || !data?.content?.bat) {
+        setError('No FanGraphs data available yet — cache updates daily around 10 AM ET.');
+        setLoading(false);
+        return;
+      }
+
+      const { bat, pit } = data.content;
+      setRawHitters({ actualArr: bat, projMap: UZIPS_BAT_BY_MLBAM });
+      setRawPitchers({ actualArr: pit, projMap: UZIPS_PIT_BY_MLBAM });
     } catch (e) {
-      setError(`Failed to load data. FanGraphs may be blocking browser requests (CORS). Error: ${e.message}`);
+      setError(`Failed to load data: ${e.message}`);
     }
     setLoading(false);
   }
