@@ -11781,6 +11781,9 @@ function PTLivePage() {
   const [matchupRect, setMatchupRect] = useState(null);
   const [storedTeamMap, setStoredTeamMap] = useState(null);
   const [storedILPlayers, setStoredILPlayers] = useState({});
+  const [suggestedRPs, setSuggestedRPs] = useState(['', '']);
+  const [suggestedRPInput, setSuggestedRPInput] = useState(['', '']);
+  const [suggestedRPSaving, setSuggestedRPSaving] = useState(false);
 
   // ── Weather & postponement state ────────────────────────────────────────────
   const [weatherData, setWeatherData] = useState(null); // { [teamAbbr]: { temp, pop, condition, windSpeed } }
@@ -12289,10 +12292,31 @@ function PTLivePage() {
     } catch (e) { /* no key stored yet */ }
     // Seed default key if none exists
     const defaultKey = '078018d788d8e15eaa3cc02505937260';
+
     try {
       await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key: defaultKey } }, { onConflict: 'id' });
       setWeatherApiKey(defaultKey);
     } catch (e) { /* seed failed, admin can set manually */ }
+  };
+
+  const loadSuggestedRPs = async () => {
+    const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_suggested_rps').maybeSingle();
+    if (data?.content) {
+      const rps = [data.content.rp1 || '', data.content.rp2 || ''];
+      setSuggestedRPs(rps);
+      setSuggestedRPInput(rps);
+    }
+  };
+
+  const saveSuggestedRPs = async () => {
+    setSuggestedRPSaving(true);
+    const rps = suggestedRPInput.map(s => (s || '').trim());
+    await supabase.from('site_content').upsert(
+      { id: 'ptlive_suggested_rps', content: { rp1: rps[0], rp2: rps[1] } },
+      { onConflict: 'id' }
+    );
+    setSuggestedRPs(rps);
+    setSuggestedRPSaving(false);
   };
 
   useEffect(() => {
@@ -12301,6 +12325,7 @@ function PTLivePage() {
     fetchFgData();
     loadProjections();
     loadPlayerTeams();
+    loadSuggestedRPs();
     loadWeatherApiKey();
     const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
     return () => clearInterval(interval);
@@ -12781,7 +12806,7 @@ function PTLivePage() {
   };
 
   // ── Projections: cheat sheet optimizer ─────────────────────────────────────
-  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null, ilSet = null) => {
+  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null, ilSet = null, forcedRPs = []) => {
     const exclude = excludeSet || new Set();
     const isIL = (name, team) => ilSet && ilSet[name] && ilSet[name] === (team || '').trim();
     const skip = (n, t) => exclude.has(n) || isIL(n, t);
@@ -12878,9 +12903,23 @@ function PTLivePage() {
       return true;
     };
 
+    // ── Pre-Phase: Force admin-suggested RPs into their slots ──
+    const forcedRPSlots = new Set();
+    for (let i = 0; i < Math.min(forcedRPs.length, 2); i++) {
+      const name = (forcedRPs[i] || '').trim();
+      if (!name) continue;
+      const norm = normalizeName(name);
+      const rpIdx = 13 + i;
+      const match = allRp.find(p => normalizeName(p.Player) === norm);
+      if (match && tryPlace(rpIdx, { slot: 'RP', ...match, suggestedRP: true })) {
+        forcedRPSlots.add(rpIdx);
+      }
+    }
+
     // ── Phase 1: Fill RP slots with SP-as-RP only (ExpPP > 0) ──
     // True RPs (ExpPP=0) deferred to Phase 4 so they don't consume Perfect/Diamond slots
     for (const rpIdx of [13, 14]) {
+      if (roster[rpIdx]) continue; // already filled by forced RP
       for (const cand of slotCands[rpIdx]) {
         if ((cand.ExpPP || 0) > 0 && tryPlace(rpIdx, cand)) break;
       }
@@ -12981,6 +13020,7 @@ function PTLivePage() {
       improved = false;
       passes++;
       for (let i = 0; i < 15; i++) {
+        if (forcedRPSlots.has(i)) continue; // don't swap out forced RPs
         const cur = roster[i];
         if (!cur) continue;
         const curPP = cur.ExpPP || 0;
@@ -14525,7 +14565,7 @@ function PTLivePage() {
                       <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
                         <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
                         <span style={{ fontSize: '0.5em', fontWeight: 400, color: '#fff', letterSpacing: '0.03em', margin: '0 8px' }}>brought to you by</span>
-                        <span style={{ fontSize: '0.9em', background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>KOBA</span>
+                        <span style={{ fontSize: '0.9em', background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Hellboy</span>
                       </div>
                       <div style={{ fontSize: 13, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
                     </div>
@@ -14623,6 +14663,31 @@ function PTLivePage() {
                           }} style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                             Save
                           </button>
+                        </div>
+                        {/* Suggested RPs */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, whiteSpace: 'nowrap' }}>Suggested RPs:</span>
+                          {[0, 1].map(i => (
+                            <input
+                              key={i}
+                              type="text"
+                              value={suggestedRPInput[i]}
+                              onChange={e => setSuggestedRPInput(prev => { const next = [...prev]; next[i] = e.target.value; return next; })}
+                              placeholder={`RP${i + 1} name`}
+                              style={{ width: 140, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 11, color: '#fff', outline: 'none' }}
+                            />
+                          ))}
+                          <button
+                            onClick={saveSuggestedRPs}
+                            disabled={suggestedRPSaving}
+                            style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: suggestedRPSaving ? 'not-allowed' : 'pointer' }}>
+                            {suggestedRPSaving ? 'Saving…' : 'Save'}
+                          </button>
+                          {(suggestedRPs[0] || suggestedRPs[1]) && (
+                            <span style={{ fontSize: 10, color: '#4ade80' }}>
+                              Active: {suggestedRPs.filter(Boolean).join(', ')}
+                            </span>
+                          )}
                         </div>
                       </div>
                   </div>}
@@ -14965,7 +15030,7 @@ function PTLivePage() {
                                 if (w && !w.dome && w.severe) { liveExclude.add(n); wxTeamsExcluded.add(t); }
                               }
                               const allCards = [...batters, ...sps, ...rps];
-                              const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers);
+                              const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers, suggestedRPs.filter(Boolean));
 
                               const csRow = (entry, i) => {
                                 if (!entry) return (
@@ -14979,7 +15044,10 @@ function PTLivePage() {
                                 return (
                                   <tr key={`cs-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
                                     <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
-                                    <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
+                                    <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>
+                                      {entry.Player}
+                                      {entry.suggestedRP && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#a855f7', background: '#a855f720', padding: '1px 6px', borderRadius: 8, verticalAlign: 'middle' }}>suggested</span>}
+                                    </td>
                                     <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
                                     <td style={{ padding: '7px 10px', textAlign: 'center' }}>
                                       <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
