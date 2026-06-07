@@ -11211,6 +11211,22 @@ function LiveSpecPage() {
       const evalWindow = getEvalWindow();
       if (!evalWindow) { setLoading(false); return; } // off-season
 
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      // Check if cached data is from today
+      const { data: cached } = await supabase
+        .from('site_content')
+        .select('content')
+        .eq('id', 'fangraphs_actuals')
+        .single();
+
+      const cachedDate = cached?.content?.updatedAt?.slice(0, 10);
+      if (!cached?.content?.bat || cachedDate !== todayStr) {
+        // Stale or missing — trigger edge function to refresh
+        await supabase.functions.invoke('fetch-fangraphs-actuals');
+      }
+
+      // Read (now-fresh) data
       const { data, error } = await supabase
         .from('site_content')
         .select('content')
@@ -11218,7 +11234,7 @@ function LiveSpecPage() {
         .single();
 
       if (error || !data?.content?.bat) {
-        setError('No FanGraphs data available yet — cache updates daily around 10 AM ET.');
+        setError('No data available — the refresh may have failed. Try again shortly.');
         setLoading(false);
         return;
       }
