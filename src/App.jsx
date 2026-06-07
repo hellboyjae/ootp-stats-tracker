@@ -10995,12 +10995,18 @@ function PTLiveScoringKey({ theme }) {
 
 // ==================== LIVE SPEC PAGE ====================
 
-// Reverse-index uZIPS by MLBAM ID (Baseball Savant player_id) for actuals matching
+// Reverse-index uZIPS by MLBAM ID (primary) and normalized name (fallback)
 const UZIPS_BAT_BY_MLBAM = Object.fromEntries(
   Object.values(UZIPS_BAT).filter(p => p.xMLBAMID).map(p => [String(p.xMLBAMID), p])
 );
 const UZIPS_PIT_BY_MLBAM = Object.fromEntries(
   Object.values(UZIPS_PIT).filter(p => p.xMLBAMID).map(p => [String(p.xMLBAMID), p])
+);
+const UZIPS_BAT_BY_NAME = Object.fromEntries(
+  Object.values(UZIPS_BAT).map(p => [normalizeName(p.Name || p.name || p.PlayerName || ''), p]).filter(([k]) => k)
+);
+const UZIPS_PIT_BY_NAME = Object.fromEntries(
+  Object.values(UZIPS_PIT).map(p => [normalizeName(p.Name || p.name || p.PlayerName || ''), p]).filter(([k]) => k)
 );
 
 const LIVESPEC_HITTER_STATS = [
@@ -11051,17 +11057,17 @@ function fgGet(obj, key) {
   return null;
 }
 
-function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
+function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol, nameMap = {}) {
   const rows = [];
   actualArr.forEach(player => {
     const pid = player.player_id || player.playerid;
     if (!pid) return;
-    const proj = projMap[String(pid)];
-    if (!proj) return;
     const playerName = normalizeName(fgStripHtml(player.Name || player.name || ''));
     if (!LIVE_CARD_OVR[playerName]) return;
     const vol = fgGet(player, minVolKey);
     if (vol === null || vol < minVol) return;
+    // Try MLBAM ID first, then name fallback — allow null (no projection available)
+    const proj = projMap[String(pid)] || nameMap[playerName] || null;
     const actualPA = fgGet(player, 'PA');
     const projPA   = fgGet(proj,   'PA');
     const statResults = {};
@@ -11082,7 +11088,7 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       const excludeHR9 = s.key === 'HR9' && playerIP !== null && playerIP < 30;
       if (!s.excludeFromComposite && !excludeHR9) { validCount++; totalPct += pct; }
     });
-    if (validCount < 1) return;
+    if (proj && validCount < 1) return; // has projection but no computable stats — skip
 
     // Regression-based OVR delta prediction (uses % vs uZIPS as features)
     const isPitcher = stats === LIVESPEC_PITCHER_STATS;
@@ -11143,18 +11149,21 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
       if (wTotal > 0) weightedPct = wSum / wTotal;
     }
 
+    const composite = predictedDelta !== null ? predictedDelta : (validCount > 0 ? totalPct / validCount : null);
     rows.push({
       playerid: String(pid),
       name: fgStripHtml(player.Name || player.name || '—'),
       team: fgStripHtml(player.Team || player.team || proj?.Team || ''),
       vol,
       stats: statResults,
-      composite: predictedDelta !== null ? predictedDelta : totalPct / validCount,
+      composite,
       predictedDelta,
       weightedPct,
+      hasProj: !!proj,
     });
   });
-  return rows.sort((a, b) => b.composite - a.composite);
+  // Players with no projection (no composite) sort to the bottom
+  return rows.sort((a, b) => (b.composite ?? -Infinity) - (a.composite ?? -Infinity));
 }
 
 function LiveSpecPage() {
@@ -11240,8 +11249,8 @@ function LiveSpecPage() {
       }
 
       const { bat, pit } = data.content;
-      setRawHitters({ actualArr: bat, projMap: UZIPS_BAT_BY_MLBAM });
-      setRawPitchers({ actualArr: pit, projMap: UZIPS_PIT_BY_MLBAM });
+      setRawHitters({ actualArr: bat, projMap: UZIPS_BAT_BY_MLBAM, nameMap: UZIPS_BAT_BY_NAME });
+      setRawPitchers({ actualArr: pit, projMap: UZIPS_PIT_BY_MLBAM, nameMap: UZIPS_PIT_BY_NAME });
     } catch (e) {
       setError(`Failed to load data: ${e.message}`);
     }
@@ -11250,12 +11259,12 @@ function LiveSpecPage() {
 
   const hitterRows = useMemo(() => {
     if (!rawHitters) return [];
-    return computeLiveSpecRows(rawHitters.actualArr, rawHitters.projMap, LIVESPEC_HITTER_STATS, 'PA', minPA);
+    return computeLiveSpecRows(rawHitters.actualArr, rawHitters.projMap, LIVESPEC_HITTER_STATS, 'PA', minPA, rawHitters.nameMap);
   }, [rawHitters, minPA]);
 
   const pitcherRows = useMemo(() => {
     if (!rawPitchers) return [];
-    return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP);
+    return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP, rawPitchers.nameMap);
   }, [rawPitchers, minIP]);
 
   const ovrToTier = ovr => ovr >= 100 ? 'Perfect' : ovr >= 90 ? 'Diamond' : ovr >= 80 ? 'Gold' : ovr >= 70 ? 'Silver' : ovr >= 60 ? 'Bronze' : 'Iron';
@@ -11270,7 +11279,7 @@ function LiveSpecPage() {
     if (tierFilter !== 'All' && ovrToTier(ovr) !== tierFilter) return false;
     return true;
   }).sort((a, b) => {
-    if (!sortKey || sortKey === 'composite') return sortDir === 'desc' ? b.composite - a.composite : a.composite - b.composite;
+    if (!sortKey || sortKey === 'composite') return sortDir === 'desc' ? (b.composite ?? -Infinity) - (a.composite ?? -Infinity) : (a.composite ?? Infinity) - (b.composite ?? Infinity);
     const av = a.stats[sortKey]?.pct ?? null;
     const bv = b.stats[sortKey]?.pct ?? null;
     if (av === null && bv === null) return 0;
@@ -11488,10 +11497,12 @@ function LiveSpecPage() {
                             ({row.weightedPct >= 0 ? '+' : ''}{row.weightedPct.toFixed(0)}%)
                           </span>
                         </>
-                      ) : (
+                      ) : row.composite !== null ? (
                         <span style={{ fontWeight: 700, fontSize: 15, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
                           {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
                         </span>
+                      ) : (
+                        <span style={{ fontSize: 13, color: '#556677' }}>No proj</span>
                       )}
                     </td>
                     {/* % diff values */}
