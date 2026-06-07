@@ -12949,24 +12949,46 @@ function PTLivePage() {
       }
     }
 
-    // ── Phase 3: Fill batter slots with top ExpPP players ──
-    // Sort all batters by ExpPP desc, then assign each to their best available slot
+    // ── Phase 3: Fill batter slots best-player-first ──
+    // Iterate players by ExpPP descending so high-value players claim tier slots
+    // before lower-value players (e.g. a Diamond 2B at 8 ExpPP gets the last
+    // diamond slot rather than losing it to a Diamond C at 3 ExpPP just because
+    // C is listed first in the roster order).
     const batPool = bats.slice().sort((a, b) => b.ExpPP - a.ExpPP);
-    // Position-locked slots first (0-7), then flex slots (8-10)
     const lockedSlots = [0, 1, 2, 3, 4, 5, 6, 7];
     const flexSlots = [8, 9, 10];
 
-    // Fill position-locked slots: for each slot, pick the best unused batter with that position
+    for (const batter of batPool) {
+      if (used.has(pKey(batter))) continue;
+      let placed = false;
+      // Try natural position slot first
+      for (const idx of lockedSlots) {
+        if (roster[idx]) continue;
+        const [slotName, eligPos] = slotDefs[idx];
+        if (!eligPos.includes(batter.Position)) continue;
+        if (tryPlace(idx, { slot: slotName, ...batter })) { placed = true; break; }
+      }
+      // Fall back to flex slots
+      if (!placed) {
+        for (const idx of flexSlots) {
+          if (roster[idx]) continue;
+          const [slotName] = slotDefs[idx];
+          if (tryPlace(idx, { slot: slotName, ...batter })) break;
+        }
+      }
+    }
+
+    // Backfill any position slots still empty (position has no sim players — Phase 5 handles rest)
     for (const idx of lockedSlots) {
+      if (roster[idx]) continue;
       const [slotName, eligPos] = slotDefs[idx];
       for (const batter of batPool) {
         if (!eligPos.includes(batter.Position)) continue;
         if (tryPlace(idx, { slot: slotName, ...batter })) break;
       }
     }
-
-    // Fill flex slots: pick the best unused batters regardless of position
     for (const idx of flexSlots) {
+      if (roster[idx]) continue;
       const [slotName] = slotDefs[idx];
       for (const batter of batPool) {
         if (tryPlace(idx, { slot: slotName, ...batter })) break;
