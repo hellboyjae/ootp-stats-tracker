@@ -11030,6 +11030,7 @@ const LIVESPEC_PITCHER_STATS = [
 const fgStripHtml = s => typeof s === 'string' ? s.replace(/<[^>]*>/g, '').trim() : (s || '');
 
 function fgGet(obj, key) {
+  if (obj == null) return null;
   const aliases = {
     'OPS':   ['OPS'],
     'OBP':   ['OBP'],
