@@ -14776,7 +14776,7 @@ function PTLivePage() {
                       {/* Type filters + Cheat Sheet button */}
                       <div style={{ display: 'flex', gap: isMobile ? 6 : 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                         {['all', 'batter', 'pitcher'].map(t => (
-                          <button key={t} onClick={() => setProjTypeFilter(t)} style={{
+                          <button key={t} onClick={() => { setProjTypeFilter(t); if (t === 'batter') setProjFilter('all'); else if (t === 'pitcher') setProjFilter('SP'); }} style={{
                             padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 600, cursor: 'pointer',
                             border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projTypeFilter === t ? theme.accent : theme.inputBg,
