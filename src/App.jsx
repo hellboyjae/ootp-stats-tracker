@@ -12442,7 +12442,7 @@ function PTLivePage() {
   const PROJ_BATTER_RUN = 6, PROJ_BATTER_RBI = 6, PROJ_BATTER_BB_HBP = 3, PROJ_BATTER_SB = 10, PROJ_BATTER_CS = -2;
   const PROJ_SP_WIN = 20, PROJ_SP_IP = 4, PROJ_SP_K = 2, PROJ_SP_K_BONUS = 40, PROJ_SP_QS = 5, PROJ_SP_ER = -2, PROJ_SP_BB = -1;
 
-  const PROJ_TEAM_CODE_MAP = { ATH: 'OAK', KC: 'KCR', LAA: 'ANA', NYY: 'NYA', SD: 'SDP', SF: 'SFG', TB: 'TBD', WAS: 'WSN', MIA: 'FLA' };
+  const PROJ_TEAM_CODE_MAP = { KC: 'KCR', LAA: 'ANA', NYY: 'NYA', SD: 'SDP', SF: 'SFG', TB: 'TBD', WAS: 'WSN', MIA: 'FLA' };
   const PROJ_NAME_FIXES = {
     'Louis Varland': 'Louie Varland', 'Louie Varland': 'Louie Varland',
     'C.J. Abrams': 'CJ Abrams', 'Jazz Chisholm': 'Jazz Chisholm Jr.',
@@ -12630,6 +12630,12 @@ function PTLivePage() {
         const matches = cardsByName[normalizeName(name)];
         if (!matches || matches.length === 0) return null;
         if (matches.length === 1) return matches[0];
+        // Same-name player disambiguation: storedTeamMap only stores one team per normalized name so it
+        // can't distinguish two players with the same name. Use card_value thresholds for known collisions.
+        if (normalizeName(name) === 'max muncy') {
+          const isAthTeam = ptTeam === 'ATH' || ptTeam === 'OAK';
+          return matches.find(m => isAthTeam ? (m.card_value || 0) < 70 : (m.card_value || 0) >= 70) || matches[0];
+        }
         // Disambiguate by team first (via storedTeamMap, since franchise column is never populated), then by player type
         const teamMatch = matches.filter(m => {
           const nn = normalizeName(`${(m.first_name || '').trim()} ${(m.last_name || '').trim()}`);
