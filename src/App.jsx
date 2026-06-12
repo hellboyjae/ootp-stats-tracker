@@ -13586,7 +13586,13 @@ function PTLivePage() {
     if (storedTeamMap) Object.assign(map, storedTeamMap);
     if (projData?.players) {
       projData.players.forEach(p => {
-        if (p.Player && p.Team) map[normalizeName(p.Player)] = (p.Team || '').trim();
+        if (p.Player && p.Team) {
+          const key = normalizeName(p.Player);
+          const team = (p.Team || '').trim();
+          map[key] = team;
+          // Disambiguate same-name players: store the non-LAD Max Muncy under 'max muncy oak'
+          if (key === 'max muncy' && team !== 'LAD') map['max muncy oak'] = team;
+        }
       });
     }
     return map;
@@ -13684,7 +13690,7 @@ function PTLivePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: isMobile ? 24 : 32 }}>{slot.label}</div>
             {card && (() => {
-              const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
+              const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
               const tc = projTeamColor(bppTeam);
               return bppTeam ? (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: `${tc}22`, color: tc, letterSpacing: '0.04em' }}>{bppTeam}</span>
@@ -14127,7 +14133,7 @@ function PTLivePage() {
                                         else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                       }
                                       const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
-                                      const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
+                                      const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
                                       const tc = projTeamColor(bppTeam);
                                       return (
                                         <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
@@ -14271,7 +14277,7 @@ function PTLivePage() {
                                     else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                   }
                                   const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
-                                  const bppTeam = playerTeamLookup[normalizeName(`${card.first_name} ${card.last_name}`)] || '';
+                                  const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
                                   const tc = projTeamColor(bppTeam);
                                   return (
                                     <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
