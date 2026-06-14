@@ -10881,7 +10881,7 @@ const VENUE_COORDS = {
 };
 
 // MLB player IDs that need disambiguation (same name, different player)
-const MLB_ID_OVERRIDES = { 695825: 'max muncy oak' }; // A's Muncy
+const MLB_ID_OVERRIDES = { 691777: 'max muncy oak' }; // A's Muncy (born 2002, MLBAM ID 691777)
 // Card-side: resolve the correct stats key for a card
 const cardStatsKey = (card) => {
   const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
