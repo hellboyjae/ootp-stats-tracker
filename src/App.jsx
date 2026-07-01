@@ -11240,9 +11240,9 @@ function LiveSpecPage() {
         .single();
 
       const cachedDate = cached?.content?.updatedAt?.slice(0, 10);
-      if (!cached?.content?.bat || cachedDate !== todayStr) {
+      if (!cached?.content?.bat || cachedDate !== todayStr || cached?.content?.startdate !== evalWindow.startdate) {
         // Stale or missing — trigger edge function to refresh
-        await supabase.functions.invoke('fetch-fangraphs-actuals');
+        await supabase.functions.invoke('fetch-fangraphs-actuals', { body: evalWindow });
       }
 
       // Read (now-fresh) data
