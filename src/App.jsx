@@ -11185,20 +11185,29 @@ function LiveSpecPage() {
 
   // 2026 season evaluation windows.
   // Each entry: [cutoff date string, window start date string].
-  // Cutoff = 3 days before first Monday of the next month.
+  // Cutoff = first Monday of that month (display switches over on first Monday, not the 1st).
   // Ordered latest → earliest for simple iteration.
   function getEvalWindow() {
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
 
+    // Returns 'YYYY-MM-DD' of the first Monday of the given month (1-indexed).
+    function firstMondayOf(year, month) {
+      const d = new Date(year, month - 1, 1);
+      const dow = d.getDay(); // 0=Sun, 1=Mon, ...
+      const offset = dow === 1 ? 0 : dow === 0 ? 1 : 8 - dow;
+      d.setDate(1 + offset);
+      return d.toISOString().slice(0, 10);
+    }
+
     const WINDOWS_2026 = [
-      ['2026-10-30', null],          // Oct 30+ → off-season
-      ['2026-10-01', '2026-10-01'],  // October
-      ['2026-09-01', '2026-09-01'],  // September
-      ['2026-08-01', '2026-08-01'],  // August
-      ['2026-07-01', '2026-07-01'],  // July
-      ['2026-06-01', '2026-06-01'],  // June
-      ['2026-05-01', '2026-05-01'],  // May
+      [firstMondayOf(2026, 11), null],                    // Nov+ → off-season
+      [firstMondayOf(2026, 10), '2026-10-01'],            // October
+      [firstMondayOf(2026,  9), '2026-09-01'],            // September
+      [firstMondayOf(2026,  8), '2026-08-01'],            // August
+      [firstMondayOf(2026,  7), '2026-07-01'],            // July
+      [firstMondayOf(2026,  6), '2026-06-01'],            // June
+      [firstMondayOf(2026,  5), '2026-05-01'],            // May
     ];
 
     for (const [cutoff, start] of WINDOWS_2026) {
@@ -11208,7 +11217,7 @@ function LiveSpecPage() {
       }
     }
 
-    // Before May 1 = April window (first month of season, no prior month to exclude)
+    // Before first Monday of May = April window (first month of season)
     return { startdate: '2026-04-01', enddate: todayStr };
   }
 
