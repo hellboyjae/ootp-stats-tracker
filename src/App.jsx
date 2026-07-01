@@ -11223,9 +11223,9 @@ function LiveSpecPage() {
     return { startdate: '2026-04-01', enddate: todayStr };
   }
 
-  useEffect(() => { fetchLiveSpecData(); }, []);
+  useEffect(() => { fetchLiveSpecData(false); }, []);
 
-  async function fetchLiveSpecData() {
+  async function fetchLiveSpecData(force = false) {
     setLoading(true);
     setError(null);
     try {
@@ -11234,7 +11234,7 @@ function LiveSpecPage() {
 
       const todayStr = new Date().toISOString().slice(0, 10);
 
-      // Check if cached data is from today
+      // Check if cached data is from today (skip check if force=true)
       const { data: cached } = await supabase
         .from('site_content')
         .select('content')
@@ -11243,8 +11243,8 @@ function LiveSpecPage() {
 
       const cachedDate = cached?.content?.updatedAt?.slice(0, 10);
       const cachedStart = cached?.content?.startdate;
-      if (!cached?.content?.bat || cachedDate !== todayStr || cachedStart !== evalWindow.startdate) {
-        // Stale, missing, or wrong window — trigger edge function to refresh
+      if (force || !cached?.content?.bat || cachedDate !== todayStr || cachedStart !== evalWindow.startdate) {
+        // Stale, missing, wrong window, or forced — trigger edge function to refresh
         await supabase.functions.invoke('fetch-fangraphs-actuals');
       }
 
@@ -11385,7 +11385,7 @@ function LiveSpecPage() {
           </div>
 
           {/* Refresh */}
-          <button onClick={fetchLiveSpecData} disabled={loading} style={{ padding: '10px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <button onClick={() => fetchLiveSpecData(true)} disabled={loading} style={{ padding: '10px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
 
