@@ -11084,7 +11084,9 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol, nameM
       }
       let pct = ((a - p) / Math.abs(p)) * 100;
       if (!s.higherBetter) pct = -pct;
-      statResults[s.key] = { actual: a, proj: p, pct };
+      // Flag zero-actual for lower-is-better stats (e.g. 0 HR/9, 0 BB/9) — pct is +100% but shown in gold
+      const isZeroDefault = a === 0 && !s.higherBetter;
+      statResults[s.key] = { actual: a, proj: p, pct, isZeroDefault };
       // Exclude HR/9 from composite until pitcher has 30+ IP (too volatile in small samples)
       const excludeHR9 = s.key === 'HR9' && playerIP !== null && playerIP < 30;
       if (!s.excludeFromComposite && !excludeHR9) { validCount++; totalPct += pct; }
@@ -11240,9 +11242,10 @@ function LiveSpecPage() {
         .single();
 
       const cachedDate = cached?.content?.updatedAt?.slice(0, 10);
-      if (!cached?.content?.bat || cachedDate !== todayStr || cached?.content?.startdate !== evalWindow.startdate) {
-        // Stale or missing — trigger edge function to refresh
-        await supabase.functions.invoke('fetch-fangraphs-actuals', { body: evalWindow });
+      const cachedStart = cached?.content?.startdate;
+      if (!cached?.content?.bat || cachedDate !== todayStr || cachedStart !== evalWindow.startdate) {
+        // Stale, missing, or wrong window — trigger edge function to refresh
+        await supabase.functions.invoke('fetch-fangraphs-actuals');
       }
 
       // Read (now-fresh) data
@@ -11519,9 +11522,17 @@ function LiveSpecPage() {
                     {currentStats.map((s, si) => {
                       const st = row.stats[s.key];
                       const pct = st?.pct ?? null;
+                      const isZeroDefault = st?.isZeroDefault ?? false;
+                      const zeroHover = isZeroDefault ? ({
+                        HR9:   'No HRs allowed — defaulted +100%',
+                        BB9:   'No walks — defaulted +100%',
+                        BABIP: 'BABIP 0 — defaulted +100%',
+                        Kpct:  'No Ks — defaulted +100%',
+                      }[s.key] ?? 'Zero actuals — defaulted +100%') : undefined;
+                      const pctDisplayColor = isZeroDefault ? '#FFE61F' : (pct != null ? pctColor(pct) : '#fff');
                       return (
                         <td key={`p_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: pct != null ? pctColor(pct) : '#fff' }}>
+                          <span title={zeroHover} style={{ fontSize: 14, fontWeight: 700, color: pctDisplayColor, cursor: isZeroDefault ? 'help' : 'default' }}>
                             {pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
                           </span>
                         </td>
