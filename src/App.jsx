@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom';
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import Papa from 'papaparse';
 import { supabase } from './supabase.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -255,18 +255,6 @@ function ThemeProvider({ children }) {
 
 function useTheme() { return useContext(ThemeContext); }
 
-function useIsMobile(query = '(max-width: 768px)') {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const handler = (e) => setIsMobile(e.matches);
-    setIsMobile(mql.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, [query]);
-  return isMobile;
-}
-
 const AuthContext = createContext();
 
 function AuthProvider({ children }) {
@@ -465,29 +453,10 @@ function NewsBanner() {
   );
 }
 
-const NAV_ITEMS = [
-  { to: '/stats', label: 'Stats', end: true },
-  { to: '/draft-assistant', label: 'Draft Assistant' },
-  { to: '/re-viewer', label: 'RE Viewer' },
-  { to: '/pack-simulator', label: 'Pack Sim' },
-  { to: '/pt-live', label: 'PT Live' },
-  { to: '/leaderboards', label: 'Leaderboards' },
-  { to: '/live-spec', label: 'Live Spec' },
-  { to: '/videos', label: 'Videos' },
-  { to: '/articles', label: 'Articles' },
-  { to: '/info', label: 'Info' },
-  { to: '/submit', label: 'Submit Data' },
-];
-
 function Layout({ children, notification, pendingCount = 0 }) {
   const { theme, team, setTeamTheme, teamColors, isColorblind, toggleColorblind } = useTheme();
   const { isAdmin } = useAuth();
   const styles = getStyles(theme);
-  const isMobile = useIsMobile();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const location = useLocation();
-  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-  useEffect(() => { if (!isMobile) setMenuOpen(false); }, [isMobile]);
 
   // Group teams by division for the dropdown
   const teamGroups = {
@@ -498,92 +467,52 @@ function Layout({ children, notification, pendingCount = 0 }) {
     'NL Central': ['brewers', 'cardinals', 'cubs', 'reds', 'pirates'],
     'NL West': ['dodgers', 'padres', 'giants', 'dbacks', 'rockies'],
   };
-
-  const mobileNavLink = { display: 'block', padding: '13px 14px', color: theme.textMuted, textDecoration: 'none', fontWeight: 600, fontSize: 14, fontFamily: "'Oswald', 'Inter', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', borderLeft: '3px solid transparent', borderRadius: 4 };
-  const mobileNavLinkActive = { color: theme.teamPrimary, borderLeftColor: theme.teamPrimary, background: `${theme.teamPrimary}12` };
-
-  const renderNav = (mobile) => (
-    <nav style={mobile ? { display: 'flex', flexDirection: 'column', gap: 2 } : styles.nav}>
-      {NAV_ITEMS.map(item => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.end}
-          style={({isActive}) => mobile
-            ? {...mobileNavLink, ...(isActive ? mobileNavLinkActive : {})}
-            : {...styles.navLink, ...(isActive ? styles.navLinkActive : {})}}
-        >
-          {item.label}
-        </NavLink>
-      ))}
-      {isAdmin && (
-        <NavLink
-          to="/review"
-          style={({isActive}) => mobile
-            ? {...mobileNavLink, ...(isActive ? mobileNavLinkActive : {})}
-            : {...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})}}
-        >
-          Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
-        </NavLink>
-      )}
-    </nav>
-  );
-
-  const themeControls = (mobile) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...(mobile ? { width: '100%' } : {}) }}>
-      <select
-        value={team}
-        onChange={(e) => setTeamTheme(e.target.value)}
-        style={{...styles.teamSelect, ...(mobile ? { flex: 1, padding: '10px 12px', fontSize: 14 } : {})}}
-        title="Team Colors"
-      >
-        <option value="default">⚾ Default</option>
-        {Object.entries(teamGroups).map(([division, teams]) => (
-          <optgroup key={division} label={division}>
-            {teams.map(t => (
-              <option key={t} value={t}>{teamColors[t].name}</option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-      <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(mobile ? { width: 44, height: 44 } : {}), ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
-    </div>
-  );
-
+  
   return (
     <div style={styles.container}>
       {notification && <div style={{...styles.notification, background: notification.type === 'error' ? theme.error : theme.success}}>{notification.message}</div>}
-      <header style={{...styles.header, ...(isMobile ? { padding: '10px 16px' } : {})}}>
-        <div style={styles.headerContent}>
-          <div>
-            <h1 style={{...styles.title, ...(isMobile ? { fontSize: 20 } : {})}}>BeaneCounter</h1>
-            {!isMobile && <p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p>}
-          </div>
-          {isMobile ? (
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              aria-label="Menu"
-              aria-expanded={menuOpen}
-              style={{ width: 44, height: 44, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', cursor: 'pointer', fontSize: 20, color: theme.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+      <header style={styles.header}><div style={styles.headerContent}>
+        <div><h1 style={styles.title}>BeaneCounter</h1><p style={styles.subtitle}>OOTP Baseball Statistics by ItsHellboy</p></div>
+        <div style={styles.headerRight}>
+          <nav style={styles.nav}>
+            <NavLink to="/stats" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})} end>Stats</NavLink>
+            <NavLink to="/draft-assistant" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Draft Assistant</NavLink>
+            <NavLink to="/re-viewer" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>RE Viewer</NavLink>
+            {/* Database tab hidden — archiving feature */}
+            {/* <NavLink to="/database" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Database</NavLink> */}
+            <NavLink to="/pack-simulator" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Pack Sim</NavLink>
+            <NavLink to="/pt-live" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>PT Live</NavLink>
+            <NavLink to="/live-spec" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Live Spec</NavLink>
+            <NavLink to="/videos" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Videos</NavLink>
+            <NavLink to="/articles" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Articles</NavLink>
+            <NavLink to="/info" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Info</NavLink>
+            <NavLink to="/submit" style={({isActive}) => ({...styles.navLink, ...(isActive ? styles.navLinkActive : {})})}>Submit Data</NavLink>
+            {isAdmin && (
+              <NavLink to="/review" style={({isActive}) => ({...styles.navLink, ...styles.navLinkReview, ...(isActive ? styles.navLinkActive : {})})}>
+                Review {pendingCount > 0 && <span style={styles.navBadge}>{pendingCount}</span>}
+              </NavLink>
+            )}
+          </nav>
+          <div style={styles.themeControls}>
+            <select 
+              value={team} 
+              onChange={(e) => setTeamTheme(e.target.value)} 
+              style={styles.teamSelect}
+              title="Team Colors"
             >
-              {menuOpen ? '✕' : '☰'}
-            </button>
-          ) : (
-            <div style={styles.headerRight}>
-              {renderNav(false)}
-              {themeControls(false)}
-            </div>
-          )}
-        </div>
-        {isMobile && menuOpen && (
-          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
-            {renderNav(true)}
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
-              {themeControls(true)}
-            </div>
+              <option value="default">⚾ Default</option>
+              {Object.entries(teamGroups).map(([division, teams]) => (
+                <optgroup key={division} label={division}>
+                  {teams.map(t => (
+                    <option key={t} value={t}>{teamColors[t].name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <button onClick={toggleColorblind} style={{...styles.themeToggle, ...(isColorblind ? { background: theme.accent, color: '#fff' } : {})}} title={isColorblind ? 'Colorblind mode (Deuteranopia) ON' : 'Colorblind mode OFF'}>👁</button>
           </div>
-        )}
-      </header>
+        </div>
+      </div></header>
       <NewsBanner />
       {children}
     </div>
@@ -593,7 +522,6 @@ function Layout({ children, notification, pendingCount = 0 }) {
 function StatsPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
-  const isMobile = useIsMobile();
   const { isAdmin, requestAuth } = useAuth();
   const fileInputRef = React.useRef(null);
   const [tournaments, setTournaments] = useState([]);
@@ -603,15 +531,15 @@ function StatsPage() {
   const [showNewTournament, setShowNewTournament] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentType, setNewTournamentType] = useState('daily');
-  const [filters, setFilters] = useState({
-    search: '',
-    position: 'all',
-    sortBy: 'fipMinus',
-    sortDir: 'asc',
-    gFilter: { enabled: false, operator: '>=', value: 0 },
-    paFilter: { enabled: false, operator: '>=', value: 0 },
-    abFilter: { enabled: false, operator: '>=', value: 0 },
-    ipFilter: { enabled: true, operator: '>=', value: 400 },
+  const [filters, setFilters] = useState({ 
+    search: '', 
+    position: 'all', 
+    sortBy: 'war', 
+    sortDir: 'desc', 
+    gFilter: { enabled: false, operator: '>=', value: 0 }, 
+    paFilter: { enabled: false, operator: '>=', value: 0 }, 
+    abFilter: { enabled: false, operator: '>=', value: 0 }, 
+    ipFilter: { enabled: false, operator: '>=', value: 0 },
     // Card tier filters (all enabled by default)
     cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
     // Variant filter: 'all', 'yes', 'no'
@@ -1279,21 +1207,18 @@ function StatsPage() {
 
   const toggleSort = (field) => { if (filters.sortBy === field) setFilters(f => ({ ...f, sortDir: f.sortDir === 'asc' ? 'desc' : 'asc' })); else setFilters(f => ({ ...f, sortBy: field, sortDir: 'desc' })); };
   const updateStatFilter = (name, updates) => setFilters(f => ({ ...f, [name]: { ...f[name], ...updates } }));
-  const resetFilters = () => {
-    const isPitching = activeTab === 'pitching';
-    setFilters({
-      search: '',
-      position: 'all',
-      sortBy: isPitching ? 'fipMinus' : 'woba',
-      sortDir: isPitching ? 'asc' : 'desc',
-      gFilter: { enabled: false, operator: '>=', value: 0 },
-      paFilter: isPitching ? { enabled: false, operator: '>=', value: 0 } : { enabled: true, operator: '>=', value: 1000 },
-      abFilter: { enabled: false, operator: '>=', value: 0 },
-      ipFilter: isPitching ? { enabled: true, operator: '>=', value: 400 } : { enabled: false, operator: '>=', value: 0 },
-      cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
-      variantFilter: 'all'
-    });
-  };
+  const resetFilters = () => setFilters({ 
+    search: '', 
+    position: 'all', 
+    sortBy: 'war', 
+    sortDir: 'desc', 
+    gFilter: { enabled: false, operator: '>=', value: 0 }, 
+    paFilter: { enabled: false, operator: '>=', value: 0 }, 
+    abFilter: { enabled: false, operator: '>=', value: 0 }, 
+    ipFilter: { enabled: false, operator: '>=', value: 0 },
+    cardTiers: { perfect: true, diamond: true, gold: true, silver: true, bronze: true, iron: true },
+    variantFilter: 'all'
+  });
   const getActiveFilterCount = () => { 
     let c = 0; 
     if (filters.position !== 'all') c++; 
@@ -1420,8 +1345,8 @@ function StatsPage() {
         onChange={handleFileUpload} 
         style={{ display: 'none' }} 
       />
-      <main style={isMobile ? {...styles.main, flexDirection: 'column'} : styles.main}>
-        <aside style={isMobile ? {...styles.sidebar, width: '100%', borderRight: 'none', borderBottom: `1px solid ${theme.border}`} : styles.sidebar}>
+      <main style={styles.main}>
+        <aside style={styles.sidebar}>
           <div style={styles.sidebarTabs}>
             <button style={{...styles.sidebarTabBtn, ...(sidebarTab === 'tournaments' ? styles.sidebarTabActive : {})}} onClick={() => {
               setSidebarTab('tournaments');
@@ -1446,7 +1371,7 @@ function StatsPage() {
             </div>
             <div style={styles.formBtns}><button onClick={createTournament} style={styles.saveBtn}>Create</button><button onClick={() => { setShowNewTournament(false); setNewTournamentType('daily'); }} style={styles.cancelBtn}>Cancel</button></div>
           </div>)}
-          <div style={isMobile ? {...styles.tournamentList, maxHeight: 240} : styles.tournamentList}>
+          <div style={styles.tournamentList}>
             {filteredTournaments.length === 0 ? <p style={styles.emptyMsg}>No {sidebarTab} yet</p> :
               filteredTournaments.map(t => {
                 const quality = getDataQuality(getCsvCount(t));
@@ -1553,7 +1478,7 @@ function StatsPage() {
             <button style={styles.newTournamentBtn} onClick={() => setShowNewTournament(true)}>+ New</button>
           )}
         </aside>
-        <div style={isMobile ? {...styles.content, padding: '14px 12px'} : styles.content}>
+        <div style={styles.content}>
           {!selectedTournament ? (<div style={styles.welcome}><h2 style={styles.welcomeTitle}>Select a Tournament</h2><p style={styles.welcomeText}>Choose from the sidebar or create a new one.</p></div>) : (<>
             <div style={styles.tournamentHeader}>
               <div style={styles.tournamentMeta}>
@@ -1760,8 +1685,8 @@ function StatsPage() {
             )}
             <div style={styles.tabRow}>
               <div style={styles.tabs}>
-                <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all', sortBy: 'fipMinus', sortDir: 'asc', ipFilter: { enabled: true, operator: '>=', value: 400 }, paFilter: { enabled: false, operator: '>=', value: 0 }})); setCurrentPage(1); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching?.length || 0}</span></button>
-                <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all', sortBy: 'woba', sortDir: 'desc', paFilter: { enabled: true, operator: '>=', value: 1000 }, ipFilter: { enabled: false, operator: '>=', value: 0 }})); setCurrentPage(1); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting?.length || 0}</span></button>
+                <button style={{...styles.tab, ...(activeTab === 'pitching' ? styles.tabActive : {})}} onClick={() => { setActiveTab('pitching'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Pitching <span style={styles.tabCount}>{selectedTournament.pitching?.length || 0}</span></button>
+                <button style={{...styles.tab, ...(activeTab === 'batting' ? styles.tabActive : {})}} onClick={() => { setActiveTab('batting'); setFilters(f => ({...f, position: 'all'})); setCurrentPage(1); }}>Batting <span style={styles.tabCount}>{selectedTournament.batting?.length || 0}</span></button>
                 {cardData.length > 0 && <button style={{...styles.tab, ...(activeTab === 'analysis' ? styles.tabActive : {})}} onClick={() => setActiveTab('analysis')}>Analysis</button>}
               </div>
             </div>
@@ -1773,7 +1698,7 @@ function StatsPage() {
                 theme={theme}
               />
             ) : (<>
-            <div style={isMobile ? {...styles.controlBar, flexWrap: 'wrap', gap: 8} : styles.controlBar}>
+            <div style={styles.controlBar}>
               {selectedTournament.rotatingFormat && (
                 <div 
                   onClick={() => alert('🔄 Rotating Format\n\nThis tournament/draft rotates its park and era runtime settings frequently.\n\nThis means player performance may vary significantly between uploads due to changing environmental factors, not just player skill.\n\nComparing stats across different dates should account for these runtime changes.')}
@@ -6398,8 +6323,7 @@ function ReviewQueuePage() {
 function DraftAssistantPage() {
   const { theme, isColorblind } = useTheme();
   const styles = getStyles(theme);
-  const isMobile = useIsMobile();
-
+  
   // Check if in compact/popout mode via URL parameter
   const isCompactMode = new URLSearchParams(window.location.search).get('compact') === '1';
   
@@ -7159,7 +7083,7 @@ function DraftAssistantPage() {
           <h1 style={{ color: theme.textPrimary, marginBottom: 8 }}>Draft Assistant</h1>
           <p style={{ color: theme.textMuted, marginBottom: 32 }}>Choose how you want to draft — use the web assistant or download the desktop overlay.</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 24, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
             {/* Left: Web Draft Assistant — under construction */}
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
@@ -8901,9 +8825,9 @@ function WelcomePage() {
       <div ref={particlesRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />
 
       {/* Main content */}
-      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600, width: '100%' }}>
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', maxWidth: 600 }}>
         <h1 style={{
-          fontSize: 'clamp(2rem, 8.5vw, 5rem)',
+          fontSize: 'clamp(3rem, 10vw, 5rem)',
           fontWeight: 700,
           letterSpacing: '0.04em',
           marginBottom: 8,
@@ -8920,7 +8844,7 @@ function WelcomePage() {
         </h1>
         
         <p style={{
-          fontSize: 'clamp(0.78rem, 3vw, 1.1rem)',
+          fontSize: '1.1rem',
           fontWeight: 500,
           color: '#5b9bd5',
           letterSpacing: '0.25em',
@@ -10842,53 +10766,13 @@ function PackSimulatorPage() {
 // ============================================================
 // PT LIVE — constants & scoring
 // ============================================================
-const NAME_ALIASES = {
-  'louis varland': 'louie varland',
-  'jazz chisholm': 'jazz chisholm jr',
-  'cameron schlittler': 'cam schlittler',
-  'haoyu lee': 'hao yu lee',
-  'jacob latz': 'jake latz',
-  'jackson perkins': 'jack perkins',
-  'leo rivas': 'leonardo rivas',
-  'richard lovelady': 'dicky lovelady',
-  'samuel antonacci': 'sam antonacci',
-  'haseong kim': 'ha seong kim',
-  'hyeseong kim': 'hye seong kim',
-  'pete crowarmstrong': 'pete crow armstrong',
-  'justynhenry malloy': 'justyn henry malloy',
-  'christian encarnacionstrand': 'christian encarnacion strand',
-  'isiah kinerfalefa': 'isiah kiner falefa',
-  'kaiwei teng': 'kai wei teng',
-  'sungmun song': 'sung mun song',
-};
+const NAME_ALIASES = { 'louis varland': 'louie varland' };
 const normalizeName = (s) => {
-  const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-.]/g, '').replace(/\s+/g, ' ').toLowerCase().trim();
+  const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, '').toLowerCase().trim();
   return NAME_ALIASES[n] || n;
 };
-// ── Weather & postponement constants ──────────────────────────────────────────
-const DOME_STADIUMS = new Set(['MIL', 'ARI', 'TEX', 'MIA', 'HOU', 'TOR', 'SEA', 'TB']);
-const POSTPONED_CODES = new Set(['DR','DS','DG','DV','DF','DC','DD','DB','DI','DP','DL','DE','DO','DA','D9']);
-const DELAYED_CODES = new Set(['PR','PS','PL','PO','IR','IS','IL','IO']);
-const VENUE_COORDS = {
-  ARI: { lat: 33.4455, lon: -112.0667 }, ATH: { lat: 37.7516, lon: -122.2005 },
-  ATL: { lat: 33.8907, lon: -84.4677 }, BAL: { lat: 39.2838, lon: -76.6216 },
-  BOS: { lat: 42.3467, lon: -71.0972 }, CHC: { lat: 41.9484, lon: -87.6553 },
-  CHW: { lat: 41.8299, lon: -87.6338 }, CIN: { lat: 39.0974, lon: -84.5082 },
-  CLE: { lat: 41.4962, lon: -81.6852 }, COL: { lat: 39.7559, lon: -104.9942 },
-  DET: { lat: 42.3390, lon: -83.0485 }, HOU: { lat: 29.7572, lon: -95.3555 },
-  KC:  { lat: 39.0517, lon: -94.4803 }, LAA: { lat: 33.8003, lon: -117.8827 },
-  LAD: { lat: 34.0739, lon: -118.2400 }, MIA: { lat: 25.7781, lon: -80.2196 },
-  MIL: { lat: 43.0280, lon: -87.9712 }, MIN: { lat: 44.9817, lon: -93.2776 },
-  NYM: { lat: 40.7571, lon: -73.8458 }, NYY: { lat: 40.8296, lon: -73.9262 },
-  PHI: { lat: 39.9061, lon: -75.1665 }, PIT: { lat: 40.4469, lon: -80.0057 },
-  SD:  { lat: 32.7076, lon: -117.1570 }, SF:  { lat: 37.7786, lon: -122.3893 },
-  SEA: { lat: 47.5914, lon: -122.3325 }, STL: { lat: 38.6226, lon: -90.1928 },
-  TB:  { lat: 27.7682, lon: -82.6534 }, TEX: { lat: 32.7512, lon: -97.0832 },
-  TOR: { lat: 43.6414, lon: -79.3894 }, WAS: { lat: 38.8730, lon: -77.0074 },
-};
-
 // MLB player IDs that need disambiguation (same name, different player)
-const MLB_ID_OVERRIDES = { 691777: 'max muncy oak' }; // A's Muncy (born 2002, MLBAM ID 691777)
+const MLB_ID_OVERRIDES = { 695825: 'max muncy oak' }; // A's Muncy
 // Card-side: resolve the correct stats key for a card
 const cardStatsKey = (card) => {
   const name = normalizeName(`${card.first_name || ''} ${card.last_name || ''}`);
@@ -11002,20 +10886,6 @@ function PTLiveScoringKey({ theme }) {
 
 // ==================== LIVE SPEC PAGE ====================
 
-// Reverse-index uZIPS by MLBAM ID (primary) and normalized name (fallback)
-const UZIPS_BAT_BY_MLBAM = Object.fromEntries(
-  Object.values(UZIPS_BAT).filter(p => p.xMLBAMID).map(p => [String(p.xMLBAMID), p])
-);
-const UZIPS_PIT_BY_MLBAM = Object.fromEntries(
-  Object.values(UZIPS_PIT).filter(p => p.xMLBAMID).map(p => [String(p.xMLBAMID), p])
-);
-const UZIPS_BAT_BY_NAME = Object.fromEntries(
-  Object.values(UZIPS_BAT).map(p => [normalizeName(p.Name || p.name || p.PlayerName || ''), p]).filter(([k]) => k)
-);
-const UZIPS_PIT_BY_NAME = Object.fromEntries(
-  Object.values(UZIPS_PIT).map(p => [normalizeName(p.Name || p.name || p.PlayerName || ''), p]).filter(([k]) => k)
-);
-
 const LIVESPEC_HITTER_STATS = [
   { key: 'wOBA',  label: 'wOBA',  higherBetter: true,  fmt: v => v.toFixed(3), excludeFromComposite: true },
   { key: 'Kpct',  label: 'K%',    higherBetter: false, fmt: v => (v * 100).toFixed(1) + '%' },
@@ -11037,7 +10907,6 @@ const LIVESPEC_PITCHER_STATS = [
 const fgStripHtml = s => typeof s === 'string' ? s.replace(/<[^>]*>/g, '').trim() : (s || '');
 
 function fgGet(obj, key) {
-  if (obj == null) return null;
   const aliases = {
     'OPS':   ['OPS'],
     'OBP':   ['OBP'],
@@ -11065,17 +10934,17 @@ function fgGet(obj, key) {
   return null;
 }
 
-function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol, nameMap = {}) {
+function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol) {
   const rows = [];
   actualArr.forEach(player => {
-    const pid = player.player_id || player.playerid;
+    const pid = player.playerid;
     if (!pid) return;
+    const proj = projMap[String(pid)];
+    if (!proj) return;
     const playerName = normalizeName(fgStripHtml(player.Name || player.name || ''));
     if (!LIVE_CARD_OVR[playerName]) return;
     const vol = fgGet(player, minVolKey);
     if (vol === null || vol < minVol) return;
-    // Try MLBAM ID first, then name fallback — allow null (no projection available)
-    const proj = projMap[String(pid)] || nameMap[playerName] || null;
     const actualPA = fgGet(player, 'PA');
     const projPA   = fgGet(proj,   'PA');
     const statResults = {};
@@ -11091,14 +10960,12 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol, nameM
       }
       let pct = ((a - p) / Math.abs(p)) * 100;
       if (!s.higherBetter) pct = -pct;
-      // Flag zero-actual for lower-is-better stats (e.g. 0 HR/9, 0 BB/9) — pct is +100% but shown in gold
-      const isZeroDefault = a === 0 && !s.higherBetter;
-      statResults[s.key] = { actual: a, proj: p, pct, isZeroDefault };
+      statResults[s.key] = { actual: a, proj: p, pct };
       // Exclude HR/9 from composite until pitcher has 30+ IP (too volatile in small samples)
       const excludeHR9 = s.key === 'HR9' && playerIP !== null && playerIP < 30;
       if (!s.excludeFromComposite && !excludeHR9) { validCount++; totalPct += pct; }
     });
-    if (proj && validCount < 1) return; // has projection but no computable stats — skip
+    if (validCount < 1) return;
 
     // Regression-based OVR delta prediction (uses % vs uZIPS as features)
     const isPitcher = stats === LIVESPEC_PITCHER_STATS;
@@ -11159,26 +11026,22 @@ function computeLiveSpecRows(actualArr, projMap, stats, minVolKey, minVol, nameM
       if (wTotal > 0) weightedPct = wSum / wTotal;
     }
 
-    const composite = predictedDelta !== null ? predictedDelta : (validCount > 0 ? totalPct / validCount : null);
     rows.push({
       playerid: String(pid),
       name: fgStripHtml(player.Name || player.name || '—'),
-      team: fgStripHtml(player.Team || player.team || proj?.Team || ''),
+      team: fgStripHtml(player.Team || player.team || ''),
       vol,
       stats: statResults,
-      composite,
+      composite: predictedDelta !== null ? predictedDelta : totalPct / validCount,
       predictedDelta,
       weightedPct,
-      hasProj: !!proj,
     });
   });
-  // Players with no projection (no composite) sort to the bottom
-  return rows.sort((a, b) => (b.composite ?? -Infinity) - (a.composite ?? -Infinity));
+  return rows.sort((a, b) => b.composite - a.composite);
 }
 
 function LiveSpecPage() {
   const { theme } = useTheme();
-  const isMobile = useIsMobile();
   const [tab, setTab]         = useState('hitters');
   const [minPA, setMinPA]     = useState(50);
   const [minIP, setMinIP]     = useState(10);
@@ -11194,29 +11057,20 @@ function LiveSpecPage() {
 
   // 2026 season evaluation windows.
   // Each entry: [cutoff date string, window start date string].
-  // Cutoff = first Monday of that month (display switches over on first Monday, not the 1st).
+  // Cutoff = 3 days before first Monday of the next month.
   // Ordered latest → earliest for simple iteration.
   function getEvalWindow() {
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
 
-    // Returns 'YYYY-MM-DD' of the first Monday of the given month (1-indexed).
-    function firstMondayOf(year, month) {
-      const d = new Date(year, month - 1, 1);
-      const dow = d.getDay(); // 0=Sun, 1=Mon, ...
-      const offset = dow === 1 ? 0 : dow === 0 ? 1 : 8 - dow;
-      d.setDate(1 + offset);
-      return d.toISOString().slice(0, 10);
-    }
-
     const WINDOWS_2026 = [
-      [firstMondayOf(2026, 11), null],                    // Nov+ → off-season
-      [firstMondayOf(2026, 10), '2026-10-01'],            // October
-      [firstMondayOf(2026,  9), '2026-09-01'],            // September
-      [firstMondayOf(2026,  8), '2026-08-01'],            // August
-      [firstMondayOf(2026,  7), '2026-07-01'],            // July
-      [firstMondayOf(2026,  6), '2026-06-01'],            // June
-      [firstMondayOf(2026,  5), '2026-05-01'],            // May
+      ['2026-10-30', null],          // Oct 30+ → off-season (Nov 2 first Monday)
+      ['2026-10-02', '2026-10-01'],  // Oct 2–29  → October  (Oct 5 first Monday)
+      ['2026-09-04', '2026-09-01'],  // Sep 4–Oct 1 → September (Sep 7 first Monday)
+      ['2026-07-31', '2026-08-01'],  // Jul 31–Sep 3 → August  (Aug 3 first Monday)
+      ['2026-07-03', '2026-07-01'],  // Jul 3–Jul 30 → July    (Jul 6 first Monday)
+      ['2026-05-29', '2026-06-01'],  // May 29–Jul 2 → June    (Jun 1 first Monday)
+      ['2026-05-01', '2026-05-01'],  // May 1–May 28 → May     (May 4 first Monday)
     ];
 
     for (const [cutoff, start] of WINDOWS_2026) {
@@ -11226,65 +11080,46 @@ function LiveSpecPage() {
       }
     }
 
-    // Before first Monday of May = April window (first month of season)
+    // Before May 1 = April window (first month of season, no prior month to exclude)
     return { startdate: '2026-04-01', enddate: todayStr };
   }
 
-  useEffect(() => { fetchLiveSpecData(false); }, []);
+  useEffect(() => { fetchLiveSpecData(); }, []);
 
-  async function fetchLiveSpecData(force = false) {
+  async function fetchLiveSpecData() {
     setLoading(true);
     setError(null);
     try {
       const evalWindow = getEvalWindow();
       if (!evalWindow) { setLoading(false); return; } // off-season
+      const { startdate, enddate } = evalWindow;
+      const season = new Date().getFullYear();
+      const fgBase = `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&lg=all&qual=0&type=8&season=${season}&season1=${season}&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=${startdate}&enddate=${enddate}&month=1000&pageItems=2000`;
+      const fgProxy = url => `/api/fangraphs?url=${encodeURIComponent(url)}`;
 
-      const todayStr = new Date().toISOString().slice(0, 10);
-
-      // Check if cached data is from today (skip check if force=true)
-      const { data: cached } = await supabase
-        .from('site_content')
-        .select('content')
-        .eq('id', 'fangraphs_actuals')
-        .single();
-
-      const cachedDate = cached?.content?.updatedAt?.slice(0, 10);
-      const cachedStart = cached?.content?.startdate;
-      if (force || !cached?.content?.bat || cachedDate !== todayStr || cachedStart !== evalWindow.startdate) {
-        // Stale, missing, wrong window, or forced — trigger edge function to refresh
-        await supabase.functions.invoke('fetch-fangraphs-actuals');
-      }
-
-      // Read (now-fresh) data
-      const { data, error } = await supabase
-        .from('site_content')
-        .select('content')
-        .eq('id', 'fangraphs_actuals')
-        .single();
-
-      if (error || !data?.content?.bat) {
-        setError('No data available — the refresh may have failed. Try again shortly.');
-        setLoading(false);
-        return;
-      }
-
-      const { bat, pit } = data.content;
-      setRawHitters({ actualArr: bat, projMap: UZIPS_BAT_BY_MLBAM, nameMap: UZIPS_BAT_BY_NAME });
-      setRawPitchers({ actualArr: pit, projMap: UZIPS_PIT_BY_MLBAM, nameMap: UZIPS_PIT_BY_NAME });
+      // Actual stats from FanGraphs (live); uZIPS from static snapshot
+      const [aBat, aPit] = await Promise.all([
+        fetch(fgProxy(`${fgBase}&stats=bat`)).then(r => r.json()),
+        fetch(fgProxy(`${fgBase}&stats=pit`)).then(r => r.json()),
+      ]);
+      const toArr = x => Array.isArray(x) ? x : (x?.data || []);
+      const aBatArr = toArr(aBat), aPitArr = toArr(aPit);
+      setRawHitters({ actualArr: aBatArr, projMap: UZIPS_BAT });
+      setRawPitchers({ actualArr: aPitArr, projMap: UZIPS_PIT });
     } catch (e) {
-      setError(`Failed to load data: ${e.message}`);
+      setError(`Failed to load data. FanGraphs may be blocking browser requests (CORS). Error: ${e.message}`);
     }
     setLoading(false);
   }
 
   const hitterRows = useMemo(() => {
     if (!rawHitters) return [];
-    return computeLiveSpecRows(rawHitters.actualArr, rawHitters.projMap, LIVESPEC_HITTER_STATS, 'PA', minPA, rawHitters.nameMap);
+    return computeLiveSpecRows(rawHitters.actualArr, rawHitters.projMap, LIVESPEC_HITTER_STATS, 'PA', minPA);
   }, [rawHitters, minPA]);
 
   const pitcherRows = useMemo(() => {
     if (!rawPitchers) return [];
-    return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP, rawPitchers.nameMap);
+    return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP);
   }, [rawPitchers, minIP]);
 
   const ovrToTier = ovr => ovr >= 100 ? 'Perfect' : ovr >= 90 ? 'Diamond' : ovr >= 80 ? 'Gold' : ovr >= 70 ? 'Silver' : ovr >= 60 ? 'Bronze' : 'Iron';
@@ -11299,7 +11134,7 @@ function LiveSpecPage() {
     if (tierFilter !== 'All' && ovrToTier(ovr) !== tierFilter) return false;
     return true;
   }).sort((a, b) => {
-    if (!sortKey || sortKey === 'composite') return sortDir === 'desc' ? (b.composite ?? -Infinity) - (a.composite ?? -Infinity) : (a.composite ?? Infinity) - (b.composite ?? Infinity);
+    if (!sortKey || sortKey === 'composite') return sortDir === 'desc' ? b.composite - a.composite : a.composite - b.composite;
     const av = a.stats[sortKey]?.pct ?? null;
     const bv = b.stats[sortKey]?.pct ?? null;
     if (av === null && bv === null) return 0;
@@ -11336,24 +11171,24 @@ function LiveSpecPage() {
 
   return (
     <Layout>
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
+      <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - 58px)' }}>
 
         {/* ── Sidebar ── */}
-        <div style={{ width: isMobile ? '100%' : 248, flexShrink: 0, background: theme.sidebarBg, borderRight: isMobile ? 'none' : `1px solid ${theme.border}`, borderBottom: isMobile ? `1px solid ${theme.border}` : 'none', boxSizing: 'border-box', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+        <div style={{ width: 220, flexShrink: 0, background: theme.sidebarBg, borderRight: `1px solid ${theme.border}`, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.accent, marginBottom: 6 }}>Live Spec</div>
             <button onClick={() => setShowInfo(!showInfo)} style={{ fontSize: 13, color: theme.accent, background: 'none', border: `1px solid ${theme.accent}`, borderRadius: 4, padding: '6px 10px', cursor: 'pointer', fontWeight: 600 }}>How Accurate Is This?</button>
             {showInfo && (
               <div style={{ marginTop: 10, fontSize: 12, color: '#d1d5db', lineHeight: 1.6, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: 12 }}>
-                <strong style={{ color: '#fff' }}>Pred Δ</strong> predicts the expected OVR change at the next Live roster update, based on a regression model trained on the April + May 2026 eval windows (~1100 players).
+                <strong style={{ color: '#fff' }}>Pred Δ</strong> predicts the expected OVR change at the next Live roster update, based on a regression model trained on the April→May 2026 update.
                 <br /><br />
                 The model measures how much each player over/underperforms their uZIPS projection, then weights those differences by how predictive each stat is of actual OVR changes.
                 <br /><br />
-                <strong style={{ color: '#fff' }}>Hitters:</strong> wRC+, OPS, ISO, BABIP, K%, BB% vs uZIPS + current OVR (R=0.67)
-                <br /><strong style={{ color: '#fff' }}>Pitchers:</strong> K/9, HR/9, BB/9, BABIP vs uZIPS (R=0.77)
+                <strong style={{ color: '#fff' }}>Hitters:</strong> wRC+, OPS, ISO, BABIP, K%, BB% vs uZIPS + current OVR (R=0.70)
+                <br /><strong style={{ color: '#fff' }}>Pitchers:</strong> K/9, HR/9, BB/9, BABIP vs uZIPS (R=0.75)
                 <br /><br />
-                <strong style={{ color: '#fff' }}>Pitcher weights:</strong> HR/9 (2.2x) &gt; BB/9 (1.5x) &gt; BABIP (1.1x) &gt; K/9 (1x)
+                <strong style={{ color: '#fff' }}>Pitcher weights:</strong> HR/9 (2.4x) &gt; BB/9 (1.6x) &gt; BABIP (1.2x) &gt; K/9 (1x)
                 <br />Suppressing HRs and walks matters far more than racking up strikeouts for OVR upgrades.
                 <br /><br />
                 The % in parentheses shows regression-weighted over/underperformance vs uZIPS.
@@ -11392,7 +11227,7 @@ function LiveSpecPage() {
           </div>
 
           {/* Refresh */}
-          <button onClick={() => fetchLiveSpecData(true)} disabled={loading} style={{ padding: '10px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <button onClick={fetchLiveSpecData} disabled={loading} style={{ padding: '10px 12px', background: theme.accent, border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, fontFamily: "'Oswald','Inter',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
 
@@ -11451,7 +11286,7 @@ function LiveSpecPage() {
         </div>
 
         {/* ── Main Table ── */}
-        <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', background: theme.mainBg, padding: isMobile ? '14px 12px' : '16px 20px' }}>
+        <div style={{ flex: 1, overflowX: 'auto', background: theme.mainBg, padding: '16px 20px' }}>
           {loading && (
             <div style={{ textAlign: 'center', padding: 60, color: '#fff', fontSize: 16 }}>Loading data from FanGraphs…</div>
           )}
@@ -11517,29 +11352,19 @@ function LiveSpecPage() {
                             ({row.weightedPct >= 0 ? '+' : ''}{row.weightedPct.toFixed(0)}%)
                           </span>
                         </>
-                      ) : row.composite !== null ? (
+                      ) : (
                         <span style={{ fontWeight: 700, fontSize: 15, color: row.composite >= 0 ? '#22c55e' : '#ef4444' }}>
                           {row.composite >= 0 ? '+' : ''}{row.composite.toFixed(1)}%
                         </span>
-                      ) : (
-                        <span style={{ fontSize: 13, color: '#556677' }}>No proj</span>
                       )}
                     </td>
                     {/* % diff values */}
                     {currentStats.map((s, si) => {
                       const st = row.stats[s.key];
                       const pct = st?.pct ?? null;
-                      const isZeroDefault = st?.isZeroDefault ?? false;
-                      const zeroHover = isZeroDefault ? ({
-                        HR9:   'No HRs allowed — defaulted +100%',
-                        BB9:   'No walks — defaulted +100%',
-                        BABIP: 'BABIP 0 — defaulted +100%',
-                        Kpct:  'No Ks — defaulted +100%',
-                      }[s.key] ?? 'Zero actuals — defaulted +100%') : undefined;
-                      const pctDisplayColor = isZeroDefault ? '#FFE61F' : (pct != null ? pctColor(pct) : '#fff');
                       return (
                         <td key={`p_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
-                          <span title={zeroHover} style={{ fontSize: 14, fontWeight: 700, color: pctDisplayColor, cursor: isZeroDefault ? 'help' : 'default' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: pct != null ? pctColor(pct) : '#fff' }}>
                             {pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
                           </span>
                         </td>
@@ -11587,7 +11412,7 @@ function LiveSpecPage() {
 
 // ==================== PERF INFO MODAL ====================
 
-function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose, isMobile }) {
+function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose }) {
   const normName = normalizeName(name);
   const normNameNoHyphen = normName.replace(/-/g, '');
   const look = (map) => map ? (map[normName] || map[normNameNoHyphen] || null) : null;
@@ -11633,12 +11458,12 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose,
 
   return ReactDOM.createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: isMobile ? '16px 14px' : '24px 32px', width: '95%', maxWidth: 680, maxHeight: '85vh', overflowY: 'auto', boxSizing: 'border-box', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '24px 32px', width: 680, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isMobile ? 16 : 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{name}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{name}</div>
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>{roleLabel} · OVR {cardOvr}</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>✕</button>
@@ -11654,7 +11479,7 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose,
         {!fgLoading && season && (
           <>
             {/* Column headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '52px 1fr 1fr 1fr' : '72px 1fr 1fr 1fr', gap: isMobile ? 8 : 12, paddingBottom: 10, marginBottom: 4, borderBottom: `2px solid ${theme.border}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, paddingBottom: 10, marginBottom: 4, borderBottom: `2px solid ${theme.border}` }}>
               <div />
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#22c55e' }}>2026 Season</div>
@@ -11677,11 +11502,11 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose,
               const lv = l14    ? fgGet(l14,  s.key) : null;
               const sColor = seasonColor(sv, pv, s.higher);
               return (
-                <div key={s.key} style={{ display: 'grid', gridTemplateColumns: isMobile ? '52px 1fr 1fr 1fr' : '72px 1fr 1fr 1fr', gap: isMobile ? 8 : 12, padding: '11px 0', borderBottom: `1px solid rgba(255,255,255,0.06)`, alignItems: 'center' }}>
-                  <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
-                  <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 700, color: sColor, fontFamily: "'Oswald',sans-serif" }}>{sv != null ? s.fmt(sv) : '—'}</div>
-                  <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 700, color: '#4b5563', fontFamily: "'Oswald',sans-serif" }}>{pv != null ? s.fmt(pv) : '—'}</div>
-                  <div style={{ fontSize: isMobile ? 15 : 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{lv != null ? s.fmt(lv) : '—'}</div>
+                <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 12, padding: '11px 0', borderBottom: `1px solid rgba(255,255,255,0.06)`, alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: sColor, fontFamily: "'Oswald',sans-serif" }}>{sv != null ? s.fmt(sv) : '—'}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#4b5563', fontFamily: "'Oswald',sans-serif" }}>{pv != null ? s.fmt(pv) : '—'}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>{lv != null ? s.fmt(lv) : '—'}</div>
                 </div>
               );
             })}
@@ -11698,51 +11523,6 @@ function PerfInfoModal({ name, role, cardOvr, fgData, fgLoading, theme, onClose,
     </div>,
     document.body
   );
-}
-
-// ==================== LEADERBOARDS CONSTANTS ====================
-
-const OOTP_BASE_URL = 'https://pt27.ootpdevelopments.com/competitive';
-function getMostRecentMonday() {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - diff);
-  const yyyy = monday.getFullYear();
-  const mm = String(monday.getMonth() + 1).padStart(2, '0');
-  const dd = String(monday.getDate()).padStart(2, '0');
-  return `${yyyy}${mm}${dd}`;
-}
-function getLeaderboardCSVConfigs() {
-  const d = getMostRecentMonday();
-  return [
-    { id: 'competitive_tournaments', label: 'Comp Tournaments', url: `${OOTP_BASE_URL}/pt27_tournaments_competitve_dump_${d}.csv` },
-    { id: 'competitive_drafts',      label: 'Comp Drafts',      url: `${OOTP_BASE_URL}/pt27_drafts_competitve_dump_${d}.csv` },
-    { id: 'quick_tournaments',       label: 'Quick Tournaments', url: `${OOTP_BASE_URL}/pt27_tournaments_quick_dump_${d}.csv` },
-    { id: 'quick_drafts',            label: 'Quick Drafts',      url: `${OOTP_BASE_URL}/pt27_drafts_quick_dump_${d}.csv` },
-  ];
-}
-const LEADERBOARD_CSV_CONFIGS = getLeaderboardCSVConfigs();
-
-function parseLeaderboardCSV(text) {
-  const lines = text.split('\n');
-  const startIdx = lines[0]?.trim().startsWith('SEP=') ? 1 : 0;
-  const cleaned = lines.slice(startIdx).join('\n');
-  const parsed = Papa.parse(cleaned, { skipEmptyLines: true });
-  if (!parsed.data || parsed.data.length < 2) return [];
-  const headers = parsed.data[0];
-  return parsed.data.slice(1).map(row => {
-    const placements = row.slice(3).filter(v => v && v.trim());
-    return { num: row[0], title: row[1] || '', starttime: row[2] || '', placements };
-  }).filter(e => e.placements.length > 0);
-}
-
-function calcBracketStats(position, totalPlayers) {
-  if (totalPlayers < 2) return { wins: 0, losses: 0 };
-  const totalRounds = Math.ceil(Math.log2(totalPlayers));
-  if (position === 1) return { wins: totalRounds, losses: 0 };
-  return { wins: Math.max(0, totalRounds - Math.ceil(Math.log2(position))), losses: 1 };
 }
 
 // ==================== PT LIVE PAGE ====================
@@ -11771,7 +11551,6 @@ function PTLivePage() {
 
   // ── Leaderboard state ──────────────────────────────────────────────────────
   const [activeTab, setActiveTab]           = useState('team');
-  const isMobile = useIsMobile();
   const [username, setUsername]             = useState(() => localStorage.getItem('ptlive_username') || '');
   const [groupCode, setGroupCode]           = useState(() => localStorage.getItem('ptlive_group_code') || '');
   const [lockTime, setLockTime]             = useState(null);
@@ -11797,7 +11576,7 @@ function PTLivePage() {
   const [yesterdayTeam, setYesterdayTeam]   = useState(null);
 
   // ── Best Possible Roster state ──────────────────────────────────────────────
-  const [bestRosterDate, setBestRosterDate] = useState(null); // defaults to todayStr on first load
+  const [bestRosterDate, setBestRosterDate] = useState(null); // defaults to yesterdayStr on first load
   const [bestRosterStats, setBestRosterStats] = useState(null);
   const [bestRosterLoading, setBestRosterLoading] = useState(false);
   const [bestRoster, setBestRoster] = useState([]);
@@ -11821,61 +11600,13 @@ function PTLivePage() {
   const [projFilter, setProjFilter] = useState('all');
   const [projTypeFilter, setProjTypeFilter] = useState('all');
   const [projSort, setProjSort] = useState({ col: 'ExpPP', dir: 'desc' });
-  const [projTeamFilter, setProjTeamFilter] = useState('all');
   const [projAdminUnlocked, setProjAdminUnlocked] = useState(false);
   const [projAdminPw, setProjAdminPw] = useState('');
   const [projUploadFiles, setProjUploadFiles] = useState({ batters: null, pitchers: null, games: null, teams: null });
   const [projUpdating, setProjUpdating] = useState(false);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
-  const [yesterdayGuess, setYesterdayGuess] = useState(null);
-  const [yesterdayGuessLoading, setYesterdayGuessLoading] = useState(false);
-  const [showYesterdayGuess, setShowYesterdayGuess] = useState(false);
-  const [yesterdayProjGuess, setYesterdayProjGuess] = useState(null);
-  const [projRefreshing, setProjRefreshing] = useState(false);
-  const [hoveredMatchup, setHoveredMatchup] = useState(null);
-  const [matchupRect, setMatchupRect] = useState(null);
-  const [storedTeamMap, setStoredTeamMap] = useState(null);
-  const [storedILPlayers, setStoredILPlayers] = useState({});
-  const [suggestedRPs, setSuggestedRPs] = useState(['', '']);
-  const [suggestedRPInput, setSuggestedRPInput] = useState(['', '']);
-  const [suggestedRPSaving, setSuggestedRPSaving] = useState(false);
-
-  // ── Weather & postponement state ────────────────────────────────────────────
-  const [weatherData, setWeatherData] = useState(null); // { [teamAbbr]: { temp, pop, condition, windSpeed } }
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [weatherError, setWeatherError] = useState(null);
-  const [postponedTeams, setPostponedTeams] = useState(new Set());
-  const [delayedTeams, setDelayedTeams] = useState(new Set());
-  const [weatherApiKey, setWeatherApiKey] = useState(null);
-  const weatherApiKeyRef = useRef(null); // ref mirror so interval callbacks read latest
-  const weatherCacheRef = useRef({}); // { [venue]: { data, fetchedAt } }
 
   const isLocked = lockTime && new Date() >= lockTime;
-  const [lockCountdown, setLockCountdown] = useState('');
-
-  // Countdown timer — locks 20 min before first pitch
-  useEffect(() => {
-    if (!lockTime) { setLockCountdown(''); return; }
-    const effectiveLock = new Date(lockTime.getTime() - 20 * 60 * 1000);
-    const tick = () => {
-      const diff = effectiveLock - new Date();
-      if (diff <= 0) { setLockCountdown('LOCKED'); return; }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setLockCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [lockTime]);
-
-  // Auto-load yesterday's best guess once lock happens (preload without opening modal)
-  useEffect(() => {
-    if (isLocked && !yesterdayGuess && !yesterdayGuessLoading) {
-      loadYesterdayGuess(false);
-    }
-  }, [isLocked]);
 
   const todayStr = (() => {
     const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
@@ -11893,29 +11624,6 @@ function PTLivePage() {
   const genCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  };
-
-  // Convert cheat sheet roster (15-element array) to a team object compatible with computeTeamPP
-  const cheatSheetToTeam = (roster) => {
-    if (!roster || !Array.isArray(roster)) return null;
-    const slotKeys = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'U1', 'U2', 'SP1', 'SP2', 'RP1', 'RP2'];
-    const allCards = [...batters, ...sps, ...rps];
-    const team = {};
-    roster.forEach((entry, i) => {
-      if (!entry) return;
-      const parts = (entry.Player || '').split(' ');
-      const firstName = parts[0] || '';
-      const lastName = parts.slice(1).join(' ') || '';
-      const nameKey = normalizeName(entry.Player || '');
-      const matched = allCards.find(c => normalizeName(`${c.first_name || ''} ${c.last_name || ''}`) === nameKey);
-      team[slotKeys[i]] = {
-        first_name: firstName, last_name: lastName,
-        card_value: entry.OVR || 0, position: entry.Position,
-        pitcher_role: entry.Position === 'SP' ? 11 : (entry.Position === 'RP' || entry.Position === 'CL') ? 12 : 0,
-        last_10_price: matched?.last_10_price || 0,
-      };
-    });
-    return team;
   };
 
   const computeTeamPP = (teamObj, statsMap = mlbStats) => {
@@ -12201,14 +11909,6 @@ function PTLivePage() {
         .single();
       if (data?.team) setYesterdayTeam(data.team);
     }
-    // Load yesterday's projected team from cheat sheet snapshot
-    if (next && !yesterdayProjGuess) {
-      const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${yesterdayStr}`).maybeSingle();
-      if (row?.content?.cheatSheet) {
-        const projTeam = cheatSheetToTeam(row.content.cheatSheet);
-        if (projTeam) setYesterdayProjGuess(projTeam);
-      }
-    }
     if (groupCode) loadGroupLeaderboard(groupCode, date);
     if (activeTab === 'group-rankings') loadGlobalRankings(date);
     if (activeTab === 'global' || activeTab === 'most-used') loadIndividualRankings(date);
@@ -12290,142 +11990,26 @@ function PTLivePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [activePicker]);
 
-  const loadPlayerTeams = async () => {
-    try {
-      const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_player_teams').single();
-      if (data?.content?.map) {
-        setStoredTeamMap(data.content.map);
-        if (data.content.ilPlayers) setStoredILPlayers(typeof data.content.ilPlayers === 'object' && !Array.isArray(data.content.ilPlayers) ? data.content.ilPlayers : {});
-        // Fresh if updatedAt is today (PST)
-        const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-        const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-        if (data.content.updatedDate === todayStr && data.content.ilPlayers && !Array.isArray(data.content.ilPlayers)) return;
-      }
-    } catch (e) {}
-    // Stale or missing — fetch from MLB API
-    try { await refreshPlayerTeams(); } catch (e) { console.error('[PTLive] Roster refresh error:', e); }
-  };
-
-  const refreshPlayerTeams = async () => {
-    const MLB_TO_BPP = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
-    const teamsRes = await fetch('https://statsapi.mlb.com/api/v1/teams?sportId=1');
-    const teamsData = await teamsRes.json();
-    const teams = (teamsData.teams || []).filter(t => t.sport?.id === 1);
-
-    const map = {};
-    const ilMap = {};
-    await Promise.all(teams.map(async (team) => {
-      const bppAbbr = MLB_TO_BPP[team.abbreviation] || team.abbreviation;
-      try {
-        const res = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/roster?rosterType=40Man`);
-        const rd = await res.json();
-        (rd.roster || []).forEach(p => {
-          if (p.person?.fullName) {
-            const nn = normalizeName(p.person.fullName);
-            map[nn] = bppAbbr;
-            if (p.status?.code !== 'A') ilMap[nn] = bppAbbr;
-          }
-        });
-      } catch (e) {}
-    }));
-
-    const pst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-    const todayStr = `${pst.getFullYear()}-${String(pst.getMonth()+1).padStart(2,'0')}-${String(pst.getDate()).padStart(2,'0')}`;
-    await supabase.from('site_content').upsert(
-      { id: 'ptlive_player_teams', content: { map, ilPlayers: ilMap, updatedDate: todayStr, updatedAt: new Date().toISOString() } },
-      { onConflict: 'id' }
-    );
-    setStoredTeamMap(map);
-    setStoredILPlayers(ilMap);
-  };
-
-  // Load weather API key from site_content (seed on first deploy)
-  const loadWeatherApiKey = async () => {
-    try {
-      const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_weather_key').single();
-      if (data?.content?.key) { setWeatherApiKey(data.content.key); return; }
-    } catch (e) { /* no key stored yet */ }
-    // Seed default key if none exists
-    const defaultKey = '078018d788d8e15eaa3cc02505937260';
-
-    try {
-      await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key: defaultKey } }, { onConflict: 'id' });
-      setWeatherApiKey(defaultKey);
-    } catch (e) { /* seed failed, admin can set manually */ }
-  };
-
-  const loadSuggestedRPs = async () => {
-    const { data } = await supabase.from('site_content').select('content').eq('id', 'ptlive_suggested_rps').maybeSingle();
-    if (data?.content) {
-      const rps = [data.content.rp1 || '', data.content.rp2 || ''];
-      setSuggestedRPs(rps);
-      setSuggestedRPInput(rps);
-    }
-  };
-
-  const saveSuggestedRPs = async () => {
-    setSuggestedRPSaving(true);
-    const rps = suggestedRPInput.map(s => (s || '').trim());
-    await supabase.from('site_content').upsert(
-      { id: 'ptlive_suggested_rps', content: { rp1: rps[0], rp2: rps[1] } },
-      { onConflict: 'id' }
-    );
-    setSuggestedRPs(rps);
-    setSuggestedRPSaving(false);
-  };
-
   useEffect(() => {
     loadPTLiveCards();
     fetchMLBToday();
     fetchFgData();
     loadProjections();
-    loadPlayerTeams();
-    loadSuggestedRPs();
-    loadWeatherApiKey();
     const interval = setInterval(fetchMLBToday, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Keep ref in sync so interval callbacks always read latest key
-  useEffect(() => { weatherApiKeyRef.current = weatherApiKey; }, [weatherApiKey]);
-
-  // Fetch weather + postponement for the projection date (not necessarily today)
-  useEffect(() => {
-    if (!weatherApiKey || !projData?.gameDate) return;
-    fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${projData.gameDate}&hydrate=team`)
-      .then(r => r.json())
-      .then(d => {
-        const games = d.dates?.[0]?.games || [];
-        // Postponement & delay detection for projection date
-        const MLB_TO_BPP_WX = { AZ: 'ARI', CWS: 'CHW', WSH: 'WAS' };
-        const toBpp = abbr => MLB_TO_BPP_WX[abbr] || abbr;
-        const ppd = new Set();
-        const dly = new Set();
-        for (const game of games) {
-          const code = game.status?.statusCode || '';
-          const home = toBpp(game.teams?.home?.team?.abbreviation || '');
-          const away = toBpp(game.teams?.away?.team?.abbreviation || '');
-          if (POSTPONED_CODES.has(code)) { ppd.add(home); ppd.add(away); }
-          if (DELAYED_CODES.has(code)) { dly.add(home); dly.add(away); }
-        }
-        setPostponedTeams(ppd);
-        setDelayedTeams(dly);
-        if (games.length) fetchWeatherData(games, weatherApiKey);
-      })
-      .catch(e => console.error('[PTLive] Weather trigger error:', e));
-  }, [weatherApiKey, projData?.gameDate]);
-
   const loadPTLiveCards = async () => {
     setIsLoadingCards(true);
     try {
+      const cols = 'card_id,card_value,first_name,last_name,pitcher_role,position,last_10_price,franchise';
       const pageSize = 1000;
-      const { data: firstPage, count, error: firstErr } = await supabase
-        .from('pt_cards').select('*', { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
-      if (firstErr) { console.error('[PTLive] Card query error:', firstErr); setIsLoadingCards(false); return; }
+      const { data: firstPage, count } = await supabase
+        .from('pt_cards').select(cols, { count: 'exact' }).eq('card_type', 1).range(0, pageSize - 1);
       const totalPages = Math.ceil((count || 0) / pageSize);
       const rest = totalPages > 1
         ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, i) =>
-            supabase.from('pt_cards').select('*').eq('card_type', 1)
+            supabase.from('pt_cards').select(cols).eq('card_type', 1)
               .range((i + 1) * pageSize, (i + 2) * pageSize - 1)))
         : [];
       const all = [...(firstPage || []), ...rest.flatMap(r => r.data || [])];
@@ -12436,13 +12020,9 @@ function PTLivePage() {
       const isBatter = c => !c.pitcher_role || Number(c.pitcher_role) === 0;
       const isSP = c => Number(c.pitcher_role) === 11 || isTwoWaySP(c);
       const isRP = c => Number(c.pitcher_role) === 12 || Number(c.pitcher_role) === 13;
-      const b = all.filter(isBatter).sort(byOvr);
-      const s = all.filter(isSP).sort(byOvr);
-      const r = all.filter(isRP).sort(byOvr);
-      console.log(`[PTLive] Cards loaded: ${all.length} total → ${b.length} batters, ${s.length} SP, ${r.length} RP`);
-      setBatters(b);
-      setSps(s);
-      setRps(r);
+      setBatters(all.filter(isBatter).sort(byOvr));
+      setSps(all.filter(isSP).sort(byOvr));
+      setRps(all.filter(isRP).sort(byOvr));
     } catch (e) { console.error('PTLive cards error:', e); }
     setIsLoadingCards(false);
   };
@@ -12452,10 +12032,7 @@ function PTLivePage() {
     setProjLoading(true);
     try {
       const { data } = await supabase.from('site_content').select('*').eq('id', 'ptlive_projections').single();
-      if (data?.content) {
-        if (data.content.players?.length) data.content.players = mergeProjectionPlayers(data.content.players);
-        setProjData(data.content);
-      }
+      if (data?.content) setProjData(data.content);
     } catch (e) { console.error('Load projections error:', e); }
     setProjLoading(false);
   };
@@ -12469,7 +12046,8 @@ function PTLivePage() {
   const PROJ_BATTER_RUN = 6, PROJ_BATTER_RBI = 6, PROJ_BATTER_BB_HBP = 3, PROJ_BATTER_SB = 10, PROJ_BATTER_CS = -2;
   const PROJ_SP_WIN = 20, PROJ_SP_IP = 4, PROJ_SP_K = 2, PROJ_SP_K_BONUS = 40, PROJ_SP_QS = 5, PROJ_SP_ER = -2, PROJ_SP_BB = -1;
 
-  const PROJ_TEAM_CODE_MAP = { KC: 'KCR', LAA: 'ANA', NYY: 'NYA', SD: 'SDP', SF: 'SFG', TB: 'TBD', WAS: 'WSN', MIA: 'FLA' };
+  const PROJ_TEAM_CODE_MAP = { ATH: 'OAK', KC: 'KCR', LAA: 'ANA', NYY: 'NYA', SD: 'SDP', SF: 'SFG', TB: 'TBD', WAS: 'WSN', MIA: 'FLA' };
+  const PROJ_FRANCHISE_TO_BPP = Object.fromEntries(Object.entries(PROJ_TEAM_CODE_MAP).map(([k, v]) => [v, k]));
   const PROJ_NAME_FIXES = {
     'Louis Varland': 'Louie Varland', 'Louie Varland': 'Louie Varland',
     'C.J. Abrams': 'CJ Abrams', 'Jazz Chisholm': 'Jazz Chisholm Jr.',
@@ -12491,40 +12069,6 @@ function PTLivePage() {
   const PROJ_POS_MAP = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH' };
   const PROJ_PITCHER_ROLE_MAP = { 11: 'SP', 12: 'RP', 13: 'CL' };
   const projDisplayPos = (pos, role) => pos === 1 ? (PROJ_PITCHER_ROLE_MAP[role] || 'P') : (PROJ_POS_MAP[pos] || '?');
-  const TWO_WAY_PLAYERS = new Set(['Shohei Ohtani']);
-
-  // ── Merge doubleheader duplicate players (display-level) ──────────────────
-  const mergeProjectionPlayers = (players) => {
-    if (!players?.length) return players;
-    const grouped = {};
-    players.forEach(p => {
-      const key = `${normalizeName(p.Player)}|${(p.Team || '').trim()}|${p.Type}`;
-      if (!grouped[key]) {
-        grouped[key] = { ...p };
-      } else {
-        const g = grouped[key];
-        g.ExpPP = Math.round(((g.ExpPP || 0) + (p.ExpPP || 0)) * 10) / 10;
-        g.BustPct = Math.round(((g.BustPct || 0) / 100) * ((p.BustPct || 0) / 100) * 1000) / 10;
-        if (p.Type === 'batter') {
-          ['Singles', 'Doubles', 'Triples', 'HR', 'Runs', 'RBI', 'BB', 'SB'].forEach(f => {
-            g[f] = Math.round(((g[f] || 0) + (p[f] || 0)) * 100) / 100;
-          });
-        } else {
-          ['IP', 'K', 'ER', 'BB'].forEach(f => {
-            g[f] = Math.round(((g[f] || 0) + (p[f] || 0)) * 100) / 100;
-          });
-          ['WinPct', 'QS'].forEach(f => {
-            g[f] = Math.round(((g[f] || 0) + (p[f] || 0)) * 10) / 10;
-          });
-        }
-        const opp = (p.Opponent || '').trim();
-        if (opp && !(g.Opponent || '').includes(opp)) g.Opponent = `${g.Opponent} / ${opp}`;
-        const gt = (p.GameTime || '').trim();
-        if (gt && !(g.GameTime || '').includes(gt)) g.GameTime = `${g.GameTime} / ${gt}`;
-      }
-    });
-    return Object.values(grouped);
-  };
 
   // ── Projections: math helpers ─────────────────────────────────────────────
   const projPoissonPmf = (k, lam) => {
@@ -12591,8 +12135,6 @@ function PTLivePage() {
     if (!projUploadFiles.batters || !projUploadFiles.pitchers) return;
     setProjUpdating(true);
     try {
-      // Refresh roster/IL data before building cheat sheet
-      try { await refreshPlayerTeams(); } catch (e) { console.error('[PTLive] Roster refresh error:', e); }
       const readXlsx = file => new Promise((res, rej) => {
         const reader = new FileReader();
         reader.onload = e => {
@@ -12603,47 +12145,18 @@ function PTLivePage() {
         reader.readAsArrayBuffer(file);
       });
 
-      const [rawBatters, rawPitchers] = await Promise.all([
+      const [simBatters, simPitchers] = await Promise.all([
         readXlsx(projUploadFiles.batters),
         readXlsx(projUploadFiles.pitchers),
       ]);
-
-      // ── Merge doubleheader entries (same player, same team → sum stats) ──
-      const mergeSimRows = (rows, numericFields, isHitter) => {
-        const grouped = {};
-        rows.forEach(r => {
-          const key = `${(r.FullName || '').trim()}|${(r.Team || '').trim()}`;
-          if (!grouped[key]) {
-            grouped[key] = { ...r };
-            if (isHitter) grouped[key]._hitProbs = [r.HitProbability || 0];
-          } else {
-            const g = grouped[key];
-            numericFields.forEach(f => { g[f] = (g[f] || 0) + (r[f] || 0); });
-            if (isHitter) g._hitProbs.push(r.HitProbability || 0);
-            const opp = (r.Opponent || '').trim();
-            if (opp && !(g.Opponent || '').includes(opp)) g.Opponent = `${g.Opponent} / ${opp}`;
-            const gt = (r.GameTime || '').trim();
-            if (gt && !(g.GameTime || '').includes(gt)) g.GameTime = `${g.GameTime} / ${gt}`;
-          }
-        });
-        return Object.values(grouped).map(r => {
-          if (r._hitProbs?.length > 1) r.HitProbability = 1 - r._hitProbs.reduce((acc, p) => acc * (1 - p), 1);
-          delete r._hitProbs;
-          return r;
-        });
-      };
-      const simBatters = mergeSimRows(rawBatters,
-        ['Singles', 'Doubles', 'Triples', 'HomeRuns', 'Hits', 'Runs', 'RBIs', 'Walks', 'StolenBaseSuccesses', 'StolenBaseAttempts'], true);
-      const simPitchers = mergeSimRows(rawPitchers,
-        ['Innings', 'Strikeouts', 'RunsAllowed', 'Walks', 'WinPct', 'QualityStart'], false);
 
       // Build card lookup from existing PT card data
       const allCards = [...batters, ...sps, ...rps];
       const cardsByName = {};
       allCards.forEach(c => {
-        const nn = normalizeName(`${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`);
-        if (!cardsByName[nn]) cardsByName[nn] = [];
-        cardsByName[nn].push(c);
+        const name = `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`;
+        if (!cardsByName[name]) cardsByName[name] = [];
+        cardsByName[name].push(c);
       });
 
       const matchCard = (simName, simTeam, playerType) => {
@@ -12654,20 +12167,11 @@ function PTLivePage() {
         // General name fix
         name = PROJ_NAME_FIXES[name] || name;
         const ptTeam = PROJ_TEAM_CODE_MAP[(simTeam || '').trim()] || (simTeam || '').trim();
-        const matches = cardsByName[normalizeName(name)];
+        const matches = cardsByName[name];
         if (!matches || matches.length === 0) return null;
         if (matches.length === 1) return matches[0];
-        // Same-name player disambiguation: storedTeamMap only stores one team per normalized name so it
-        // can't distinguish two players with the same name. Use card_value thresholds for known collisions.
-        if (normalizeName(name) === 'max muncy') {
-          const isAthTeam = ptTeam === 'ATH' || ptTeam === 'OAK';
-          return matches.find(m => isAthTeam ? (m.card_value || 0) < 70 : (m.card_value || 0) >= 70) || matches[0];
-        }
-        // Disambiguate by team first (via storedTeamMap, since franchise column is never populated), then by player type
-        const teamMatch = matches.filter(m => {
-          const nn = normalizeName(`${(m.first_name || '').trim()} ${(m.last_name || '').trim()}`);
-          return storedTeamMap && storedTeamMap[nn] === ptTeam;
-        });
+        // Disambiguate by team first, then by player type
+        const teamMatch = matches.filter(m => m.franchise === ptTeam);
         const pool = teamMatch.length > 0 ? teamMatch : matches;
         if (playerType === 'batter') {
           const typed = pool.filter(m => !m.pitcher_role || Number(m.pitcher_role) === 0);
@@ -12713,11 +12217,10 @@ function PTLivePage() {
         const expPP = projCalcSpPP(r);
         const bust = projCalcPitcherBust(expPP, r.WinPct || 0, r.QualityStart || 0, r.Strikeouts || 0, r.RunsAllowed || 0, r.Walks || 0);
         const ovr = card.card_value || 0;
-        const isTwoWay = TWO_WAY_PLAYERS.has(name);
         results.push({
           Player: name, Team: team, Opponent: (r.Opponent || '').trim(),
           Side: r.Side || '', GameTime: r.GameTime || '',
-          Position: isTwoWay ? 'SP' : projDisplayPos(Number(card.position), Number(card.pitcher_role)),
+          Position: projDisplayPos(Number(card.position), Number(card.pitcher_role)),
           OVR: ovr, Tier: ovrToTier(ovr), ExpPP: expPP, BustPct: bust, Type: 'pitcher',
           IP: Math.round((r.Innings || 0) * 100) / 100,
           K: Math.round((r.Strikeouts || 0) * 100) / 100,
@@ -12728,177 +12231,44 @@ function PTLivePage() {
         });
       });
 
-      const mergedResults = mergeProjectionPlayers(results);
-      mergedResults.sort((a, b) => b.ExpPP - a.ExpPP);
+      results.sort((a, b) => b.ExpPP - a.ExpPP);
 
       // Build cheat sheet
-      const cheatSheet = projBuildCheatSheet(mergedResults, allCards, simBatters, simPitchers, null, storedILPlayers);
+      const cheatSheet = projBuildCheatSheet(results, allCards, simBatters, simPitchers);
 
       const gameDate = simBatters.length > 0 && simBatters[0].GameDate
         ? String(simBatters[0].GameDate).slice(0, 10) : todayStr;
 
       const content = {
-        players: mergedResults,
+        players: results,
         cheatSheet: cheatSheet.roster,
         gameDate,
         updatedAt: new Date().toISOString(),
         tierCounts: cheatSheet.tierCounts,
       };
 
-      const { error: saveErr } = await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
-      if (saveErr) throw new Error('Failed to save projections: ' + saveErr.message);
-      await supabase.from('site_content').upsert(
-        { id: `ptlive_cheatsheet_${gameDate}`, content: { cheatSheet: cheatSheet.roster, tierCounts: cheatSheet.tierCounts, gameDate, updatedAt: new Date().toISOString() } },
-        { onConflict: 'id' }
-      );
+      await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
       setProjData(content);
       setProjUploadFiles({ batters: null, pitchers: null, games: null, teams: null });
     } catch (e) { console.error('Projection upload error:', e); alert('Error processing files: ' + e.message); }
     setProjUpdating(false);
   };
 
-  // ── Projections: refresh confirmed lineups ────────────────────────────────
-  const projRefreshLineups = async () => {
-    if (!projData?.players?.length || !projData.gameDate) return;
-    setProjRefreshing(true);
-    try {
-      // Refresh roster/IL data before rebuilding cheat sheet
-      try { await refreshPlayerTeams(); } catch (e) { console.error('[PTLive] Roster refresh error:', e); }
-      // MLB API abbreviation → BallparkPal abbreviation
-      const MLB_TO_BPP = { OAK: 'ATH', CWS: 'CHW', WSH: 'WAS' };
-      const mlbToBpp = abbr => MLB_TO_BPP[abbr] || abbr;
-
-      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${projData.gameDate}&hydrate=lineups,probablePitcher`);
-      const schedData = await schedRes.json();
-      const games = schedData.dates?.[0]?.games || [];
-
-      // For each game, collect confirmed lineup names keyed by BPP team abbreviation
-      const confirmedByTeam = {}; // { bppTeam: Set<normalizedName> }
-      const teamsWithLineups = new Set(); // BPP teams that have confirmed lineups
-
-      for (const game of games) {
-        const homeAbbr = mlbToBpp(game.teams?.home?.team?.abbreviation || '');
-        const awayAbbr = mlbToBpp(game.teams?.away?.team?.abbreviation || '');
-        const homePlayers = game.lineups?.homePlayers || [];
-        const awayPlayers = game.lineups?.awayPlayers || [];
-        const homePP = game.teams?.home?.probablePitcher;
-        const awayPP = game.teams?.away?.probablePitcher;
-
-        // Only flag teams whose lineup has actually been posted
-        if (homePlayers.length > 0) {
-          teamsWithLineups.add(homeAbbr);
-          const names = new Set(homePlayers.map(p => normalizeName(p.fullName)));
-          if (homePP?.fullName) names.add(normalizeName(homePP.fullName));
-          confirmedByTeam[homeAbbr] = names;
-        }
-        if (awayPlayers.length > 0) {
-          teamsWithLineups.add(awayAbbr);
-          const names = new Set(awayPlayers.map(p => normalizeName(p.fullName)));
-          if (awayPP?.fullName) names.add(normalizeName(awayPP.fullName));
-          confirmedByTeam[awayAbbr] = names;
-        }
-      }
-
-      // Build confirmed-out set
-      const confirmedOut = [];
-      for (const player of projData.players) {
-        const pos = (player.Position || '').trim();
-        // Skip RPs/CLs — they don't appear in starting lineups
-        if (pos === 'RP' || pos === 'CL') continue;
-        const team = (player.Team || '').trim();
-        if (!teamsWithLineups.has(team)) continue; // no lineup yet for this team
-        const normalizedPlayer = normalizeName(player.Player);
-        // Also try PROJ_NAME_FIXES mapping for the MLB API side
-        const lineupNames = confirmedByTeam[team];
-        if (!lineupNames) continue;
-        // Check if this player (or any name-fixed variant) is in the confirmed lineup
-        if (!lineupNames.has(normalizedPlayer)) {
-          confirmedOut.push(normalizedPlayer);
-        }
-      }
-
-      const excludeSet = new Set(confirmedOut);
-
-      // ── Weather & postponement exclusions ──────────────────────────────────
-      const weatherExcluded = []; // names excluded due to weather/postponement
-      const postponedPlayers = [];
-      for (const player of projData.players) {
-        const team = (player.Team || '').trim();
-        const name = normalizeName(player.Player);
-        if (postponedTeams.has(team)) {
-          excludeSet.add(name);
-          postponedPlayers.push(name);
-          continue;
-        }
-        const wx = weatherData?.[team];
-        if (wx && !wx.dome && wx.severe) {
-          excludeSet.add(name);
-          weatherExcluded.push(name);
-        }
-      }
-
-      // Rebuild cheat sheet excluding confirmed-out + postponed + rain 30%+ players
-      const allCards = [...batters, ...sps, ...rps];
-      const cheatSheet = projBuildCheatSheet(projData.players, allCards, null, null, excludeSet, storedILPlayers);
-
-      const content = {
-        ...projData,
-        cheatSheet: cheatSheet.roster,
-        tierCounts: cheatSheet.tierCounts,
-        confirmedOut,
-        postponedPlayers,
-        weatherExcluded,
-        lineupsRefreshedAt: new Date().toISOString(),
-      };
-
-      await supabase.from('site_content').upsert({ id: 'ptlive_projections', content }, { onConflict: 'id' });
-      await supabase.from('site_content').upsert(
-        { id: `ptlive_cheatsheet_${projData.gameDate}`, content: { cheatSheet: cheatSheet.roster, tierCounts: cheatSheet.tierCounts, gameDate: projData.gameDate, updatedAt: new Date().toISOString() } },
-        { onConflict: 'id' }
-      );
-      setProjData(content);
-      const wxCount = weatherExcluded.length + postponedPlayers.length;
-      alert(`Lineups refreshed! ${confirmedOut.length} player(s) confirmed out. ${wxCount > 0 ? wxCount + ' weather/PPD excluded. ' : ''}${teamsWithLineups.size} team(s) have posted lineups.`);
-    } catch (e) {
-      console.error('Lineup refresh error:', e);
-      alert('Error refreshing lineups: ' + e.message);
-    }
-    setProjRefreshing(false);
-  };
-
   // ── Projections: cheat sheet optimizer ─────────────────────────────────────
-  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers, excludeSet = null, ilSet = null, forcedRPs = []) => {
-    const exclude = excludeSet || new Set();
-    const isIL = (name, team) => ilSet && ilSet[name] && ilSet[name] === (team || '').trim();
-    const skip = (n, t) => exclude.has(n) || isIL(n, t);
-    const bats = allPlayers.filter(p => p.Type === 'batter' && !skip(normalizeName(p.Player), p.Team));
-    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP' && !skip(normalizeName(p.Player), p.Team));
+  const projBuildCheatSheet = (allPlayers, allCards, simBatters, simPitchers) => {
+    const bats = allPlayers.filter(p => p.Type === 'batter');
+    const spList = allPlayers.filter(p => p.Type === 'pitcher' && p.Position === 'SP');
 
     // Get RP candidates from card list for teams playing today
-    // Derive teams from allPlayers when sim data is null
-    const teamsPlaying = (simBatters && simPitchers)
-      ? new Set([...simBatters.map(r => (r.Team || '').trim()), ...simPitchers.map(r => (r.Team || '').trim())])
-      : new Set(allPlayers.map(r => (r.Team || '').trim()));
+    const teamsPlaying = new Set([...simBatters.map(r => (r.Team || '').trim()), ...simPitchers.map(r => (r.Team || '').trim())]);
     const ptTeamsPlaying = new Set();
     teamsPlaying.forEach(t => ptTeamsPlaying.add(PROJ_TEAM_CODE_MAP[t] || t));
-
-    // Build team win chance from SP WinPct (best SP per team as proxy)
-    const teamWinChance = {};
-    // Track teams whose SP is projected >6 IP (less bullpen usage)
-    const teamsWithDeepSP = new Set();
-    spList.forEach(sp => {
-      const t = (sp.Team || '').trim();
-      if (!t) return;
-      const wPct = sp.WinPct || 0;
-      if (!teamWinChance[t] || wPct > teamWinChance[t]) teamWinChance[t] = wPct;
-      if ((sp.IP || 0) > 6) teamsWithDeepSP.add(t);
-    });
 
     const rpCandidates = allCards
       .filter(c => Number(c.position) === 1 && [12, 13].includes(Number(c.pitcher_role)))
       .map(c => {
         const name = `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`;
-        const bppTeam = (storedTeamMap && storedTeamMap[normalizeName(name)]) || '';
+        const bppTeam = PROJ_FRANCHISE_TO_BPP[c.franchise] || c.franchise || '';
         return {
           Player: name, Team: bppTeam, Opponent: '',
           Position: PROJ_PITCHER_ROLE_MAP[Number(c.pitcher_role)] || 'RP',
@@ -12906,29 +12276,12 @@ function PTLivePage() {
           ExpPP: 0, BustPct: 0, Type: 'pitcher', Side: '', GameTime: '', HasSim: false,
         };
       })
-      .filter(c => !isIL(normalizeName(c.Player), c.Team));
+      .sort((a, b) => b.OVR - a.OVR);
 
-    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL') && !skip(normalizeName(p.Player), p.Team));
-    // Dedup simRps + rpCandidates by normalized name — sim entries (ExpPP > 0) win over card-only
-    const rpSeen = new Set(simRps.map(p => normalizeName(p.Player)));
-    const dedupedRpCandidates = rpCandidates.filter(c => !rpSeen.has(normalizeName(c.Player)));
-    const allRp = [...simRps, ...dedupedRpCandidates]
-      .filter(p => !skip(normalizeName(p.Player), p.Team))
-      .sort((a, b) => {
-        // 1. SP-as-RP with sim data first (ExpPP > 0)
-        const aHasSim = (a.ExpPP || 0) > 0 ? 1 : 0;
-        const bHasSim = (b.ExpPP || 0) > 0 ? 1 : 0;
-        if (bHasSim !== aHasSim) return bHasSim - aHasSim;
-        // 2. Team with best starter win chance
-        const aWin = teamWinChance[(a.Team || '').trim()] || 0;
-        const bWin = teamWinChance[(b.Team || '').trim()] || 0;
-        if (bWin !== aWin) return bWin - aWin;
-        // 3. Highest OVR
-        return b.OVR - a.OVR;
-      });
+    const simRps = allPlayers.filter(p => p.Type === 'pitcher' && (p.Position === 'RP' || p.Position === 'CL'));
+    const allRp = [...simRps, ...rpCandidates];
 
     const BATTER_POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
-    // Slot indices: 0-7=position batters, 8-10=DH/UTIL/UTIL, 11-12=SP, 13-14=RP
     const slotDefs = [
       ['C', ['C'], bats], ['1B', ['1B'], bats], ['2B', ['2B'], bats], ['3B', ['3B'], bats],
       ['SS', ['SS'], bats], ['LF', ['LF'], bats], ['CF', ['CF'], bats], ['RF', ['RF'], bats],
@@ -12937,406 +12290,34 @@ function PTLivePage() {
       ['RP', ['RP', 'CL'], allRp], ['RP', ['RP', 'CL'], allRp],
     ];
 
-    // Tier limits: 2 Perfect, 3 Diamond, 4 Gold max (independent)
-    const TIER_MAX = { Perfect: 2, Diamond: 3, Gold: 4 };
-    const tierOk = (r) => {
-      const c = { Perfect: 0, Diamond: 0, Gold: 0 };
-      r.forEach(p => { if (p && c[p.Tier] !== undefined) c[p.Tier]++; });
-      return c.Perfect <= TIER_MAX.Perfect && c.Diamond <= TIER_MAX.Diamond && c.Gold <= TIER_MAX.Gold;
-    };
-    const pKey = p => `${normalizeName(p.Player)}|${(p.Team || '').trim()}`;
-
-    // Build per-slot candidate lists preserving source sort order
-    const slotCands = slotDefs.map(([slotName, eligPos, source]) => {
-      return source.filter(p => eligPos.includes(p.Position))
-        .map(p => ({ slot: slotName, ...p }));
+    const slotCandidates = slotDefs.map(([slotName, eligPos, source], idx) => {
+      const cands = source.filter(p => eligPos.includes(p.Position)).sort((a, b) => b.ExpPP - a.ExpPP);
+      return { idx, slotName, cands };
     });
+    slotCandidates.sort((a, b) => a.cands.length - b.cands.length);
 
     const used = new Set();
     const roster = new Array(15).fill(null);
+    let pCount = 0, dCount = 0, gCount = 0;
 
-    const tryPlace = (idx, player) => {
-      const k = pKey(player);
-      if (used.has(k)) return false;
-      roster[idx] = player;
-      if (!tierOk(roster)) { roster[idx] = null; return false; }
-      used.add(k);
-      return true;
-    };
-
-    // ── Pre-Phase: Force admin-suggested RPs into their slots ──
-    const forcedRPSlots = new Set();
-    for (let i = 0; i < Math.min(forcedRPs.length, 2); i++) {
-      const name = (forcedRPs[i] || '').trim();
-      if (!name) continue;
-      const norm = normalizeName(name);
-      const rpIdx = 13 + i;
-      const match = allRp.find(p => normalizeName(p.Player) === norm);
-      if (match && tryPlace(rpIdx, { slot: 'RP', ...match, suggestedRP: true })) {
-        forcedRPSlots.add(rpIdx);
+    for (const { idx, slotName, cands } of slotCandidates) {
+      for (const player of cands) {
+        const key = `${player.Player}|${player.Team}`;
+        if (used.has(key)) continue;
+        const tier = player.Tier;
+        if (tier === 'Perfect' && pCount >= 2) continue;
+        if (tier === 'Diamond' && pCount + dCount >= 5) continue;
+        if (tier === 'Gold' && pCount + dCount + gCount >= 9) continue;
+        used.add(key);
+        roster[idx] = { slot: slotName, ...player };
+        if (tier === 'Perfect') pCount++;
+        else if (tier === 'Diamond') dCount++;
+        else if (tier === 'Gold') gCount++;
+        break;
       }
     }
 
-    // ── Phase 1: Fill RP slots with SP-as-RP only (ExpPP > 0) ──
-    // True RPs (ExpPP=0) deferred to Phase 4 so they don't consume Perfect/Diamond slots
-    for (const rpIdx of [13, 14]) {
-      if (roster[rpIdx]) continue; // already filled by forced RP
-      for (const cand of slotCands[rpIdx]) {
-        if ((cand.ExpPP || 0) > 0 && tryPlace(rpIdx, cand)) break;
-      }
-    }
-
-    // ── Phase 2: Fill SP slots (indices 11, 12) by ExpPP ──
-    const spCands = slotCands[11].slice().sort((a, b) => b.ExpPP - a.ExpPP);
-    for (const spIdx of [11, 12]) {
-      for (const cand of spCands) {
-        if (tryPlace(spIdx, cand)) break;
-      }
-    }
-
-    // ── Phase 3: Fill batter slots best-player-first ──
-    // Iterate players by ExpPP descending so high-value players claim tier slots
-    // before lower-value players (e.g. a Diamond 2B at 8 ExpPP gets the last
-    // diamond slot rather than losing it to a Diamond C at 3 ExpPP just because
-    // C is listed first in the roster order).
-    const batPool = bats.slice().sort((a, b) => b.ExpPP - a.ExpPP);
-    const lockedSlots = [0, 1, 2, 3, 4, 5, 6, 7];
-    const flexSlots = [8, 9, 10];
-
-    for (const batter of batPool) {
-      if (used.has(pKey(batter))) continue;
-      let placed = false;
-      // Try natural position slot first
-      for (const idx of lockedSlots) {
-        if (roster[idx]) continue;
-        const [slotName, eligPos] = slotDefs[idx];
-        if (!eligPos.includes(batter.Position)) continue;
-        if (tryPlace(idx, { slot: slotName, ...batter })) { placed = true; break; }
-      }
-      // Fall back to flex slots
-      if (!placed) {
-        for (const idx of flexSlots) {
-          if (roster[idx]) continue;
-          const [slotName] = slotDefs[idx];
-          if (tryPlace(idx, { slot: slotName, ...batter })) break;
-        }
-      }
-    }
-
-    // Backfill any position slots still empty (position has no sim players — Phase 5 handles rest)
-    for (const idx of lockedSlots) {
-      if (roster[idx]) continue;
-      const [slotName, eligPos] = slotDefs[idx];
-      for (const batter of batPool) {
-        if (!eligPos.includes(batter.Position)) continue;
-        if (tryPlace(idx, { slot: slotName, ...batter })) break;
-      }
-    }
-    for (const idx of flexSlots) {
-      if (roster[idx]) continue;
-      const [slotName] = slotDefs[idx];
-      for (const batter of batPool) {
-        if (tryPlace(idx, { slot: slotName, ...batter })) break;
-      }
-    }
-
-    // ── Phase 4: Fill remaining empty RP slots with true RPs ──
-    // Deferred from Phase 1 so batters/SPs get first pick of tier slots
-    for (const rpIdx of [13, 14]) {
-      if (roster[rpIdx]) continue;
-      for (const cand of slotCands[rpIdx]) {
-        if (tryPlace(rpIdx, cand)) break;
-      }
-    }
-
-    // ── Phase 5: Backfill any empty slots ──
-    // For batters/SP: try lower-tier players from card data
-    // For RP: already sourced from full card list, but tier limits may have blocked — retry with any tier
-    for (let idx = 0; idx < 15; idx++) {
-      if (roster[idx]) continue;
-      const [slotName, eligPos, source] = slotDefs[idx];
-      // Build full candidate list: for batter/SP slots use sim players; for RP use allRp
-      // Also try card-based backfill for batter slots
-      let backfillPool;
-      if (idx <= 10) {
-        // Batter slot — try all cards with matching position
-        backfillPool = allCards
-          .filter(c => {
-            const pos = BATTER_POS[Number(c.position) - 2]; // position 2=C → index 0
-            return pos && eligPos.includes(pos) && Number(c.position) !== 1;
-          })
-          .sort((a, b) => (b.card_value || 0) - (a.card_value || 0))
-          .map(c => ({
-            slot: slotName,
-            Player: `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`,
-            Team: (storedTeamMap && storedTeamMap[normalizeName(`${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`)]) || '',
-            Position: BATTER_POS[Number(c.position) - 2] || '?',
-            OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
-            ExpPP: 0, BustPct: 0, Type: 'batter', Opponent: '', Side: '', GameTime: '', HasSim: false,
-          }));
-      } else if (idx <= 12) {
-        // SP slot — try all SP cards sorted by OVR
-        backfillPool = allCards
-          .filter(c => Number(c.position) === 1 && Number(c.pitcher_role) === 11)
-          .sort((a, b) => (b.card_value || 0) - (a.card_value || 0))
-          .map(c => ({
-            slot: slotName,
-            Player: `${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`,
-            Team: (storedTeamMap && storedTeamMap[normalizeName(`${(c.first_name || '').trim()} ${(c.last_name || '').trim()}`)]) || '',
-            Position: 'SP', OVR: c.card_value || 0, Tier: ovrToTier(c.card_value || 0),
-            ExpPP: 0, BustPct: 0, Type: 'pitcher', Opponent: '', Side: '', GameTime: '', HasSim: false,
-          }));
-      } else {
-        // RP slot — allRp already has all candidates, just retry
-        backfillPool = slotCands[idx];
-      }
-      for (const cand of backfillPool) {
-        if (tryPlace(idx, cand.slot ? cand : { slot: slotName, ...cand })) break;
-      }
-    }
-
-    // ── Phase 6: Iterative improvement ──
-    // Try swapping each slot with any better unused candidate to maximize total ExpPP
-    let improved = true;
-    let passes = 0;
-    while (improved && passes < 10) {
-      improved = false;
-      passes++;
-      for (let i = 0; i < 15; i++) {
-        if (forcedRPSlots.has(i)) continue; // don't swap out forced RPs
-        const cur = roster[i];
-        if (!cur) continue;
-        const curPP = cur.ExpPP || 0;
-        const curKey = pKey(cur);
-
-        // Try all eligible candidates for this slot
-        // For RP slots, only consider SP-as-RP (ExpPP > 0) to avoid wasting tier slots on true RPs
-        const pool = i >= 13
-          ? slotCands[i].filter(c => (c.ExpPP || 0) > 0)
-          : (i >= 11 ? spCands : batPool.filter(b => slotDefs[i][1].includes(b.Position)));
-        for (const raw of pool) {
-          const cand = raw.slot ? raw : { slot: slotDefs[i][0], ...raw };
-          if ((cand.ExpPP || 0) <= curPP) continue;
-          const candKey = pKey(cand);
-          if (candKey === curKey) continue;
-
-          // Is this candidate used in another slot?
-          let otherIdx = -1;
-          for (let j = 0; j < 15; j++) {
-            if (j !== i && roster[j] && pKey(roster[j]) === candKey) { otherIdx = j; break; }
-          }
-
-          if (otherIdx === -1 && !used.has(candKey)) {
-            // Not used — simple swap
-            roster[i] = cand;
-            if (tierOk(roster)) {
-              used.delete(curKey);
-              used.add(candKey);
-              improved = true;
-              break;
-            }
-            roster[i] = cur;
-          } else if (otherIdx >= 0) {
-            // Used in another slot — try swapping the two
-            const other = roster[otherIdx];
-            const otherElig = slotDefs[otherIdx][1];
-            if (otherElig.includes(cur.Position)) {
-              roster[i] = cand;
-              roster[otherIdx] = { ...cur, slot: slotDefs[otherIdx][0] };
-              if (tierOk(roster)) {
-                improved = true;
-                break;
-              }
-              roster[i] = cur;
-              roster[otherIdx] = other;
-            }
-          }
-        }
-      }
-    }
-
-    const tc = { Perfect: 0, Diamond: 0, Gold: 0 };
-    roster.forEach(p => { if (p && tc[p.Tier] !== undefined) tc[p.Tier]++; });
-    return { roster, tierCounts: { perfect: tc.Perfect, diamond: tc.Diamond, gold: tc.Gold } };
-  };
-
-  const loadYesterdayGuess = async (showModal = true) => {
-    setYesterdayGuessLoading(true);
-    if (showModal) setShowYesterdayGuess(true);
-    try {
-      // After lock, today's projections are the "guess" — games are in progress/done
-      const guessDate = isLocked ? todayStr : yesterdayStr;
-
-      // 1. Fetch snapshot
-      const { data: row } = await supabase.from('site_content').select('content').eq('id', `ptlive_cheatsheet_${guessDate}`).maybeSingle();
-      if (!row?.content?.cheatSheet) { setYesterdayGuess(null); setYesterdayGuessLoading(false); return; }
-      const snapshot = row.content;
-
-      // 2. Fetch MLB schedule for that date
-      const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${guessDate}`);
-      const schedData = await schedRes.json();
-      const games = schedData.dates?.[0]?.games || [];
-
-      // 3. Fetch boxscores
-      const boxscores = await Promise.all(
-        games.map(g => fetch(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`).then(r => r.json()).catch(() => null))
-      );
-
-      // 4. Build stats map
-      const mergeIP = (a, b) => {
-        const toOuts = s => { const [inn, frac] = String(s || '0').split('.'); return parseInt(inn) * 3 + parseInt(frac || 0); };
-        return `${Math.floor((toOuts(a) + toOuts(b)) / 3)}.${(toOuts(a) + toOuts(b)) % 3}`;
-      };
-      const sumStats = (a, b) => {
-        if (!a && !b) return null; if (!a) return b; if (!b) return a;
-        const result = { ...a };
-        for (const k of Object.keys(b)) {
-          if (k === 'inningsPitched') result[k] = mergeIP(a[k], b[k]);
-          else if (typeof b[k] === 'number') result[k] = (result[k] || 0) + b[k];
-        }
-        return result;
-      };
-
-      const statsMap = {};
-      boxscores.forEach(bs => {
-        if (!bs) return;
-        ['home', 'away'].forEach(side => {
-          Object.values(bs.teams?.[side]?.players || {}).forEach(p => {
-            let name = normalizeName(p.person?.fullName);
-            if (!name) return;
-            if (MLB_ID_OVERRIDES[p.person?.id]) name = MLB_ID_OVERRIDES[p.person.id];
-            const batting = p.stats?.batting || {};
-            const pitching = p.stats?.pitching || {};
-            const newBat = Object.keys(batting).length ? batting : null;
-            const newPit = Object.keys(pitching).length ? pitching : null;
-            if (statsMap[name]) {
-              statsMap[name] = {
-                batting: sumStats(statsMap[name].batting, newBat),
-                pitching: sumStats(statsMap[name].pitching, newPit),
-                battingGames: newBat ? [...statsMap[name].battingGames, newBat] : statsMap[name].battingGames,
-                pitchingGames: newPit ? [...statsMap[name].pitchingGames, newPit] : statsMap[name].pitchingGames,
-              };
-            } else {
-              statsMap[name] = { batting: newBat, pitching: newPit, battingGames: newBat ? [newBat] : [], pitchingGames: newPit ? [newPit] : [] };
-            }
-          });
-        });
-      });
-
-      // 5. Match entries to actuals
-      const slotRoles = ['batter','batter','batter','batter','batter','batter','batter','batter','batter','batter','batter','sp','sp','rp','rp'];
-      const results = snapshot.cheatSheet.map((entry, i) => {
-        if (!entry) return null;
-        const key = normalizeName(entry.Player);
-        const stats = statsMap[key];
-        const role = slotRoles[i] || 'batter';
-        let actualPP = null;
-        if (stats) {
-          if (role === 'batter') {
-            actualPP = ptLiveBatterPP(stats.battingGames);
-          } else {
-            actualPP = ptLivePitcherPP(stats.pitchingGames, role);
-          }
-        }
-        return { ...entry, actualPP, projectedPP: entry.ExpPP || 0 };
-      });
-
-      setYesterdayGuess({ roster: results, tierCounts: snapshot.tierCounts, gameDate: snapshot.gameDate });
-    } catch (e) {
-      console.error('Yesterday guess error:', e);
-      setYesterdayGuess(null);
-    }
-    setYesterdayGuessLoading(false);
-  };
-
-  // ── Weather fetch for PT Live ─────────────────────────────────────────────
-  const fetchWeatherData = async (games, apiKey) => {
-    if (!apiKey || !games?.length) return;
-    setWeatherLoading(true); setWeatherError(null);
-    try {
-      const MLB_TO_BPP_W = { AZ: 'ARI', CWS: 'CHW', WSH: 'WAS' };
-      const mlbToBppW = abbr => MLB_TO_BPP_W[abbr] || abbr;
-      const now = Date.now();
-      const weatherMap = {};
-      const fetches = [];
-
-      // Build weather object from raw forecast entry — severity always computed fresh
-      const buildWx = (entry) => {
-        const condId = entry.weather?.[0]?.id || 800;
-        const rainVol = entry.rain?.['3h'] || 0;
-        const isThunderstorm = condId >= 200 && condId < 300;
-        const isHeavyRain = condId === 502 || condId === 503 || condId === 504 || condId === 522;
-        return {
-          temp: Math.round(entry.main?.temp || 0),
-          pop: entry.pop || 0,
-          condition: entry.weather?.[0]?.main || 'Clear',
-          conditionId: condId,
-          rainVol,
-          severe: isThunderstorm || isHeavyRain || rainVol >= 5,
-          moderate: !(isThunderstorm || isHeavyRain || rainVol >= 5) && (rainVol >= 2.5 || condId === 501 || condId === 521),
-          windSpeed: Math.round(entry.wind?.speed || 0),
-          dome: false,
-        };
-      };
-
-      for (const game of games) {
-        const homeAbbr = mlbToBppW(game.teams?.home?.team?.abbreviation || '');
-        const awayAbbr = mlbToBppW(game.teams?.away?.team?.abbreviation || '');
-        if (DOME_STADIUMS.has(homeAbbr)) {
-          weatherMap[homeAbbr] = { temp: null, pop: 0, condition: 'Dome', windSpeed: 0, dome: true };
-          weatherMap[awayAbbr] = { temp: null, pop: 0, condition: 'Dome', windSpeed: 0, dome: true };
-          continue;
-        }
-        const coords = VENUE_COORDS[homeAbbr];
-        if (!coords) { console.warn('[PTLive] No coords for', homeAbbr); continue; }
-        // Check cache (30 min) — cache stores raw forecast data, severity computed fresh each time
-        const cached = weatherCacheRef.current[homeAbbr];
-        if (cached && (now - cached.fetchedAt) < 30 * 60 * 1000) {
-          const cw = buildWx(cached.raw);
-          weatherMap[homeAbbr] = cw;
-          weatherMap[awayAbbr] = cw;
-          continue;
-        }
-        const gameTime = new Date(game.gameDate).getTime();
-        fetches.push(
-          fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=imperial`)
-            .then(r => {
-              if (!r.ok) { console.error('[PTLive] Weather API HTTP', r.status, 'for', homeAbbr); return null; }
-              return r.json();
-            })
-            .then(data => {
-              if (!data || !data.list?.length) {
-                if (data?.message) console.error('[PTLive] Weather API error:', data.message);
-                return;
-              }
-              // Find WORST weather within ±3 hours of game time
-              const windowMs = 3 * 60 * 60 * 1000;
-              const nearby = data.list.filter(e => Math.abs((e.dt * 1000) - gameTime) <= windowMs);
-              if (!nearby.length) nearby.push(data.list[0]);
-              // Pick the entry with worst weather (highest severity, then highest rainVol)
-              let worst = nearby[0];
-              let worstWx = buildWx(worst);
-              for (const entry of nearby) {
-                const ewx = buildWx(entry);
-                if (ewx.severe && !worstWx.severe) { worst = entry; worstWx = ewx; }
-                else if (ewx.severe === worstWx.severe && ewx.rainVol > worstWx.rainVol) { worst = entry; worstWx = ewx; }
-              }
-              const wx = worstWx;
-              weatherMap[homeAbbr] = wx;
-              weatherMap[awayAbbr] = wx;
-              weatherCacheRef.current[homeAbbr] = { raw: worst, fetchedAt: now };
-            })
-            .catch(e => console.error('[PTLive] Weather fetch failed for', homeAbbr, e))
-        );
-      }
-      await Promise.all(fetches);
-      console.log('[PTLive] Weather loaded:', Object.keys(weatherMap).length, 'teams', weatherMap);
-      setWeatherData(weatherMap);
-    } catch (e) {
-      console.error('[PTLive] Weather fetch error:', e);
-      setWeatherError('Could not load weather data.');
-    }
-    setWeatherLoading(false);
+    return { roster, tierCounts: { perfect: pCount, diamond: dCount, gold: gCount } };
   };
 
   const fetchMLBToday = async () => {
@@ -13613,40 +12594,6 @@ function PTLivePage() {
     tierCounts.goldOrHigher    > 9 && `${tierCounts.goldOrHigher}/9 Gold+`,
   ].filter(Boolean);
 
-  // Build name→BPP team lookup: stored map (persistent) as base, live projData overrides
-  const playerTeamLookup = useMemo(() => {
-    const map = {};
-    if (storedTeamMap) Object.assign(map, storedTeamMap);
-    if (projData?.players) {
-      projData.players.forEach(p => {
-        if (p.Player && p.Team) {
-          const key = normalizeName(p.Player);
-          const team = (p.Team || '').trim();
-          map[key] = team;
-          // Disambiguate same-name players: store the non-LAD Max Muncy under 'max muncy oak'
-          if (key === 'max muncy' && team !== 'LAD') map['max muncy oak'] = team;
-        }
-      });
-    }
-    return map;
-  }, [storedTeamMap, projData]);
-
-  // Handedness lookup: normalizedName → '(R)' / '(L)' / '(S)' for batters, '(R)' / '(L)' for pitchers
-  const playerHandLookup = useMemo(() => {
-    const map = {};
-    const allCards = [...batters, ...sps, ...rps];
-    for (const c of allCards) {
-      const key = normalizeName(`${c.first_name || ''} ${c.last_name || ''}`);
-      const isPitcher = Number(c.pitcher_role) === 11 || Number(c.pitcher_role) === 12;
-      if (isPitcher) {
-        map[key] = THROWS_MAP[parseInt(c.throws)] || '';
-      } else {
-        map[key] = BATS_MAP[parseInt(c.bats)] || '';
-      }
-    }
-    return map;
-  }, [batters, sps, rps]);
-
   const getPickerCards = (slot) => {
     let pool = slot.role === 'sp' ? sps : slot.role === 'rp' ? rps : batters;
     if (slot.pos) pool = pool.filter(c => Number(c.position) === slot.pos);
@@ -13717,18 +12664,19 @@ function PTLivePage() {
 
     return (
       <div key={slot.key} style={{ borderBottom: `1px solid ${theme.border}`, position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '50px 1fr 56px' : '90px 1fr 70px 200px 72px', alignItems: 'center', padding: isMobile ? '7px 10px' : '9px 16px', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', alignItems: 'center', padding: '9px 16px', gap: 10 }}>
 
-          {/* Slot label + team tag */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: isMobile ? 24 : 32 }}>{slot.label}</div>
-            {card && (() => {
-              const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
-              const tc = projTeamColor(bppTeam);
-              return bppTeam ? (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: `${tc}22`, color: tc, letterSpacing: '0.04em' }}>{bppTeam}</span>
-              ) : null;
-            })()}
+          {/* Slot label + Stats button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', minWidth: 32 }}>{slot.label}</div>
+            {card && !isEditing && (
+              <button
+                onClick={() => setPerfModal({ name: `${card.first_name} ${card.last_name}`, role: slot.role, cardOvr: card.card_value || 0 })}
+                style={{ fontSize: 9, fontWeight: 700, padding: '3px 6px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 4, color: '#aaa', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+              >
+                Stats
+              </button>
+            )}
           </div>
 
           {/* Card picker / display */}
@@ -13782,39 +12730,28 @@ function PTLivePage() {
               )}
             </div>
           ) : (
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {card
-                  ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
-                  : <span style={{ color: theme.textDim }}>—</span>}
-              </div>
-              {isMobile && card && (
-                <div style={{ fontSize: 10, color: dotInfo?.color || theme.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {dotInfo?.label || ''}{statsText ? ` · ${statsText}` : ''}
-                </div>
-              )}
+            <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {card
+                ? <><span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, marginRight: 8 }}>{card.card_value}</span>{card.first_name} {card.last_name}</>
+                : <span style={{ color: theme.textDim }}>—</span>}
             </div>
           )}
 
           {/* Game status */}
-          {!isMobile && (
-            <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
-              {dotInfo?.label || ''}
-            </div>
-          )}
+          <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {dotInfo?.label || ''}
+          </div>
 
           {/* Stats */}
-          {!isMobile && (
-            <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {isLoadingStats
-                ? <span style={{ color: '#fff' }}>…</span>
-                : card
-                  ? (statsText || (pd?.gameStatus === 'Preview'
-                      ? <span style={{ color: theme.textMuted }}>Upcoming</span>
-                      : <span style={{ color: theme.textDim }}>No game</span>))
-                  : ''}
-            </div>
-          )}
+          <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isLoadingStats
+              ? <span style={{ color: '#fff' }}>…</span>
+              : card
+                ? (statsText || (pd?.gameStatus === 'Preview'
+                    ? <span style={{ color: theme.textMuted }}>Upcoming</span>
+                    : <span style={{ color: theme.textDim }}>No game</span>))
+                : ''}
+          </div>
 
           {/* PP */}
           <div style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: (pp || 0) > 0 ? '#22c55e' : (pp || 0) < 0 ? '#ef4444' : '#fff' }}>
@@ -13829,33 +12766,24 @@ function PTLivePage() {
     <>
     <Layout>
       {/* Header */}
-      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: isMobile ? '10px 12px' : '14px 24px', borderTop: `4px solid ${theme.accent}` }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 12 : 0 }}>
+      <div style={{ background: theme.sidebarBg, borderBottom: `1px solid ${theme.border}`, padding: '14px 24px', borderTop: `4px solid ${theme.accent}` }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: isMobile ? 20 : 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent, display: 'flex', alignItems: 'center', gap: 12 }}>
-              PT Live
-              {lockCountdown && (
-                <span style={{ fontSize: isMobile ? 13 : 16, fontWeight: 600, color: lockCountdown === 'LOCKED' ? '#ef4444' : '#fff', letterSpacing: '0.04em', fontFamily: "'Inter', sans-serif" }}>
-                  {lockCountdown === 'LOCKED' ? '— Locked' : `— Locks in ${lockCountdown}`}
-                </span>
-              )}
-            </h1>
+            <h1 style={{ margin: 0, fontSize: 26, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.accent }}>PT Live</h1>
             <div style={{ fontSize: 11, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Perfect Team · Live Fantasy Scoring</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 16, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-            {!isMobile && (
-              <div style={{ textAlign: 'right', fontSize: 12, color: '#fff' }}>
-                {isLoadingStats
-                ? 'Updating…'
-                : statsError
-                  ? <span style={{ color: theme.error }}>{statsError}</span>
-                  : lastRefreshed
-                    ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
-                    : 'Updates every 2 min'}
-              </div>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ textAlign: 'right', fontSize: 12, color: '#fff' }}>
+              {isLoadingStats
+              ? 'Updating…'
+              : statsError
+                ? <span style={{ color: theme.error }}>{statsError}</span>
+                : lastRefreshed
+                  ? `Updated ${lastRefreshed} · auto-refreshes every 2 min`
+                  : 'Updates every 2 min'}
+            </div>
             {/* Leaderboard chip */}
-            {!isMobile && (groupCode && hasSubmittedToday ? (
+            {groupCode && hasSubmittedToday ? (
               <button onClick={() => { setActiveTab('leaderboard'); loadGroupLeaderboard(groupCode); }}
                 style={{ background: `${theme.accent}22`, border: `1px solid ${theme.accent}66`, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: theme.accent, cursor: 'pointer', letterSpacing: '0.04em' }}>
                 {groupCode}
@@ -13865,15 +12793,15 @@ function PTLivePage() {
                 style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: theme.textMuted, cursor: 'pointer' }}>
                 + Join Leaderboard
               </button>
-            ) : null)}
+            ) : null}
             {totalCost > 0 && (
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: '#fbbf24', lineHeight: 1 }}>{totalCost.toLocaleString()} PP</div>
+                <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: '#fbbf24', lineHeight: 1 }}>{totalCost.toLocaleString()} PP</div>
                 <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>L10 Team Cost</div>
               </div>
             )}
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
+              <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Oswald', sans-serif", color: totalPP >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1 }}>{totalPP} PP</div>
               <div style={{ fontSize: 11, color: '#fff', textTransform: 'uppercase', marginTop: 2 }}>Total Points</div>
             </div>
           </div>
@@ -13883,7 +12811,7 @@ function PTLivePage() {
       <div style={{ maxWidth: 1600, margin: '0 auto', padding: '20px 8px' }}>
 
         {/* Edit button above the flex row — keeps sidebar top flush with roster top */}
-        <div style={{ display: 'flex', justifyContent: isMobile ? 'center' : 'flex-end', alignItems: 'center', gap: isMobile ? 6 : 10, marginBottom: 14, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           {isEditing && (
             <button
               onClick={() => {
@@ -13955,14 +12883,13 @@ function PTLivePage() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 0 : 20, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
 
-          {/* Left sidebar — vertical tab nav (horizontal scroll on mobile) */}
-          <div style={{ width: isMobile ? '100%' : 160, flexShrink: 0, marginBottom: isMobile ? 12 : 0 }}>
-            {isMobile && <style>{`.ptlive-tabs::-webkit-scrollbar { display: none; } .ptlive-tabs { -ms-overflow-style: none; scrollbar-width: none; }`}</style>}
-            <div className={isMobile ? 'ptlive-tabs' : undefined} style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: 3, overflowX: isMobile ? 'auto' : undefined, WebkitOverflowScrolling: isMobile ? 'touch' : undefined }}>
+          {/* Left sidebar — vertical tab nav */}
+          <div style={{ width: 160, flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <button onClick={() => { setActiveTab('projections'); loadProjections(); }} style={{
-                textAlign: isMobile ? 'center' : 'left', padding: isMobile ? '8px 12px' : '10px 14px', borderRadius: 7, cursor: 'pointer',
+                textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                 border: activeTab === 'projections' ? '1px solid #a855f7' : '1px solid transparent',
                 background: activeTab === 'projections'
                   ? 'linear-gradient(135deg, #a855f722, #ec489922)'
@@ -13971,7 +12898,6 @@ function PTLivePage() {
                 fontWeight: 700, fontSize: 13, letterSpacing: '0.02em',
                 backgroundClip: 'padding-box',
                 position: 'relative',
-                whiteSpace: 'nowrap',
               }}>
                 <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                   Projections
@@ -13993,19 +12919,18 @@ function PTLivePage() {
                   if (tab.id === 'leaderboard' && groupCode) loadGroupLeaderboard(groupCode, date);
                   if (tab.id === 'group-rankings') loadGlobalRankings(date);
                   if (tab.id === 'global' || tab.id === 'most-used') loadIndividualRankings(date);
-                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || todayStr);
+                  if (tab.id === 'best-roster') loadBestRoster(bestRosterDate || yesterdayStr);
                   if (tab.id === 'alltime') loadAlltimeRankings();
                   if (tab.id === 'cumulative-pp') loadCumulativePP();
                 }} style={{
-                  textAlign: isMobile ? 'center' : 'left', padding: isMobile ? '8px 12px' : '10px 14px', borderRadius: 7, cursor: 'pointer',
+                  textAlign: 'left', padding: '10px 14px', borderRadius: 7, cursor: 'pointer',
                   border: activeTab === tab.id ? `1px solid ${theme.accent}` : '1px solid transparent',
                   background: activeTab === tab.id ? `${theme.accent}22` : 'transparent',
                   color: activeTab === tab.id ? theme.accent : theme.textMuted,
                   fontWeight: 600, fontSize: 13, letterSpacing: '0.02em',
-                  whiteSpace: 'nowrap',
                 }}>
                   {tab.label}
-                  {!isMobile && tab.id === 'leaderboard' && groupCode && (
+                  {tab.id === 'leaderboard' && groupCode && (
                     <div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>{groupCode}</div>
                   )}
                 </button>
@@ -14014,32 +12939,32 @@ function PTLivePage() {
           </div>
 
           {/* Center: content area */}
-          <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : undefined }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
 
             {/* ── MY TEAM TAB ─────────────────────────────────────────────── */}
             {activeTab === 'team' && (
               <div>
               {!teamEligible && (
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 16, background: '#ef444418', border: '1px solid #ef444466', borderRadius: 8, padding: isMobile ? '8px 12px' : '10px 16px', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#ef444418', border: '1px solid #ef444466', borderRadius: 8, padding: '10px 16px', marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>Ineligible Team</div>
                   <div style={{ fontSize: 12, color: '#ef4444' }}>Over limit: {tierViolations.join(' · ')}</div>
-                  {!isMobile && <div style={{ fontSize: 11, color: '#6b7280', marginLeft: 'auto', whiteSpace: 'nowrap' }}>Max 2 Perfect · 5 Diamond+ · 9 Gold+</div>}
+                  <div style={{ fontSize: 11, color: '#6b7280', marginLeft: 'auto', whiteSpace: 'nowrap' }}>Max 2 Perfect · 5 Diamond+ · 9 Gold+</div>
                 </div>
               )}
               <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${teamEligible ? theme.border : '#ef444466'}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '50px 1fr 56px' : '90px 1fr 70px 200px 72px', padding: isMobile ? '8px 10px' : '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderRadius: '9px 9px 0 0' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>BATTERS</div>
-                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>}
-                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>}
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
                 </div>
                 {PT_LIVE_SLOTS.filter(s => s.role === 'batter').map(renderRow)}
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '50px 1fr 56px' : '90px 1fr 70px 200px 72px', padding: isMobile ? '8px 10px' : '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 200px 72px', padding: '8px 16px', gap: 10, background: theme.tableHeaderBg, borderBottom: `1px solid ${theme.border}`, borderTop: `1px solid ${theme.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>POS</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>PITCHERS</div>
-                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>}
-                  {!isMobile && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>}
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>STATUS</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff' }}>TODAY</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textAlign: 'right' }}>PP</div>
                 </div>
                 {PT_LIVE_SLOTS.filter(s => s.role !== 'batter').map(renderRow)}
@@ -14049,11 +12974,11 @@ function PTLivePage() {
 
             {/* ── MY GROUP TAB ─────────────────────────────────────────────── */}
             {activeTab === 'leaderboard' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 {!groupCode ? (
                   /* No group yet */
                   <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                    <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Join a Group</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Join a Group</div>
                     <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 24 }}>Submit your team and track how you stack up against friends.</div>
                     <button onClick={() => { setSubmitModalUsername(username); setSubmitModalCode(groupCode); setShowSubmitModal(true); }}
                       style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '10px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em' }}>
@@ -14063,9 +12988,9 @@ function PTLivePage() {
                 ) : (
                   <>
                     {/* Group header */}
-                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', marginBottom: 20, gap: isMobile ? 10 : 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                       <div>
-                        <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>{groupCode}</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>{groupCode}</div>
                         <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
                           {isLocked
                             ? <span style={{ color: '#fbbf24' }}>First pitch {fmtTime(lockTime)} · Late submissions won't count toward group average</span>
@@ -14099,13 +13024,7 @@ function PTLivePage() {
                       </div>
                     ) : (() => {
                       const activeStats = showYesterday ? yesterdayStats : mlbStats;
-                      const entries = [...groupEntries];
-                      // Inject projected team — use yesterday's snapshot when viewing yesterday
-                      const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
-                      if ((showYesterday || isLocked) && projTeam) {
-                        entries.push({ username: '✦ Projected Team', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
-                      }
-                      const ranked = entries
+                      const ranked = [...groupEntries]
                         .map(e => ({
                           ...e,
                           livePP:   computeTeamPP(e.team, activeStats),
@@ -14115,8 +13034,8 @@ function PTLivePage() {
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {/* Header row */}
-                          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 110px 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                            {(isMobile ? ['#', 'Username', 'Live PP'] : ['#', 'Username', 'L10 Cost', 'Submitted', 'Live PP']).map(h => (
+                          <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                            {['#', 'Username', 'L10 Cost', 'Submitted', 'Live PP'].map(h => (
                               <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                             ))}
                           </div>
@@ -14127,59 +13046,44 @@ function PTLivePage() {
                             return (
                               <div key={entry.username}>
                                 <div onClick={() => setExpandedUser(isExpanded ? null : entry.username)}
-                                  style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                                  style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {entry._isProjected
-                                      ? <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', fontWeight: 700 }}>{entry.username}</span>
-                                      : <>
-                                          {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
-                                          {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
-                                          {isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
-                                        </>
-                                    }
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                    {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
+                                    {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
+                                    {isMe && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11 }}>you</span>}
                                   </div>
-                                  {!isMobile && <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>
                                     {entry.teamCost > 0 ? entry.teamCost.toLocaleString() : '—'}
-                                  </div>}
-                                  {!isMobile && <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
+                                  </div>
+                                  <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                     {fmtTime(entry.submitted_at)}{isLate && ' · late'}
-                                  </div>}
-                                  <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
+                                  </div>
+                                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
                                     {entry.livePP} PP
                                   </div>
                                 </div>
                                 {isExpanded && (
-                                  <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 0 }}>
-                                    {PT_LIVE_SLOTS.map((slot, si) => {
+                                  <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {PT_LIVE_SLOTS.map(slot => {
                                       const card = entry.team?.[slot.key];
                                       if (!card) return (
-                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
-                                          <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span><span />
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, color: '#374151' }}>
+                                          <span>{slot.label}</span><span>—</span><span />
                                         </div>
                                       );
-                                      const cName = cardStatsKey(card);
-                                      const pd = activeStats[cName];
+                                      const name = cardStatsKey(card);
+                                      const pd = activeStats[name];
                                       let slotPP = null;
                                       if (pd) {
                                         if (slot.role === 'batter' && pd.battingGames?.length) slotPP = ptLiveBatterPP(pd.battingGames);
                                         else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                       }
-                                      const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
-                                      const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
-                                      const tc = projTeamColor(bppTeam);
                                       return (
-                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', fontSize: 11 }}>{slot.label}</span>
-                                            {bppTeam && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: `${tc}22`, color: tc }}>{bppTeam}</span>}
-                                          </div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                                            <span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{card.card_value}</span>
-                                            <span style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.first_name} {card.last_name}</span>
-                                            {perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
-                                          </div>
-                                          <span style={{ textAlign: 'right', fontWeight: 700, fontSize: 14, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
+                                          <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
+                                          <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
+                                          <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                             {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                           </span>
                                         </div>
@@ -14200,9 +13104,9 @@ function PTLivePage() {
 
             {/* ── GROUP RANKINGS TAB ──────────────────────────────────────── */}
             {activeTab === 'group-rankings' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Group Rankings</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Group Rankings</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Average PP per member · today · min. 2 members · late submissions excluded from average</div>
                 </div>
                 {globalLoading ? (
@@ -14211,21 +13115,21 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No qualifying groups yet today.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 100px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                      {(isMobile ? ['#', 'Group', 'Avg PP'] : ['#', 'Group', 'Members', 'Avg PP']).map(h => (
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {['#', 'Group', 'Members', 'Avg PP'].map(h => (
                         <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                       ))}
                     </div>
                     {globalRankings.map((g, idx) => {
                       const isMyGroup = g.group_code === groupCode;
                       return (
-                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
+                        <div key={g.group_code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, alignItems: 'center', background: isMyGroup ? `${theme.accent}18` : 'transparent', border: isMyGroup ? `1px solid ${theme.accent}44` : '1px solid transparent' }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", letterSpacing: '0.04em' }}>
                             {g.group_code}{isMyGroup && <span style={{ color: theme.accent, marginLeft: 6, fontSize: 11, fontFamily: 'inherit' }}>you</span>}
                           </div>
-                          {!isMobile && <div style={{ fontSize: 13, color: '#fff' }}>{g.member_count} members</div>}
-                          <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
+                          <div style={{ fontSize: 13, color: '#fff' }}>{g.member_count} members</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: '#22c55e', textAlign: 'right' }}>{Math.round(g.avg_pp)} PP</div>
                         </div>
                       );
                     })}
@@ -14236,9 +13140,9 @@ function PTLivePage() {
 
             {/* ── GLOBAL RANKINGS TAB (individuals) ────────────────────────── */}
             {activeTab === 'global' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Rankings</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Global Rankings</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>All players today · ranked by PP · group tag shown</div>
                 </div>
                 {individualLoading ? (
@@ -14247,18 +13151,13 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No submissions yet today.</div>
                 ) : (() => {
                   const activeStats = showYesterday ? yesterdayStats : mlbStats;
-                  const entries = [...individualRankings];
-                  const projTeam = showYesterday ? yesterdayProjGuess : (yesterdayGuess?.roster ? cheatSheetToTeam(yesterdayGuess.roster) : null);
-                  if ((showYesterday || isLocked) && projTeam) {
-                    entries.push({ username: '✦ Projected Team', group_code: '', team: projTeam, submitted_at: projData?.updatedAt || null, pp: 0, _isProjected: true });
-                  }
-                  const ranked = entries
+                  const ranked = [...individualRankings]
                     .map(e => ({ ...e, livePP: computeTeamPP(e.team, activeStats) }))
                     .sort((a, b) => b.livePP - a.livePP);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                        {(isMobile ? ['#', 'Player', 'Live PP'] : ['#', 'Player', 'Submitted', 'Live PP']).map(h => (
+                      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['#', 'Player', 'Submitted', 'Live PP'].map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                         ))}
                       </div>
@@ -14270,60 +13169,45 @@ function PTLivePage() {
                         return (
                           <div key={expandKey}>
                             <div onClick={() => setExpandedGlobal(isExpanded ? null : expandKey)}
-                              style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 70px' : '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: entry._isProjected ? '#a855f718' : isMe ? `${theme.accent}18` : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent', border: entry._isProjected ? '1px solid #a855f744' : isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
+                              style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 100px', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', background: isMe ? `${theme.accent}18` : 'transparent', border: isMe ? `1px solid ${theme.accent}44` : '1px solid transparent', alignItems: 'center' }}>
                               <div style={{ fontSize: 14, fontWeight: 700, color: idx === 0 ? '#fbbf24' : idx === 1 ? '#9ca3af' : idx === 2 ? '#cd7f32' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                                {entry._isProjected
-                                  ? <span style={{ fontSize: 14, fontWeight: 700, background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{entry.username}</span>
-                                  : <>
-                                      <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
-                                      </span>
-                                      {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
-                                      {!isMobile && <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>}
-                                      {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
-                                      {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
-                                    </>
-                                }
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                                  {entry.username.endsWith(' - alt') ? entry.username.slice(0, -6) : entry.username}
+                                </span>
+                                {entry.username.endsWith(' - alt') && <span style={{ color: '#8b5cf6', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>alt</span>}
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', background: theme.border, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em' }}>{entry.group_code}</span>
+                                {isMe && <span style={{ fontSize: 10, color: theme.accent, fontWeight: 700 }}>you</span>}
+                                {isLate && <span style={{ fontSize: 10, color: '#fbbf24' }} title="Submitted after lock">⚠</span>}
                               </div>
-                              {!isMobile && <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
+                              <div style={{ fontSize: 12, color: isLate ? '#ef4444' : '#fff' }}>
                                 {fmtTime(entry.submitted_at)}{isLate && ' · late'}
-                              </div>}
-                              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
+                              </div>
+                              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: entry.livePP > 0 ? '#22c55e' : '#fff', textAlign: 'right' }}>
                                 {entry.livePP} PP
                               </div>
                             </div>
                             {isExpanded && (
-                              <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 0 }}>
-                                {PT_LIVE_SLOTS.map((slot, si) => {
+                              <div style={{ background: theme.sidebarBg, borderRadius: 6, margin: '2px 0 6px 0', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {PT_LIVE_SLOTS.map(slot => {
                                   const card = entry.team?.[slot.key];
                                   if (!card) return (
-                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
-                                      <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span><span />
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, color: '#374151' }}>
+                                      <span>{slot.label}</span><span>—</span><span />
                                     </div>
                                   );
-                                  const cName = cardStatsKey(card);
-                                  const pd = activeStats[cName];
+                                  const name = cardStatsKey(card);
+                                  const pd = activeStats[name];
                                   let slotPP = null;
                                   if (pd) {
                                     if (slot.role === 'batter' && pd.battingGames?.length) slotPP = ptLiveBatterPP(pd.battingGames);
                                     else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                   }
-                                  const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
-                                  const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
-                                  const tc = projTeamColor(bppTeam);
                                   return (
-                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', fontSize: 11 }}>{slot.label}</span>
-                                        {bppTeam && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: `${tc}22`, color: tc }}>{bppTeam}</span>}
-                                      </div>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                                        <span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{card.card_value}</span>
-                                        <span style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.first_name} {card.last_name}</span>
-                                        {perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
-                                      </div>
-                                      <span style={{ textAlign: 'right', fontWeight: 700, fontSize: 14, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 60px', gap: 8, fontSize: 12, alignItems: 'center' }}>
+                                      <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{slot.label}</span>
+                                      <span style={{ color: '#fff' }}>{card.first_name} {card.last_name}</span>
+                                      <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                         {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                       </span>
                                     </div>
@@ -14342,9 +13226,9 @@ function PTLivePage() {
 
             {/* ── MOST USED TAB ───────────────────────────────────────────── */}
             {activeTab === 'most-used' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Most Used Players</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Most Used Players</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>{showYesterday ? 'Yesterday' : 'Today'} · ranked by roster usage</div>
                 </div>
                 {individualLoading ? (
@@ -14375,19 +13259,19 @@ function PTLivePage() {
                   const sorted = Object.values(playerMap).sort((a, b) => b.count - a.count);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 55px 55px' : '36px 60px 1fr 80px 80px', gap: isMobile ? 6 : 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                        {(isMobile ? ['#', 'Player', 'Usage', 'PP'] : ['#', 'POS', 'Player', 'Usage', 'PP']).map(h => (
+                      <div style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['#', 'POS', 'Player', 'Usage', 'PP'].map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted }}>{h}</div>
                         ))}
                       </div>
                       {sorted.map((p, idx) => (
-                        <div key={p.displayName} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 55px 55px' : '36px 60px 1fr 80px 80px', gap: isMobile ? 6 : 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                        <div key={p.displayName} style={{ display: 'grid', gridTemplateColumns: '36px 60px 1fr 80px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          {!isMobile && <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>}
-                          <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.displayName}</div>
-                          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: theme.accent, fontFamily: "'Oswald',sans-serif" }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{p.pos}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{p.displayName}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: theme.accent, fontFamily: "'Oswald',sans-serif" }}>
                             {Math.round(p.count / total * 100)}%
-                            {!isMobile && <span style={{ fontSize: 10, fontWeight: 400, color: '#fff', marginLeft: 4 }}>{p.count}/{total}</span>}
+                            <span style={{ fontSize: 10, fontWeight: 400, color: '#fff', marginLeft: 4 }}>{p.count}/{total}</span>
                           </div>
                           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", color: p.pp > 0 ? '#22c55e' : p.pp < 0 ? '#ef4444' : '#fff' }}>
                             {p.pp !== null ? `${p.pp >= 0 ? '+' : ''}${p.pp}` : '—'}
@@ -14402,17 +13286,17 @@ function PTLivePage() {
 
             {/* ── BEST POSSIBLE ROSTER TAB ────────────────────────────────── */}
             {activeTab === 'best-roster' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', marginBottom: 20, gap: isMobile ? 10 : 0 }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                   <div>
-                    <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Best Possible Roster</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Best Possible Roster</div>
                     <div style={{ fontSize: 12, color: theme.textMuted }}>Highest-PP card per slot for the selected date (respects tier limits)</div>
                   </div>
                   <input
                     type="date"
                     min={SEASON_START}
                     max={todayStr}
-                    value={bestRosterDate || todayStr}
+                    value={bestRosterDate || yesterdayStr}
                     onChange={e => {
                       const d = e.target.value;
                       setBestRosterDate(d);
@@ -14429,7 +13313,7 @@ function PTLivePage() {
                   const totalBestPP = bestRoster.reduce((s, r) => s + (r.pp || 0), 0);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '44px 1fr 44px 60px' : '60px 1fr 60px 80px', gap: isMobile ? 6 : 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
                         {['Slot', 'Player', 'OVR', 'PP'].map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' ? 'right' : 'left' }}>{h}</div>
                         ))}
@@ -14441,7 +13325,7 @@ function PTLivePage() {
                         return (
                           <React.Fragment key={r.slotKey}>
                             {isSep && <div style={{ borderTop: `1px solid ${theme.border}`, margin: '4px 0' }} />}
-                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '44px 1fr 44px 60px' : '60px 1fr 60px 80px', gap: isMobile ? 6 : 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                               <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                                 {r.card ? `${r.card.first_name} ${r.card.last_name}` : '—'}
@@ -14458,7 +13342,7 @@ function PTLivePage() {
                           </React.Fragment>
                         );
                       })}
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '44px 1fr 44px 60px' : '60px 1fr 60px 80px', gap: isMobile ? 6 : 10, padding: '12px 12px 6px', borderTop: `2px solid ${theme.border}` }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 80px', gap: 10, padding: '12px 12px 6px', borderTop: `2px solid ${theme.border}` }}>
                         <div />
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total</div>
                         <div />
@@ -14474,9 +13358,9 @@ function PTLivePage() {
 
             {/* ── ALL-TIME TOP 25 TAB ─────────────────────────────────────── */}
             {activeTab === 'alltime' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>All-Time Top 25</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>All-Time Top 25</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Greatest single-day individual PP performances · 2026 season</div>
                 </div>
                 {alltimeLoading ? (
@@ -14485,8 +13369,8 @@ function PTLivePage() {
                   <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No data yet.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 60px' : '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                      {(isMobile ? ['#', 'Player', 'PP'] : ['#', 'Player', 'OVR', 'Date', 'Pos', 'PP']).map(h => (
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                      {['#', 'Player', 'OVR', 'Date', 'Pos', 'PP'].map(h => (
                         <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' ? 'right' : 'left' }}>{h}</div>
                       ))}
                     </div>
@@ -14494,14 +13378,14 @@ function PTLivePage() {
                       const ovr = r.card_value || 0;
                       const tc = tierColor(ovr);
                       return (
-                        <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 60px' : '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                        <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 100px 60px 80px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: idx < 3 ? '#fbbf24' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player_name}</div>
-                          {!isMobile && <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
+                          <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
-                          </div>}
-                          {!isMobile && <div style={{ fontSize: 12, color: '#fff' }}>{r.date}</div>}
-                          {!isMobile && <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#fff' }}>{r.date}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: r.pp > 0 ? '#22c55e' : r.pp < 0 ? '#ef4444' : '#fff' }}>
                             {r.pp >= 0 ? '+' : ''}{Number(r.pp)}
                           </div>
@@ -14515,9 +13399,9 @@ function PTLivePage() {
 
             {/* ── CUMULATIVE PP TAB ───────────────────────────────────────── */}
             {activeTab === 'cumulative-pp' && (
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
+              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Points Earned</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>Points Earned</div>
                   <div style={{ fontSize: 12, color: theme.textMuted }}>Cumulative PP earned across the 2026 season</div>
                 </div>
 
@@ -14550,8 +13434,8 @@ function PTLivePage() {
                   );
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 44px 70px' : '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
-                        {(isMobile ? ['#', 'Player', 'OVR', 'PP'] : ['#', 'Player', 'OVR', 'Pos', 'Games', 'PP']).map(h => (
+                      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '6px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                        {['#', 'Player', 'OVR', 'Pos', 'Games', 'PP'].map(h => (
                           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, textAlign: h === 'PP' || h === 'OVR' || h === 'Games' ? 'right' : 'left' }}>{h}</div>
                         ))}
                       </div>
@@ -14561,14 +13445,14 @@ function PTLivePage() {
                         const isTop3 = cumulativeSearchResults === null && idx < 3;
                         const pp = Number(r.total_pp);
                         return (
-                          <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 1fr 44px 70px' : '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
+                          <div key={r.id || idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 60px 60px 90px', gap: 10, padding: '9px 12px', borderRadius: 6, alignItems: 'center', background: idx % 2 === 0 ? 'transparent' : `${theme.tableHeaderBg}66` }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: isTop3 ? '#fbbf24' : '#fff', fontFamily: "'Oswald',sans-serif" }}>#{idx + 1}</div>
-                            <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player_name}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.player_name}</div>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: 12, fontWeight: 700, color: tc, background: `${tc}18`, padding: '2px 8px', borderRadius: 4 }}>{ovr}</span>
                             </div>
-                            {!isMobile && <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>}
-                            {!isMobile && <div style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{r.days_played}</div>}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{r.slot_label}</div>
+                            <div style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{r.days_played}</div>
                             <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textAlign: 'right', color: pp > 0 ? '#22c55e' : pp < 0 ? '#ef4444' : '#fff' }}>
                               {pp >= 0 ? '+' : ''}{pp}
                             </div>
@@ -14589,13 +13473,11 @@ function PTLivePage() {
                 const order = ['SP','RP','CL','C','1B','2B','3B','SS','LF','CF','RF','DH'];
                 return (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b));
               }) : [];
-              const allTeams = projData?.players ? [...new Set(projData.players.map(p => (p.Team || '').trim()).filter(Boolean))].sort() : [];
 
               const filteredPlayers = (projData?.players || []).filter(p => {
                 if (projFilter !== 'all' && p.Position !== projFilter) return false;
                 if (projTypeFilter === 'batter' && !PROJ_BATTER_POSITIONS.has(p.Position)) return false;
                 if (projTypeFilter === 'pitcher' && !PROJ_PITCHER_POSITIONS.has(p.Position)) return false;
-                if (projTeamFilter !== 'all' && (p.Team || '').trim() !== projTeamFilter) return false;
                 return true;
               }).sort((a, b) => {
                 const col = projSort.col;
@@ -14607,35 +13489,10 @@ function PTLivePage() {
                 return projSort.dir === 'asc' ? va - vb : vb - va;
               });
 
-              // Build opposing player lookups by team
-              const opposingSPByTeam = {};
-              const opposingBatsByTeam = {};
-              (projData?.players || []).forEach(p => {
-                const t = (p.Team || '').trim();
-                if (p.Type === 'pitcher' && p.Position === 'SP') {
-                  if (!opposingSPByTeam[t] || p.ExpPP > opposingSPByTeam[t].ExpPP) opposingSPByTeam[t] = p;
-                }
-                if (p.Type === 'batter') {
-                  if (!opposingBatsByTeam[t]) opposingBatsByTeam[t] = [];
-                  opposingBatsByTeam[t].push(p);
-                }
-              });
-              // Sort each team's batters by ExpPP and keep top 3
-              Object.keys(opposingBatsByTeam).forEach(t => {
-                opposingBatsByTeam[t] = opposingBatsByTeam[t].sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 3);
-              });
-
-              const valuePicks = (() => {
-                const allPlayers = projData?.players || [];
-                const topBatters = new Set(allPlayers.filter(p => p.Type === 'batter').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 25).map(p => p.Player));
-                const topPitchers = new Set(allPlayers.filter(p => p.Type === 'pitcher').sort((a, b) => b.ExpPP - a.ExpPP).slice(0, 5).map(p => p.Player));
-                const eligible = allPlayers
-                  .filter(p => ['Silver', 'Bronze', 'Iron'].includes(p.Tier) && (topBatters.has(p.Player) || topPitchers.has(p.Player)))
-                  .sort((a, b) => b.ExpPP - a.ExpPP);
-                const pitcherPick = eligible.find(p => p.Type === 'pitcher');
-                const batterPicks = eligible.filter(p => p.Type === 'batter').slice(0, 3);
-                return [...(pitcherPick ? [pitcherPick] : []), ...batterPicks].sort((a, b) => b.ExpPP - a.ExpPP);
-              })();
+              const valuePicks = (projData?.players || [])
+                .filter(p => ['Silver', 'Bronze', 'Iron'].includes(p.Tier))
+                .sort((a, b) => b.ExpPP - a.ExpPP)
+                .slice(0, 3);
 
               const handleProjSort = col => {
                 setProjSort(prev => prev.col === col
@@ -14646,39 +13503,34 @@ function PTLivePage() {
               const bustColor = pct => pct < 15 ? '#4ade80' : pct < 30 ? '#fbbf24' : '#ef4444';
 
               return (
-                <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, minWidth: 0, background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: isMobile ? '14px 12px' : '20px 24px' }}>
-                  {/* Header + Admin */}
-                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', marginBottom: 20, gap: isMobile ? 12 : 0 }}>
-                    <div>
-                      <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
-                        <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
-                        <span style={{ fontSize: '0.5em', fontWeight: 400, color: '#fff', letterSpacing: '0.03em', margin: '0 8px' }}>brought to you by</span>
-                        <span style={{ fontSize: '0.9em', background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Hellboy</span>
-                      </div>
-                      <div style={{ fontSize: 13, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
+                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, padding: '20px 24px' }}>
+                  {/* Header */}
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 4 }}>
+                      <span style={{ background: 'linear-gradient(90deg, #a855f7, #ec4899, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Expected Points</span>
                     </div>
+                    <div style={{ fontSize: 12, color: '#fff' }}>1,000+ simulation projections using top paid models · PT scoring rubric</div>
+                  </div>
+
+                  {/* Admin Upload Section */}
+                  <div style={{ marginBottom: 20, padding: 16, background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
                     {!projAdminUnlocked ? (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <input
                           type="password"
                           value={projAdminPw}
                           onChange={e => setProjAdminPw(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter' && projAdminPw === 'KOBALYTICS') setProjAdminUnlocked(true); }}
                           placeholder="Admin password"
-                          style={{ width: 130, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 11, color: '#fff', outline: 'none' }}
+                          style={{ flex: 1, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#fff', outline: 'none' }}
                         />
                         <button onClick={() => { if (projAdminPw === 'KOBALYTICS') setProjAdminUnlocked(true); }}
-                          style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                           Unlock
                         </button>
                       </div>
-                    ) : null}
-                  </div>
-
-                  {/* Admin Upload Section (expanded) */}
-                  {projAdminUnlocked && <div style={{ marginBottom: 20 }}>
-                      <div style={{ padding: 16, background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
+                    ) : (
+                      <div>
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 10 }}>Upload BallparkPal Files</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                           {[
@@ -14708,86 +13560,19 @@ function PTLivePage() {
                             }}>
                             {projUpdating ? 'Processing…' : 'Update Projections'}
                           </button>
-                          <button
-                            onClick={projRefreshLineups}
-                            disabled={projRefreshing || !projData}
-                            style={{
-                              background: projData ? 'linear-gradient(135deg, #3b82f6, #06b6d4)' : theme.inputBg,
-                              color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: projRefreshing ? 'not-allowed' : 'pointer',
-                              opacity: !projData ? 0.4 : 1,
-                            }}>
-                            {projRefreshing ? 'Refreshing…' : 'Refresh Lineups'}
-                          </button>
                           <button onClick={() => { setProjAdminUnlocked(false); setProjAdminPw(''); }}
                             style={{ background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
                             Lock
                           </button>
                         </div>
-                        {/* Weather API Key */}
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10 }}>
-                          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>Weather Key:</span>
-                          <input
-                            ref={el => { if (el) el._wxRef = true; }}
-                            type="text"
-                            defaultValue={weatherApiKey || ''}
-                            placeholder="OpenWeatherMap API key"
-                            style={{ flex: 1, maxWidth: 280, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 11, color: '#fff', outline: 'none' }}
-                            onKeyDown={async e => {
-                              if (e.key === 'Enter') {
-                                const key = e.target.value.trim();
-                                if (!key) return;
-                                await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key } }, { onConflict: 'id' });
-                                setWeatherApiKey(key);
-                                alert('Weather API key saved!');
-                              }
-                            }}
-                          />
-                          <button onClick={async e => {
-                            const input = e.target.parentElement.querySelector('input');
-                            const key = input?.value?.trim();
-                            if (!key) return;
-                            await supabase.from('site_content').upsert({ id: 'ptlive_weather_key', content: { key } }, { onConflict: 'id' });
-                            setWeatherApiKey(key);
-                            alert('Weather API key saved!');
-                          }} style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                            Save
-                          </button>
-                        </div>
-                        {/* Suggested RPs */}
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, whiteSpace: 'nowrap' }}>Suggested RPs:</span>
-                          {[0, 1].map(i => (
-                            <input
-                              key={i}
-                              type="text"
-                              value={suggestedRPInput[i]}
-                              onChange={e => setSuggestedRPInput(prev => { const next = [...prev]; next[i] = e.target.value; return next; })}
-                              placeholder={`RP${i + 1} name`}
-                              style={{ width: 140, background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 11, color: '#fff', outline: 'none' }}
-                            />
-                          ))}
-                          <button
-                            onClick={saveSuggestedRPs}
-                            disabled={suggestedRPSaving}
-                            style={{ background: theme.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: suggestedRPSaving ? 'not-allowed' : 'pointer' }}>
-                            {suggestedRPSaving ? 'Saving…' : 'Save'}
-                          </button>
-                          {(suggestedRPs[0] || suggestedRPs[1]) && (
-                            <span style={{ fontSize: 10, color: '#4ade80' }}>
-                              Active: {suggestedRPs.filter(Boolean).join(', ')}
-                            </span>
-                          )}
-                        </div>
                       </div>
-                  </div>}
+                    )}
+                  </div>
 
                   {/* Last Updated */}
                   {projData?.updatedAt && (
-                    <div style={{ fontSize: 12, color: '#fff', marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: '#fff', marginBottom: 12 }}>
                       Last updated: {new Date(projData.updatedAt).toLocaleString()} · {projData.gameDate || ''} · {projData.players?.length || 0} players
-                      {projData.lineupsRefreshedAt && (
-                        <span style={{ color: '#3b82f6', marginLeft: 8 }}>· Lineups: {new Date(projData.lineupsRefreshedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ({(projData.confirmedOut || []).length} out)</span>
-                      )}
                     </div>
                   )}
 
@@ -14799,7 +13584,7 @@ function PTLivePage() {
                     <>
                       {/* Value Picks */}
                       {valuePicks.length > 0 && (
-                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 17, color: '#667788', lineHeight: 1.8 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 19, color: '#667788', lineHeight: 1.8 }}>
                           <span style={{ fontWeight: 600, color: '#fbbf24' }}>Value Picks: </span>
                           {valuePicks.map((v, i) => (
                             <span key={i}>
@@ -14813,10 +13598,10 @@ function PTLivePage() {
                       )}
 
                       {/* Type filters + Cheat Sheet button */}
-                      <div style={{ display: 'flex', gap: isMobile ? 6 : 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                         {['all', 'batter', 'pitcher'].map(t => (
-                          <button key={t} onClick={() => { setProjTypeFilter(t); if (t === 'batter') setProjFilter('all'); else if (t === 'pitcher') setProjFilter('SP'); }} style={{
-                            padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 600, cursor: 'pointer',
+                          <button key={t} onClick={() => setProjTypeFilter(t)} style={{
+                            padding: '8px 20px', borderRadius: 18, fontSize: 18, fontWeight: 600, cursor: 'pointer',
                             border: projTypeFilter === t ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projTypeFilter === t ? theme.accent : theme.inputBg,
                             color: projTypeFilter === t ? '#fff' : theme.textMuted,
@@ -14825,35 +13610,24 @@ function PTLivePage() {
                           </button>
                         ))}
                         <button onClick={() => setShowCheatSheet(true)} style={{
-                          padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 700, cursor: 'pointer',
+                          padding: '8px 20px', borderRadius: 18, fontSize: 18, fontWeight: 700, cursor: 'pointer',
                           background: '#2a1a33', border: '1px solid #6b3fa0', color: '#c89dff',
                         }}>
                           Cheat Sheet
                         </button>
-                        <button onClick={loadYesterdayGuess} disabled={yesterdayGuessLoading} style={{
-                          padding: isMobile ? '5px 10px' : '6px 18px', borderRadius: 16, fontSize: isMobile ? 12 : 16, fontWeight: 700, cursor: 'pointer',
-                          background: '#2a1a08', border: '1px solid #b8860b', color: '#fbbf24',
-                          opacity: yesterdayGuessLoading ? 0.6 : 1,
-                        }}>
-                          {yesterdayGuessLoading ? 'Loading…' : "Yesterday's Best Guess"}
-                        </button>
                       </div>
 
                       {/* Position filters */}
-                      <div style={{ display: 'flex', gap: isMobile ? 4 : 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
                         <button onClick={() => setProjFilter('all')} style={{
-                          padding: isMobile ? '4px 10px' : '5px 16px', borderRadius: 14, fontSize: isMobile ? 11 : 15, fontWeight: 600, cursor: 'pointer',
+                          padding: '7px 18px', borderRadius: 16, fontSize: 17, fontWeight: 600, cursor: 'pointer',
                           border: projFilter === 'all' ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                           background: projFilter === 'all' ? theme.accent : theme.inputBg,
                           color: projFilter === 'all' ? '#fff' : theme.textMuted,
                         }}>All</button>
                         {allPositions.map(pos => (
-                          <button key={pos} onClick={() => {
-                            setProjFilter(pos);
-                            if (PROJ_BATTER_POSITIONS.has(pos) && projTypeFilter === 'pitcher') setProjTypeFilter('batter');
-                            if (PROJ_PITCHER_POSITIONS.has(pos) && projTypeFilter === 'batter') setProjTypeFilter('pitcher');
-                          }} style={{
-                            padding: isMobile ? '4px 10px' : '5px 16px', borderRadius: 14, fontSize: isMobile ? 11 : 15, fontWeight: 600, cursor: 'pointer',
+                          <button key={pos} onClick={() => setProjFilter(pos)} style={{
+                            padding: '7px 18px', borderRadius: 16, fontSize: 17, fontWeight: 600, cursor: 'pointer',
                             border: projFilter === pos ? '1px solid ' + theme.accent : `1px solid ${theme.border}`,
                             background: projFilter === pos ? theme.accent : theme.inputBg,
                             color: projFilter === pos ? '#fff' : theme.textMuted,
@@ -14861,72 +13635,31 @@ function PTLivePage() {
                         ))}
                       </div>
 
-                      {/* Weather Summary Bar */}
-                      {(() => {
-                        const items = [];
-                        if (!weatherData && !postponedTeams.size) return null;
-                        const seen = new Set();
-                        for (const player of (projData?.players || [])) {
-                          const team = (player.Team || '').trim();
-                          const opp = (player.Opponent || '').trim();
-                          const key = player.Side === 'A' ? `${team}@${opp}` : `${opp}@${team}`;
-                          if (seen.has(key)) continue;
-                          seen.add(key);
-                          const homeTeam = player.Side === 'A' ? opp : team;
-                          if (postponedTeams.has(team) || postponedTeams.has(opp)) {
-                            items.push({ key, type: 'ppd', label: key });
-                          } else if (!DOME_STADIUMS.has(homeTeam)) {
-                            const wx = weatherData?.[homeTeam];
-                            if (wx && wx.severe) {
-                              items.push({ key, type: 'severe', label: key, condition: wx.condition });
-                            } else if (wx && wx.moderate) {
-                              items.push({ key, type: 'moderate', label: key, condition: wx.condition });
-                            }
-                          }
-                        }
-                        if (items.length === 0) return null;
-                        return (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 6 : 10, justifyContent: 'center', marginBottom: 14, padding: '8px 12px', background: theme.panelBg, borderRadius: 8, border: `1px solid ${theme.border}` }}>
-                            {items.map(it => (
-                              <span key={it.key} style={{ fontSize: isMobile ? 11 : 13, fontWeight: 600, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap',
-                                background: it.type === 'ppd' ? 'rgba(239,68,68,0.15)' : it.type === 'severe' ? 'rgba(96,165,250,0.15)' : 'rgba(96,165,250,0.08)',
-                                color: it.type === 'ppd' ? '#ef4444' : '#60a5fa',
-                              }}>
-                                {it.type === 'ppd' ? `[PPD] ${it.label}` : `${it.label} - ${it.condition}, ${it.type}`}
-                              </span>
-                            ))}
-                            {weatherLoading && <span style={{ fontSize: 11, color: theme.textMuted }}>Loading weather...</span>}
-                          </div>
-                        );
-                      })()}
-
                       {/* Table */}
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 13 : 17, tableLayout: 'fixed' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 19 }}>
                           <thead>
                             <tr>
                               {[
-                                { col: '_rank', label: '#', w: 40 },
+                                { col: '_rank', label: '#', w: 44 },
+                                { col: 'Player', label: 'Player', w: null },
                                 { col: 'Team', label: 'Team', w: 70 },
-                                { col: 'Player', label: 'Player', w: 200, align: 'left' },
                                 { col: 'Position', label: 'Pos', w: 60 },
-                                { col: 'OVR', label: 'OVR', w: 64 },
-                                { col: 'ExpPP', label: 'Exp PP', w: 90 },
-                                ...(projTypeFilter !== 'pitcher' ? [{ col: 'HR', label: 'HR', w: 70 }] : []),
-                                ...(projTypeFilter !== 'pitcher' ? [{ col: 'SB', label: 'SB', w: 70 }] : []),
-                                ...(projTypeFilter !== 'batter' ? [{ col: 'K', label: 'K', w: 70 }] : []),
-                                ...(projTypeFilter !== 'batter' ? [{ col: 'IP', label: 'IP', w: 70 }] : []),
-                                { col: 'BustPct', label: 'Bust %', w: 80 },
-                                { col: '_matchup', label: 'Matchup', w: 130 },
+                                { col: 'OVR', label: 'OVR', w: 60 },
+                                { col: 'ExpPP', label: 'Exp PP', w: 80 },
+                                { col: 'BustPct', label: 'Bust %', w: 70 },
+                                { col: '_matchup', label: 'Matchup', w: 100 },
+                                { col: 'GameTime', label: 'Time', w: 80 },
                               ].map(h => (
-                                <th key={h.col} onClick={() => !h.col.startsWith('_') && handleProjSort(h.col)} style={{
-                                  padding: isMobile ? '6px 4px' : '10px 12px', textAlign: h.align || 'center', fontWeight: 600, fontSize: isMobile ? 11 : 14,
+                                <th key={h.col} onClick={() => h.col !== '_rank' && h.col !== '_matchup' && handleProjSort(h.col)} style={{
+                                  padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 16,
                                   textTransform: 'uppercase', letterSpacing: '0.06em', color: theme.textMuted,
-                                  borderBottom: `2px solid ${theme.border}`, cursor: !h.col.startsWith('_') ? 'pointer' : 'default',
+                                  borderBottom: `2px solid ${theme.border}`, cursor: h.col !== '_rank' && h.col !== '_matchup' ? 'pointer' : 'default',
                                   whiteSpace: 'nowrap', width: h.w || undefined, userSelect: 'none',
+                                  ...(h.col === 'Player' ? { textAlign: 'left' } : {}),
                                 }}>
                                   {h.label}
-                                  {projSort.col === h.col && <span style={{ fontSize: 11, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
+                                  {projSort.col === h.col && <span style={{ fontSize: 13, marginLeft: 3 }}>{projSort.dir === 'asc' ? '▲' : '▼'}</span>}
                                 </th>
                               ))}
                             </tr>
@@ -14935,412 +13668,139 @@ function PTLivePage() {
                             {filteredPlayers.map((p, idx) => {
                               const tc = projTeamColor(p.Team);
                               const oc = projTeamColor(p.Opponent);
-                              const isHome = p.Side !== 'A';
-                              const isOut = (projData?.confirmedOut || []).includes(normalizeName(p.Player));
-                              const isIL = storedILPlayers[normalizeName(p.Player)] === (p.Team || '').trim();
-                              const pTeam = (p.Team || '').trim();
-                              const isPPD = postponedTeams.has(pTeam);
-                              const isDelayed = delayedTeams.has(pTeam);
-                              const wx = weatherData?.[pTeam];
-                              const wxSevere = wx && !wx.dome && wx.severe; // thunderstorm / heavy rain
-                              const wxModerate = wx && !wx.dome && wx.moderate && !wx.severe;
-                              const wxLabel = wx && !wx.dome ? (wxSevere ? `${wx.condition}, severe` : wxModerate ? `${wx.condition}, moderate` : wx.condition) : null;
+                              const sideLabel = p.Side === 'A' ? '@ ' : 'vs ';
                               const tooltip = p.Type === 'batter'
                                 ? `1B: ${p.Singles}  2B: ${p.Doubles}  3B: ${p.Triples}  HR: ${p.HR}\nR: ${p.Runs}  RBI: ${p.RBI}  BB: ${p.BB}  SB: ${p.SB}`
                                 : `W%: ${p.WinPct}%  QS%: ${p.QS}%\nIP: ${p.IP}  K: ${p.K}  ER: ${p.ER}  BB: ${p.BB}`;
-                              const rowBg = isIL ? 'rgba(239,68,68,0.10)'
-                                : isPPD ? 'rgba(239,68,68,0.15)'
-                                : isOut ? 'rgba(239,68,68,0.15)'
-                                : wxSevere ? 'rgba(96,165,250,0.10)'
-                                : wxModerate ? 'rgba(96,165,250,0.06)'
-                                : idx % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent';
-                              const blurStyle = (isOut || isPPD) ? { filter: 'blur(4px)', userSelect: 'none' } : {};
-                              const tdPad = isMobile ? '6px 4px' : '10px 12px';
                               return (
-                                <tr key={idx} title={isPPD ? 'Game postponed' : isOut ? 'Not in confirmed lineup' : wxSevere ? `Severe weather: ${wxLabel}` : tooltip} style={{ borderBottom: `1px solid ${theme.border}22`, background: rowBg, position: 'relative' }}
-                                  onMouseEnter={e => { if (!isOut && !isPPD) e.currentTarget.style.background = theme.tableRowHover; }}
-                                  onMouseLeave={e => e.currentTarget.style.background = rowBg}>
-                                  <td style={{ padding: tdPad, textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: isMobile ? 12 : 16 }}>{idx + 1}</td>
-                                  <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, color: tc, fontSize: isMobile ? 13 : 17 }}>{p.Team}</td>
-                                  <td style={{ padding: tdPad, fontWeight: 600, color: isPPD ? '#ef4444' : isOut ? '#ef4444' : '#fff', textAlign: 'left', fontSize: isMobile ? 13 : 17, maxWidth: isMobile ? 120 : 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {p.Player}
-                                    {(() => { const h = playerHandLookup[normalizeName(p.Player)]; return h ? <span style={{ marginLeft: 4, fontSize: isMobile ? 10 : 12, fontWeight: 500, color: '#8899aa' }}>({h})</span> : null; })()}
-                                    {isIL && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IL</span>}
-                                    {isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PPD</span>}
-                                    {isDelayed && !isPPD && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(251,191,36,0.25)', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DLY</span>}
-                                    {!isPPD && isOut && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.25)', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not in lineup</span>}
-                                    {wxSevere && <span style={{ marginLeft: 4, fontSize: isMobile ? 8 : 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'rgba(96,165,250,0.25)', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{wxLabel}</span>}
-                                  </td>
-                                  <td style={{ padding: tdPad, textAlign: 'center' }}>
+                                <tr key={idx} title={tooltip} style={{ borderBottom: `1px solid ${theme.border}22` }}
+                                  onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', color: '#556677', fontWeight: 600, fontSize: 18 }}>{idx + 1}</td>
+                                  <td style={{ padding: '12px 10px', fontWeight: 600, color: '#fff', textAlign: 'left', fontSize: 19 }}>{p.Player}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, color: tc, fontSize: 19 }}>{p.Team}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                                     <span style={{
-                                      ...blurStyle,
-                                      display: 'inline-block', padding: isMobile ? '2px 6px' : '3px 10px', borderRadius: 12, fontSize: isMobile ? 11 : 15, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 17, fontWeight: 700,
                                       background: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#1a3a2a' : '#2a3040',
                                       color: PROJ_PITCHER_POSITIONS.has(p.Position) ? '#4ade80' : '#aabbcc',
                                     }}>{p.Position}</span>
                                   </td>
-                                  <td style={{ padding: tdPad, textAlign: 'center' }}>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                                     <span style={{
-                                      ...blurStyle,
-                                      display: 'inline-block', padding: isMobile ? '2px 6px' : '3px 10px', borderRadius: 12, fontSize: isMobile ? 12 : 16, fontWeight: 700,
+                                      display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 18, fontWeight: 700,
                                       color: tierColor(p.OVR), background: `${tierColor(p.OVR)}18`,
                                     }}>{p.OVR}</span>
                                   </td>
-                                  <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 700, fontSize: isMobile ? 15 : 19, color: '#4ade80', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.ExpPP}</td>
-                                  {projTypeFilter !== 'pitcher' && (
-                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'batter' ? '#f97316' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
-                                      {p.Type === 'batter' ? `${Math.round(p.HR * 100)}%` : 'N/A'}
-                                    </td>
-                                  )}
-                                  {projTypeFilter !== 'pitcher' && (
-                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'batter' ? '#a78bfa' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
-                                      {p.Type === 'batter' ? `${Math.round(p.SB * 100)}%` : 'N/A'}
-                                    </td>
-                                  )}
-                                  {projTypeFilter !== 'batter' && (
-                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'pitcher' ? '#38bdf8' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
-                                      {p.Type === 'pitcher' ? p.K : 'N/A'}
-                                    </td>
-                                  )}
-                                  {projTypeFilter !== 'batter' && (
-                                    <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 12 : 16, color: p.Type === 'pitcher' ? '#fbbf24' : '#556677', fontVariantNumeric: 'tabular-nums', ...blurStyle }}>
-                                      {p.Type === 'pitcher' ? p.IP : 'N/A'}
-                                    </td>
-                                  )}
-                                  <td style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 13 : 17, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums', ...blurStyle }}>{p.BustPct}%</td>
-                                  <td title="" style={{ padding: tdPad, textAlign: 'center', fontWeight: 600, fontSize: isMobile ? 11 : 15, ...blurStyle }}
-                                    onMouseEnter={e => {
-                                      if (isMobile) return;
-                                      const opp = (p.Opponent || '').trim();
-                                      if ((p.Type === 'batter' && opposingSPByTeam[opp]) || (p.Type === 'pitcher' && opposingBatsByTeam[opp]?.length)) {
-                                        setHoveredMatchup(idx); setMatchupRect(e.currentTarget.getBoundingClientRect());
-                                      }
-                                    }}
-                                    onMouseLeave={() => setHoveredMatchup(null)}>
-                                    <span style={{ color: oc, cursor: 'pointer' }}>{p.Opponent}</span>
-                                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: isHome ? '#1a3a2a' : '#2a2040', color: isHome ? '#4ade80' : '#c084fc' }}>{isHome ? 'HOME' : 'AWAY'}</span>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 700, fontSize: 21, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>{p.ExpPP}</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 19, color: bustColor(p.BustPct), fontVariantNumeric: 'tabular-nums' }}>{p.BustPct}%</td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600, fontSize: 18 }}>
+                                    <span style={{ color: '#fff' }}>{sideLabel}</span>
+                                    <span style={{ color: oc }}>{p.Opponent}</span>
                                   </td>
+                                  <td style={{ padding: '12px 10px', textAlign: 'center', color: '#fff', fontSize: 18 }}>{p.GameTime}</td>
                                 </tr>
                               );
                             })}
                           </tbody>
                         </table>
-                      </div>{/* end overflowX */}
-
-                      {/* Matchup hover popover — fixed position to avoid clipping */}
-                      {hoveredMatchup !== null && matchupRect && (() => {
-                        const hp = filteredPlayers[hoveredMatchup];
-                        if (!hp) return null;
-                        const opp = (hp.Opponent || '').trim();
-
-                        if (hp.Type === 'batter') {
-                          const sp = opposingSPByTeam[opp];
-                          if (!sp) return null;
-                          const spTc = projTeamColor(sp.Team);
-                          const popoverH = 160;
-                          const showBelow = matchupRect.top < popoverH + 20;
-                          return ReactDOM.createPortal(
-                            <div style={{
-                              position: 'fixed',
-                              top: showBelow ? matchupRect.bottom + 6 : matchupRect.top - popoverH - 6,
-                              left: Math.min(matchupRect.right - 220, window.innerWidth - 230),
-                              zIndex: 9999, pointerEvents: 'none',
-                              background: '#1a2332', border: `1px solid ${theme.border}`, borderRadius: 10,
-                              padding: '10px 14px', width: 220, textAlign: 'left',
-                              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                            }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, marginBottom: 6 }}>Opposing Pitcher</div>
-                              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{sp.Player}</div>
-                              <div style={{ fontSize: 12, color: spTc, fontWeight: 600, marginBottom: 8 }}>{sp.Team} · <span style={{ color: tierColor(sp.OVR) }}>{sp.OVR} OVR</span></div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 12px' }}>
-                                <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Exp PP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#4ade80' }}>{sp.ExpPP}</div></div>
-                                <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>K</div><div style={{ fontSize: 15, fontWeight: 700, color: '#38bdf8' }}>{sp.K}</div></div>
-                                <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>IP</div><div style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>{sp.IP}</div></div>
-                                <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Win%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.WinPct}%</div></div>
-                                <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>QS%</div><div style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>{sp.QS}%</div></div>
-                                <div><div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600 }}>Bust%</div><div style={{ fontSize: 14, fontWeight: 600, color: bustColor(sp.BustPct) }}>{sp.BustPct}%</div></div>
-                              </div>
-                            </div>,
-                            document.body
-                          );
-                        }
-
-                        // Pitcher → show top opposing batters
-                        const topBats = opposingBatsByTeam[opp];
-                        if (!topBats?.length) return null;
-                        const popoverH = 50 + topBats.length * 36;
-                        const showBelow = matchupRect.top < popoverH + 20;
-                        return ReactDOM.createPortal(
-                          <div style={{
-                            position: 'fixed',
-                            top: showBelow ? matchupRect.bottom + 6 : matchupRect.top - popoverH - 6,
-                            left: Math.min(matchupRect.right - 260, window.innerWidth - 270),
-                            zIndex: 9999, pointerEvents: 'none',
-                            background: '#1a2332', border: `1px solid ${theme.border}`, borderRadius: 10,
-                            padding: '10px 14px', width: 260, textAlign: 'left',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                          }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, marginBottom: 8 }}>Top Opposing Batters</div>
-                            {topBats.map((b, bi) => {
-                              const bTc = projTeamColor(b.Team);
-                              return (
-                                <div key={bi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: bi > 0 ? `1px solid ${theme.border}44` : 'none' }}>
-                                  <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.Player}</span>
-                                  <span style={{ fontSize: 11, color: bTc, fontWeight: 600 }}>{b.Position}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(b.OVR) }}>{b.OVR}</span>
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80', minWidth: 36, textAlign: 'right' }}>{b.ExpPP}</span>
-                                  <span style={{ fontSize: 11, fontWeight: 600, color: '#f97316', minWidth: 32, textAlign: 'right' }}>{Math.round(b.HR * 100)}%</span>
-                                </div>
-                              );
-                            })}
-                          </div>,
-                          document.body
-                        );
-                      })()}
+                      </div>
 
                       {/* Cheat Sheet Modal */}
-                      {showCheatSheet && projData?.players && ReactDOM.createPortal(
+                      {showCheatSheet && projData?.cheatSheet && ReactDOM.createPortal(
                         <div onClick={() => setShowCheatSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: `1px solid ${theme.border}`, borderRadius: 16, maxWidth: 800, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: isMobile ? 16 : 28 }}>
+                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: `1px solid ${theme.border}`, borderRadius: 16, maxWidth: 800, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: 28 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>Cheat Sheet</div>
+                              <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', fontFamily: "'Oswald',sans-serif" }}>Cheat Sheet</div>
                               <button onClick={() => setShowCheatSheet(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
                             </div>
 
-                            {(() => {
-                              // Rebuild cheat sheet live with current weather + PPD + confirmedOut exclusions
-                              const liveExclude = new Set(projData.confirmedOut || []);
-                              const wxTeamsExcluded = new Set();
-                              for (const player of projData.players) {
-                                const t = (player.Team || '').trim();
-                                const n = normalizeName(player.Player);
-                                if (postponedTeams.has(t)) { liveExclude.add(n); continue; }
-                                const w = weatherData?.[t];
-                                if (w && !w.dome && w.severe) { liveExclude.add(n); wxTeamsExcluded.add(t); }
-                              }
-                              const allCards = [...batters, ...sps, ...rps];
-                              const liveCS = projBuildCheatSheet(projData.players, allCards, null, null, liveExclude, storedILPlayers, suggestedRPs.filter(Boolean));
-
-                              const csRow = (entry, i) => {
-                                if (!entry) return (
-                                  <tr key={`cs-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase' }}>???</td>
-                                    <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
-                                  </tr>
-                                );
-                                const tc2 = projTeamColor(entry.Team);
-                                const hasSim = entry.HasSim !== false;
-                                return (
-                                  <tr key={`cs-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
-                                    <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>
-                                      {entry.Player}
-                                      {entry.suggestedRP && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#a855f7', background: '#a855f720', padding: '1px 6px', borderRadius: 8, verticalAlign: 'middle' }}>suggested</span>}
-                                    </td>
-                                    <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                                      <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
-                                    </td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
-                                  </tr>
-                                );
-                              };
-                              return (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 12 : 14, tableLayout: 'fixed', marginBottom: 16 }}>
-                                  <colgroup>
-                                    <col style={{ width: isMobile ? 40 : 55 }} />
-                                    <col />
-                                    <col style={{ width: isMobile ? 50 : 70 }} />
-                                    <col style={{ width: isMobile ? 45 : 60 }} />
-                                    <col style={{ width: isMobile ? 60 : 80 }} />
-                                  </colgroup>
-                                  <thead>
-                                    <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
-                                      <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Slot</th>
-                                      <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Player</th>
-                                      <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Team</th>
-                                      <th style={{ padding: '7px 10px', textAlign: 'center', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>OVR</th>
-                                      <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Exp PP</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <tr><td colSpan={5} style={{ padding: '10px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Starting Lineup</td></tr>
-                                    {liveCS.roster.slice(0, 11).map((entry, i) => csRow(entry, i))}
-                                    <tr><td colSpan={5} style={{ padding: '14px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Pitching</td></tr>
-                                    {liveCS.roster.slice(11, 15).map((entry, i) => csRow(entry, 11 + i))}
-                                  </tbody>
-                                </table>
-                              );
-                            })()}
-
-                            {/* Footer — uses liveCS from above IIFE, re-read via closure isn't possible so recalc inline */}
-                            {(() => {
-                              const liveExcludeF = new Set(projData.confirmedOut || []);
-                              for (const pl of projData.players) {
-                                const t = (pl.Team || '').trim();
-                                if (postponedTeams.has(t)) { liveExcludeF.add(normalizeName(pl.Player)); continue; }
-                                const w = weatherData?.[t];
-                                if (w && !w.dome && w.severe) liveExcludeF.add(normalizeName(pl.Player));
-                              }
-                              const csF = projBuildCheatSheet(projData.players, [...batters, ...sps, ...rps], null, null, liveExcludeF, storedILPlayers);
-                              const total = csF.roster.filter(r => r && r.HasSim !== false).reduce((s, r) => s + (r?.ExpPP || 0), 0).toFixed(1);
-                              return (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16 }}>
-                                  <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>Total: {total} PP</div>
-                                  <div style={{ color: '#8899aa', fontSize: 13 }}>{csF.tierCounts.perfect}P / {csF.tierCounts.diamond}D / {csF.tierCounts.gold}G</div>
-                                </div>
-                              );
-                            })()}
-                            <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots prioritize SPs listed as RP, then teams with highest win chance and shortest SP outings, then highest OVR.</div>
-                          </div>
-                        </div>,
-                        document.body
-                      )}
-
-                      {/* Yesterday's Best Guess Modal */}
-                      {showYesterdayGuess && ReactDOM.createPortal(
-                        <div onClick={() => setShowYesterdayGuess(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div onClick={e => e.stopPropagation()} style={{ background: '#151f2b', border: '1px solid #b8860b', borderRadius: 16, maxWidth: 900, width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: isMobile ? 16 : 28 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: '#fbbf24', fontFamily: "'Oswald',sans-serif" }}>Yesterday's Best Guess</div>
-                              <button onClick={() => setShowYesterdayGuess(false)} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 28, cursor: 'pointer' }}>&times;</button>
-                            </div>
-                            {yesterdayGuessLoading ? (
-                              <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>Loading yesterday's data…</div>
-                            ) : !yesterdayGuess?.roster ? (
-                              <div style={{ color: theme.textMuted, fontSize: 14, padding: '32px 0', textAlign: 'center' }}>No projection data for yesterday.</div>
-                            ) : (() => {
-                              const roster = yesterdayGuess.roster;
-                              const totalProj = roster.filter(r => r).reduce((s, r) => s + (r.projectedPP || 0), 0);
-                              const totalActual = roster.filter(r => r && r.actualPP !== null).reduce((s, r) => s + r.actualPP, 0);
-                              const totalDiff = totalActual - totalProj;
-                              const renderRow = (entry, i) => {
-                                if (!entry) return (
-                                  <tr key={`yg-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700 }}>—</td>
-                                    <td colSpan={6} style={{ color: '#556677', padding: '7px 10px' }}>No player</td>
-                                  </tr>
-                                );
-                                const tc = projTeamColor(entry.Team);
-                                const hasPP = entry.actualPP !== null;
-                                const diff = hasPP ? entry.actualPP - entry.projectedPP : null;
-                                return (
-                                  <tr key={`yg-${i}`} style={{ borderBottom: `1px solid ${theme.border}22`, background: i % 2 === 1 ? `${theme.tableHeaderBg}66` : 'transparent' }}>
-                                    <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
-                                    <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
-                                    <td style={{ padding: '7px 10px', color: tc, fontWeight: 600 }}>{entry.Team}</td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                                      <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
-                                    </td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>{entry.projectedPP.toFixed(1)}</td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: hasPP ? (entry.actualPP >= 0 ? '#22c55e' : '#ef4444') : '#556677' }}>
-                                      {hasPP ? entry.actualPP.toFixed(1) : 'DNP'}
-                                    </td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: diff !== null ? (diff >= 0 ? '#22c55e' : '#ef4444') : '#556677' }}>
-                                      {diff !== null ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}` : '—'}
-                                    </td>
-                                  </tr>
-                                );
-                              };
-                              return (
-                                <>
-                                  <div style={{ fontSize: 12, color: '#8899aa', marginBottom: 12 }}>Date: {yesterdayGuess.gameDate}</div>
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? 12 : 14, tableLayout: 'fixed', marginBottom: 16 }}>
-                                    <colgroup>
-                                      <col style={{ width: isMobile ? 40 : 55 }} />
-                                      <col />
-                                      <col style={{ width: isMobile ? 50 : 70 }} />
-                                      <col style={{ width: isMobile ? 45 : 60 }} />
-                                      <col style={{ width: isMobile ? 55 : 80 }} />
-                                      <col style={{ width: isMobile ? 55 : 80 }} />
-                                      <col style={{ width: isMobile ? 50 : 70 }} />
-                                    </colgroup>
-                                    <thead>
-                                      <tr style={{ borderBottom: `2px solid ${theme.border}` }}>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Slot</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Player</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Team</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'center', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>OVR</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Proj PP</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Actual</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', color: '#8899aa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Diff</th>
+                            {/* Lineup */}
+                            <div style={{ marginBottom: 16 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Starting Lineup</div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                                <tbody>
+                                  {projData.cheatSheet.slice(0, 11).map((entry, i) => {
+                                    if (!entry) return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
+                                        <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
                                       </tr>
-                                    </thead>
-                                    <tbody>
-                                      <tr><td colSpan={7} style={{ padding: '10px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Starting Lineup</td></tr>
-                                      {roster.slice(0, 11).map((e, i) => renderRow(e, i))}
-                                      <tr><td colSpan={7} style={{ padding: '14px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', borderBottom: `1px solid ${theme.border}` }}>Pitching</td></tr>
-                                      {roster.slice(11, 15).map((e, i) => renderRow(e, 11 + i))}
-                                    </tbody>
-                                  </table>
-                                  {/* Footer */}
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16, flexWrap: 'wrap', gap: 12 }}>
-                                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                                      <div><span style={{ color: '#8899aa', fontSize: 13 }}>Projected: </span><span style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>{totalProj.toFixed(1)}</span></div>
-                                      <div><span style={{ color: '#8899aa', fontSize: 13 }}>Actual: </span><span style={{ color: totalActual >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>{totalActual.toFixed(1)}</span></div>
-                                      <div><span style={{ color: '#8899aa', fontSize: 13 }}>Diff: </span><span style={{ color: totalDiff >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>{totalDiff >= 0 ? '+' : ''}{totalDiff.toFixed(1)}</span></div>
-                                    </div>
-                                    {yesterdayGuess.tierCounts && (
-                                      <div style={{ color: '#8899aa', fontSize: 13 }}>
-                                        {yesterdayGuess.tierCounts.perfect}P / {yesterdayGuess.tierCounts.diamond}D / {yesterdayGuess.tierCounts.gold}G
-                                      </div>
-                                    )}
-                                  </div>
-                                </>
-                              );
-                            })()}
+                                    );
+                                    const tc2 = projTeamColor(entry.Team);
+                                    const hasSim = entry.HasSim !== false;
+                                    return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
+                                        <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
+                                        <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                                          <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
+                                        </td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Pitching */}
+                            <div style={{ marginBottom: 16 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8899aa', marginBottom: 8, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6 }}>Pitching</div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                                <tbody>
+                                  {projData.cheatSheet.slice(11, 15).map((entry, i) => {
+                                    if (!entry) return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase' }}>???</td>
+                                        <td colSpan={4} style={{ color: '#556677', padding: '7px 10px' }}>No eligible player found</td>
+                                      </tr>
+                                    );
+                                    const tc2 = projTeamColor(entry.Team);
+                                    const hasSim = entry.HasSim !== false;
+                                    return (
+                                      <tr key={i} style={{ borderBottom: `1px solid ${theme.border}22` }}>
+                                        <td style={{ padding: '7px 10px', color: '#8899aa', fontWeight: 700, width: 50, textTransform: 'uppercase', fontSize: 12 }}>{entry.slot}</td>
+                                        <td style={{ padding: '7px 10px', color: '#fff', fontWeight: 600 }}>{entry.Player}</td>
+                                        <td style={{ padding: '7px 10px', color: tc2, fontWeight: 600 }}>{entry.Team}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                                          <span style={{ fontSize: 12, fontWeight: 700, color: tierColor(entry.OVR), background: `${tierColor(entry.OVR)}18`, padding: '2px 8px', borderRadius: 10 }}>{entry.OVR}</span>
+                                        </td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: hasSim ? '#4ade80' : '#556677', fontWeight: 700 }}>{hasSim ? entry.ExpPP : 'N/A'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Footer */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: `2px solid ${theme.border}`, marginTop: 16 }}>
+                              <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, fontFamily: "'Oswald',sans-serif" }}>
+                                Total: {projData.cheatSheet.filter(r => r && r.HasSim !== false).reduce((s, r) => s + (r?.ExpPP || 0), 0).toFixed(1)} PP
+                              </div>
+                              {projData.tierCounts && (
+                                <div style={{ color: '#8899aa', fontSize: 13 }}>
+                                  {projData.tierCounts.perfect}P / {projData.tierCounts.diamond}D / {projData.tierCounts.gold}G
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ marginTop: 10, fontSize: 12, color: '#556677', fontStyle: 'italic' }}>RP slots selected by OVR (no sim data available for relievers).</div>
                           </div>
                         </div>,
                         document.body
                       )}
                     </>
                   )}
-                </div>{/* end card */}
-                {/* Notebook tabs — pop out from right side */}
-                {allTeams.length > 0 && !isMobile && (
-                  <div style={{
-                    marginLeft: -1, width: 61, flexShrink: 0,
-                    border: `1px solid ${theme.border}`, borderLeft: 'none',
-                    borderRadius: '0 10px 10px 0', overflow: 'hidden',
-                    display: 'flex', flexDirection: 'column',
-                  }}>
-                    <button onClick={() => setProjTeamFilter('all')} style={{
-                      padding: '7px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                      border: 'none', borderBottom: `1px solid ${theme.border}`,
-                      background: projTeamFilter === 'all' ? theme.accent : 'transparent',
-                      color: projTeamFilter === 'all' ? '#fff' : theme.textMuted,
-                      letterSpacing: '0.08em', flexShrink: 0, textAlign: 'center',
-                    }}>ALL</button>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1 }}>
-                      {allTeams.map((t, i) => {
-                        const c = projTeamColor(t);
-                        const active = projTeamFilter === t;
-                        const isLeftCol = i % 2 === 0;
-                        return (
-                          <button key={t} onClick={() => setProjTeamFilter(active ? 'all' : t)} style={{
-                            writingMode: 'vertical-lr', textOrientation: 'upright', padding: '10px 0',
-                            fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                            textAlign: 'center', letterSpacing: '0.05em',
-                            border: 'none',
-                            borderRight: isLeftCol ? `1px solid ${theme.border}55` : 'none',
-                            borderBottom: `1px solid ${theme.border}44`,
-                            background: active ? c : c + '1c',
-                            color: active ? '#fff' : c,
-                            transition: 'background 0.12s',
-                          }}>{t}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
                 </div>
               );
             })()}
 
           </div>
 
-          {/* Right: scoring key — only on My Team tab, hidden on mobile */}
-          {activeTab === 'team' && !isMobile && (
+          {/* Right: scoring key — only on My Team tab */}
+          {activeTab === 'team' && (
             <div style={{ width: 180, flexShrink: 0 }}>
               <PTLiveScoringKey theme={theme} />
             </div>
@@ -15358,14 +13818,13 @@ function PTLivePage() {
         fgLoading={fgLoading}
         theme={theme}
         onClose={() => setPerfModal(null)}
-        isMobile={isMobile}
       />
     )}
 
     {/* ── Submit / Join Modal ──────────────────────────────────────────────── */}
     {showSubmitModal && ReactDOM.createPortal(
       <div onClick={() => setShowSubmitModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: isMobile ? '20px 16px' : '28px 32px', width: isMobile ? '92%' : 420, maxWidth: 420, boxSizing: 'border-box', boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '28px 32px', width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.9)' }}>
           <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Oswald',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', marginBottom: 20 }}>
             {hasSubmittedToday ? 'Update Submission' : 'Join / Create Group'}
           </div>
@@ -15435,455 +13894,6 @@ function PTLivePage() {
   );
 }
 
-// ==================== LEADERBOARDS PAGE ====================
-
-function LeaderboardsPage() {
-  const { theme } = useTheme();
-  const isMobile = useIsMobile();
-  const [lbData, setLbData] = useState(null);
-  const [lbLoading, setLbLoading] = useState(true);
-  const [lbError, setLbError] = useState('');
-  const [lbLastUpdated, setLbLastUpdated] = useState('');
-  const [lbCategory, setLbCategory] = useState('competitive_tournaments');
-  const [lbEventType, setLbEventType] = useState('all');
-  const [lbSearch, setLbSearch] = useState('');
-  const [lbSort, setLbSort] = useState({ col: 'totalWins', dir: 'desc' });
-  const [lbView, setLbView] = useState('leaderboard');
-  const [lbSelectedEvent, setLbSelectedEvent] = useState(null);
-  const [lbSelectedInstance, setLbSelectedInstance] = useState(null);
-  const [lbMinPlayed, setLbMinPlayed] = useState(0);
-  const [lbPage, setLbPage] = useState(0);
-  const LB_PAGE_SIZE = 50;
-
-  const loadLeaderboardData = async (forceRefresh = false) => {
-    setLbLoading(true);
-    setLbError('');
-    try {
-      if (!forceRefresh) {
-        const { data: cached } = await supabase.from('site_content').select('content').eq('id', 'leaderboards_data').single();
-        // Validate cache has actual event data, not just an empty shell
-        const cachedData = cached?.content?.data;
-        const hasEvents = cachedData && Object.values(cachedData).some(arr => Array.isArray(arr) && arr.length > 0);
-        if (hasEvents) {
-          const updatedAt = cached.content.updatedAt ? new Date(cached.content.updatedAt) : null;
-          // Fresh if fetched after the most recent Monday (dumps publish Monday, we fetch Tuesday+)
-          const now = new Date();
-          const day = now.getDay();
-          const diffToMonday = day === 0 ? 6 : day - 1;
-          const lastMonday = new Date(now);
-          lastMonday.setDate(now.getDate() - diffToMonday);
-          lastMonday.setHours(0, 0, 0, 0);
-          if (updatedAt && updatedAt > lastMonday) {
-            setLbData(cachedData);
-            setLbLastUpdated(cached.content.updatedAt);
-            setLbLoading(false);
-            return;
-          }
-        }
-      }
-      await fetchAndCacheCSVs();
-    } catch (e) {
-      setLbError('Failed to load leaderboard data');
-    }
-    setLbLoading(false);
-  };
-
-  const fetchAndCacheCSVs = async () => {
-    try {
-      // Fetch via Supabase Edge Function to avoid CORS (OOTP site blocks cross-origin requests)
-      const { data, error } = await supabase.functions.invoke('leaderboard-csv-fetch');
-      if (error) throw new Error(error.message || 'Edge function error');
-      const results = data?.data;
-      if (!results || !Object.values(results).some(arr => Array.isArray(arr) && arr.length > 0)) {
-        throw new Error(data?.error || 'Edge function returned no event data');
-      }
-      setLbData(results);
-      setLbLastUpdated(data.updatedAt);
-    } catch (e) {
-      setLbError('Failed to fetch CSV data: ' + e.message);
-    }
-  };
-
-  useEffect(() => { loadLeaderboardData(); }, []);
-
-  const activeEvents = useMemo(() => {
-    if (!lbData || !lbData[lbCategory]) return [];
-    let events = lbData[lbCategory];
-    if (lbEventType !== 'all') {
-      events = events.filter(e => {
-        const t = e.title.toLowerCase();
-        if (lbEventType === 'daily') return t.includes('daily');
-        if (lbEventType === 'weekly') return t.includes('weekly');
-        return true;
-      });
-    }
-    return events;
-  }, [lbData, lbCategory, lbEventType]);
-
-  const leaderboard = useMemo(() => {
-    const agg = {};
-    activeEvents.forEach(event => {
-      const total = event.placements.length;
-      event.placements.forEach((username, idx) => {
-        const name = username.trim();
-        if (!name) return;
-        const pos = idx + 1;
-        const { wins, losses } = calcBracketStats(pos, total);
-        if (!agg[name]) agg[name] = { username: name, totalWins: 0, totalLosses: 0, eventsPlayed: 0, bestFinish: Infinity, championships: 0 };
-        agg[name].totalWins += wins;
-        agg[name].totalLosses += losses;
-        agg[name].eventsPlayed += 1;
-        if (pos < agg[name].bestFinish) agg[name].bestFinish = pos;
-        if (pos === 1) agg[name].championships += 1;
-      });
-    });
-    let arr = Object.values(agg);
-    arr.forEach(p => { p.winRate = p.totalWins + p.totalLosses > 0 ? p.totalWins / (p.totalWins + p.totalLosses) : 0; });
-    if (lbMinPlayed > 0) arr = arr.filter(p => p.eventsPlayed >= lbMinPlayed);
-    if (lbSearch) {
-      const q = lbSearch.toLowerCase();
-      arr = arr.filter(p => p.username.toLowerCase().includes(q));
-    }
-    arr.sort((a, b) => {
-      let va = a[lbSort.col], vb = b[lbSort.col];
-      if (lbSort.col === 'bestFinish') { va = va === Infinity ? 9999 : va; vb = vb === Infinity ? 9999 : vb; }
-      if (lbSort.col === 'username') return lbSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      return lbSort.dir === 'asc' ? va - vb : vb - va;
-    });
-    return arr;
-  }, [activeEvents, lbSearch, lbSort, lbMinPlayed]);
-
-  const paginatedLeaderboard = useMemo(() => {
-    const start = lbPage * LB_PAGE_SIZE;
-    return leaderboard.slice(start, start + LB_PAGE_SIZE);
-  }, [leaderboard, lbPage]);
-  const totalPages = Math.ceil(leaderboard.length / LB_PAGE_SIZE);
-
-  const toggleSort = (col) => {
-    setLbSort(prev => prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
-    setLbPage(0);
-  };
-
-  const getEventType = (title) => {
-    const t = title.toLowerCase();
-    if (t.includes('daily')) return 'Daily';
-    if (t.includes('weekly')) return 'Weekly';
-    return 'Event';
-  };
-
-  const ordinal = (n) => { const s = ['th','st','nd','rd']; const v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); };
-
-  const podiumColor = (pos) => pos === 1 ? '#d4a843' : pos === 2 ? '#c0c0c0' : pos === 3 ? '#cd7f32' : null;
-  const fmtEventDate = (ts) => { const n = Number(ts); if (!n) return ts; return new Date(n * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
-
-  const groupedEvents = useMemo(() => {
-    const groups = {};
-    activeEvents.forEach(event => {
-      const key = event.title;
-      if (!groups[key]) groups[key] = { title: key, events: [], totalPlayers: 0 };
-      groups[key].events.push(event);
-      groups[key].totalPlayers += event.placements.length;
-    });
-    return Object.values(groups).sort((a, b) => b.events.length - a.events.length);
-  }, [activeEvents]);
-
-  const eventLeaderboard = useMemo(() => {
-    if (!lbSelectedEvent) return [];
-    const group = groupedEvents.find(g => g.title === lbSelectedEvent);
-    if (!group) return [];
-    const agg = {};
-    group.events.forEach(event => {
-      const total = event.placements.length;
-      event.placements.forEach((username, idx) => {
-        const name = username.trim();
-        if (!name) return;
-        const pos = idx + 1;
-        const { wins, losses } = calcBracketStats(pos, total);
-        if (!agg[name]) agg[name] = { username: name, totalWins: 0, totalLosses: 0, eventsPlayed: 0, bestFinish: Infinity, championships: 0 };
-        agg[name].totalWins += wins;
-        agg[name].totalLosses += losses;
-        agg[name].eventsPlayed += 1;
-        if (pos < agg[name].bestFinish) agg[name].bestFinish = pos;
-        if (pos === 1) agg[name].championships += 1;
-      });
-    });
-    let arr = Object.values(agg);
-    arr.forEach(p => { p.winRate = p.totalWins + p.totalLosses > 0 ? p.totalWins / (p.totalWins + p.totalLosses) : 0; });
-    if (lbMinPlayed > 0) arr = arr.filter(p => p.eventsPlayed >= lbMinPlayed);
-    if (lbSearch) { const q = lbSearch.toLowerCase(); arr = arr.filter(p => p.username.toLowerCase().includes(q)); }
-    arr.sort((a, b) => {
-      let va = a[lbSort.col], vb = b[lbSort.col];
-      if (lbSort.col === 'bestFinish') { va = va === Infinity ? 9999 : va; vb = vb === Infinity ? 9999 : vb; }
-      if (lbSort.col === 'username') return lbSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      return lbSort.dir === 'asc' ? va - vb : vb - va;
-    });
-    return arr;
-  }, [lbSelectedEvent, groupedEvents, lbSearch, lbSort, lbMinPlayed]);
-
-  const hasEventTypes = lbCategory.startsWith('competitive');
-
-  const sortArrow = (col) => lbSort.col === col ? (lbSort.dir === 'desc' ? ' ▼' : ' ▲') : '';
-
-  const headerStyle = { padding: isMobile ? '8px 4px' : '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: isMobile ? 11 : 13, color: theme.textMuted, borderBottom: `1px solid ${theme.border}`, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' };
-  const cellStyle = { padding: isMobile ? '8px 4px' : '10px 12px', borderBottom: `1px solid ${theme.border}`, fontSize: isMobile ? 12 : 14, color: theme.textPrimary };
-
-  return (
-    <Layout>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '16px 10px' : '24px 32px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 10 : 0, marginBottom: 20 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: isMobile ? 22 : 28, fontWeight: 800, fontFamily: "'Oswald', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em', color: theme.textPrimary }}>Leaderboards</h1>
-            {lbLastUpdated && <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>Last updated: {new Date(lbLastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={() => { setLbData(null); loadLeaderboardData(true); }} style={{ padding: '7px 16px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Refresh</button>
-          </div>
-        </div>
-
-        {/* Category tabs */}
-        <div style={{ display: 'flex', gap: isMobile ? 0 : 6, marginBottom: 16, overflowX: isMobile ? 'auto' : undefined, WebkitOverflowScrolling: 'touch' }}>
-          {LEADERBOARD_CSV_CONFIGS.map(cfg => (
-            <button key={cfg.id} onClick={() => { setLbCategory(cfg.id); setLbPage(0); setLbEventType('all'); setLbSelectedEvent(null); setLbSelectedInstance(null); }} style={{
-              padding: isMobile ? '8px 12px' : '9px 18px', background: lbCategory === cfg.id ? theme.accent : 'transparent',
-              color: lbCategory === cfg.id ? '#fff' : theme.textSecondary, border: `1px solid ${lbCategory === cfg.id ? theme.accent : theme.border}`,
-              borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-            }}>{cfg.label}</button>
-          ))}
-        </div>
-
-        {/* Filters + view toggle */}
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: 10, marginBottom: 16 }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {hasEventTypes && ['all', 'daily', 'weekly'].map(et => (
-              <button key={et} onClick={() => { setLbEventType(et); setLbPage(0); }} style={{
-                padding: '5px 14px', background: lbEventType === et ? `${theme.accent}25` : 'transparent',
-                color: lbEventType === et ? theme.accent : theme.textMuted, border: `1px solid ${lbEventType === et ? theme.accent : theme.border}`,
-                borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: 'pointer', textTransform: 'capitalize',
-              }}>{et}</button>
-            ))}
-            <div style={{ display: 'flex', gap: 4, marginLeft: hasEventTypes ? 12 : 0 }}>
-              {['leaderboard', 'events'].map(v => (
-                <button key={v} onClick={() => { setLbView(v); setLbSelectedEvent(null); setLbSelectedInstance(null); }} style={{
-                  padding: '5px 12px', background: lbView === v ? theme.cardBg : 'transparent',
-                  color: lbView === v ? theme.textPrimary : theme.textDim, border: `1px solid ${lbView === v ? theme.border : 'transparent'}`,
-                  borderRadius: 4, fontSize: 12, cursor: 'pointer', textTransform: 'capitalize',
-                }}>{v}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : undefined }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 11, color: theme.textMuted, whiteSpace: 'nowrap' }}>Min Played:</span>
-              <input type="number" min="0" value={lbMinPlayed || ''} onChange={e => { setLbMinPlayed(Number(e.target.value) || 0); setLbPage(0); }} placeholder="0" style={{
-                padding: '6px 8px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 4,
-                color: theme.textPrimary, fontSize: 12, width: 52, textAlign: 'center',
-              }} />
-            </div>
-            <input value={lbSearch} onChange={e => { setLbSearch(e.target.value); setLbPage(0); }} placeholder="Search username…" style={{
-              padding: '7px 12px', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 6,
-              color: theme.textPrimary, fontSize: 13, flex: isMobile ? 1 : undefined, width: isMobile ? undefined : 220,
-            }} />
-          </div>
-        </div>
-
-        {/* Error */}
-        {lbError && <div style={{ padding: 12, marginBottom: 16, background: `${theme.error}15`, border: `1px solid ${theme.error}40`, borderRadius: 6, color: theme.error, fontSize: 13 }}>{lbError}</div>}
-
-        {/* Loading */}
-        {lbLoading && <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted }}>Loading leaderboard data…</div>}
-
-        {/* No data */}
-        {!lbLoading && !lbData && !lbError && <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted }}>No leaderboard data available. Try refreshing.</div>}
-
-        {/* Leaderboard view */}
-        {!lbLoading && lbData && lbView === 'leaderboard' && (
-          <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
-            <div style={{ padding: isMobile ? '10px 10px' : '12px 16px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: isMobile ? 13 : 15, fontWeight: 700, color: theme.textPrimary }}>{leaderboard.length} players</span>
-              <span style={{ fontSize: 11, color: theme.textDim }}>{activeEvents.length} events</span>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...headerStyle, width: isMobile ? 28 : 36 }} onClick={() => toggleSort('rank')}>#</th>
-                    <th style={headerStyle} onClick={() => toggleSort('username')}>Username{sortArrow('username')}</th>
-                    <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalWins')}>W{sortArrow('totalWins')}</th>
-                    <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalLosses')}>L{sortArrow('totalLosses')}</th>
-                    {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('winRate')}>Win%{sortArrow('winRate')}</th>}
-                    {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('eventsPlayed')}>Played{sortArrow('eventsPlayed')}</th>}
-                    <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 36 : 50 }} onClick={() => toggleSort('championships')}>Titles{sortArrow('championships')}</th>
-                    <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('bestFinish')}>Best{sortArrow('bestFinish')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedLeaderboard.map((p, i) => {
-                    const rank = lbPage * LB_PAGE_SIZE + i + 1;
-                    const pc = podiumColor(rank);
-                    return (
-                      <tr key={p.username} style={{ transition: 'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover} onMouseLeave={e => e.currentTarget.style.background = ''}>
-                        <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim, fontSize: isMobile ? 11 : 13 }}>{rank}</td>
-                        <td style={{ ...cellStyle, fontWeight: 600 }}>{p.username}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>{p.totalWins}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center', color: '#ef4444' }}>{p.totalLosses}</td>
-                        {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{(p.winRate * 100).toFixed(1)}%</td>}
-                        {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{p.eventsPlayed}</td>}
-                        <td style={{ ...cellStyle, textAlign: 'center', color: p.championships > 0 ? '#d4a843' : theme.textDim, fontWeight: p.championships > 0 ? 700 : 400 }}>{p.championships}</td>
-                        <td style={{ ...cellStyle, textAlign: 'center', color: pc || theme.textSecondary, fontWeight: p.bestFinish <= 3 ? 600 : 400 }}>{p.bestFinish === Infinity ? '—' : ordinal(p.bestFinish)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: 12, borderTop: `1px solid ${theme.border}` }}>
-                <button disabled={lbPage === 0} onClick={() => setLbPage(p => p - 1)} style={{ padding: '5px 12px', background: 'transparent', color: lbPage === 0 ? theme.textDim : theme.accent, border: `1px solid ${lbPage === 0 ? theme.border : theme.accent}`, borderRadius: 4, fontSize: 12, cursor: lbPage === 0 ? 'default' : 'pointer' }}>Prev</button>
-                <span style={{ fontSize: 12, color: theme.textMuted }}>Page {lbPage + 1} of {totalPages}</span>
-                <button disabled={lbPage >= totalPages - 1} onClick={() => setLbPage(p => p + 1)} style={{ padding: '5px 12px', background: 'transparent', color: lbPage >= totalPages - 1 ? theme.textDim : theme.accent, border: `1px solid ${lbPage >= totalPages - 1 ? theme.border : theme.accent}`, borderRadius: 4, fontSize: 12, cursor: lbPage >= totalPages - 1 ? 'default' : 'pointer' }}>Next</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Events view */}
-        {!lbLoading && lbData && lbView === 'events' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {lbSelectedInstance ? (
-              /* Level 3: Individual event results */
-              <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
-                <div style={{ padding: isMobile ? '12px 10px' : '14px 18px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button onClick={() => setLbSelectedInstance(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Back</button>
-                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 16, color: theme.textPrimary }}>{lbSelectedInstance.title}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: theme.textMuted }}>{fmtEventDate(lbSelectedInstance.starttime)} · {lbSelectedInstance.placements.length} players</div>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...headerStyle, width: 50, cursor: 'default' }}>Place</th>
-                        <th style={{ ...headerStyle, cursor: 'default' }}>Username</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: 50, cursor: 'default' }}>W</th>
-                        <th style={{ ...headerStyle, textAlign: 'center', width: 50, cursor: 'default' }}>L</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lbSelectedInstance.placements.map((name, idx) => {
-                        const pos = idx + 1;
-                        const { wins, losses } = calcBracketStats(pos, lbSelectedInstance.placements.length);
-                        const pc = podiumColor(pos);
-                        return (
-                          <tr key={idx} style={{ background: pc ? `${pc}10` : '' }}>
-                            <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim }}>{ordinal(pos)}</td>
-                            <td style={{ ...cellStyle, fontWeight: pos <= 3 ? 700 : 400, color: pc || theme.textPrimary }}>{name}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e' }}>{wins}</td>
-                            <td style={{ ...cellStyle, textAlign: 'center', color: losses > 0 ? '#ef4444' : theme.textDim }}>{losses}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : lbSelectedEvent ? (
-              /* Level 2: Individual instances within a grouped event + mini-leaderboard */
-              <>
-                <div style={{ padding: isMobile ? '10px 10px' : '12px 18px', background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button onClick={() => setLbSelectedEvent(null)} style={{ padding: '4px 10px', background: 'transparent', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Back</button>
-                    <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 18, color: theme.textPrimary }}>{lbSelectedEvent}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: theme.textMuted }}>{groupedEvents.find(g => g.title === lbSelectedEvent)?.events.length || 0} events</div>
-                </div>
-                {/* Mini-leaderboard for this event */}
-                <div style={{ background: theme.cardBg, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
-                  <div style={{ padding: isMobile ? '8px 10px' : '10px 16px', borderBottom: `1px solid ${theme.border}` }}>
-                    <span style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: theme.textPrimary }}>Leaderboard — {eventLeaderboard.length} players</span>
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ ...headerStyle, width: isMobile ? 28 : 36 }} onClick={() => toggleSort('rank')}>#</th>
-                          <th style={headerStyle} onClick={() => toggleSort('username')}>Username{sortArrow('username')}</th>
-                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalWins')}>W{sortArrow('totalWins')}</th>
-                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('totalLosses')}>L{sortArrow('totalLosses')}</th>
-                          {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('winRate')}>Win%{sortArrow('winRate')}</th>}
-                          {!isMobile && <th style={{ ...headerStyle, textAlign: 'center', width: 70 }} onClick={() => toggleSort('eventsPlayed')}>Played{sortArrow('eventsPlayed')}</th>}
-                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 36 : 50 }} onClick={() => toggleSort('championships')}>Titles{sortArrow('championships')}</th>
-                          <th style={{ ...headerStyle, textAlign: 'center', width: isMobile ? 40 : 60 }} onClick={() => toggleSort('bestFinish')}>Best{sortArrow('bestFinish')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {eventLeaderboard.slice(0, 50).map((p, i) => {
-                          const pc = podiumColor(i + 1);
-                          return (
-                            <tr key={p.username} style={{ transition: 'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background = theme.tableRowHover} onMouseLeave={e => e.currentTarget.style.background = ''}>
-                              <td style={{ ...cellStyle, fontWeight: 700, color: pc || theme.textDim, fontSize: isMobile ? 11 : 13 }}>{i + 1}</td>
-                              <td style={{ ...cellStyle, fontWeight: 600 }}>{p.username}</td>
-                              <td style={{ ...cellStyle, textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>{p.totalWins}</td>
-                              <td style={{ ...cellStyle, textAlign: 'center', color: '#ef4444' }}>{p.totalLosses}</td>
-                              {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{(p.winRate * 100).toFixed(1)}%</td>}
-                              {!isMobile && <td style={{ ...cellStyle, textAlign: 'center' }}>{p.eventsPlayed}</td>}
-                              <td style={{ ...cellStyle, textAlign: 'center', color: p.championships > 0 ? '#d4a843' : theme.textDim, fontWeight: p.championships > 0 ? 700 : 400 }}>{p.championships}</td>
-                              <td style={{ ...cellStyle, textAlign: 'center', color: pc || theme.textSecondary, fontWeight: p.bestFinish <= 3 ? 600 : 400 }}>{p.bestFinish === Infinity ? '—' : ordinal(p.bestFinish)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                {/* Individual event instances */}
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 8 }}>Individual Events</div>
-                  {(groupedEvents.find(g => g.title === lbSelectedEvent)?.events || []).map((event, i) => (
-                    <div key={i} onClick={() => setLbSelectedInstance(event)} style={{
-                      padding: isMobile ? '8px 10px' : '10px 18px', background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}`,
-                      cursor: 'pointer', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 4,
-                    }} onMouseEnter={e => { e.currentTarget.style.background = theme.tableRowHover; e.currentTarget.style.borderColor = theme.accent; }}
-                       onMouseLeave={e => { e.currentTarget.style.background = theme.cardBg; e.currentTarget.style.borderColor = theme.border; }}>
-                      <div style={{ fontSize: isMobile ? 12 : 14, color: theme.textPrimary }}>{fmtEventDate(event.starttime)}</div>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-                        <span style={{ fontSize: 12, color: theme.textMuted }}>{event.placements.length}p</span>
-                        <span style={{ fontSize: 12, color: '#d4a843', fontWeight: 600 }}>{event.placements[0]}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              /* Level 1: Grouped event list */
-              <>
-                {groupedEvents.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>No events found</div>}
-                {groupedEvents.map((group, i) => (
-                  <div key={i} onClick={() => { setLbSelectedEvent(group.title); setLbSelectedInstance(null); }} style={{
-                    padding: isMobile ? '10px 10px' : '12px 18px', background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}`,
-                    cursor: 'pointer', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-                  }} onMouseEnter={e => { e.currentTarget.style.background = theme.tableRowHover; e.currentTarget.style.borderColor = theme.accent; }}
-                     onMouseLeave={e => { e.currentTarget.style.background = theme.cardBg; e.currentTarget.style.borderColor = theme.border; }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 15, color: theme.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.title}</div>
-                      <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{group.events.length} events · avg {Math.round(group.totalPlayers / group.events.length)} players</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: `${theme.accent}20`, color: theme.accent }}>{getEventType(group.title)}</span>
-                      <span style={{ fontSize: 12, color: theme.textMuted }}>{group.events.length}x</span>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </Layout>
-  );
-}
-
 export function AppContent() {
   return (<ThemeProvider><AuthProvider><BannerProvider><Routes>
     <Route path="/" element={<WelcomePage />} />
@@ -15898,7 +13908,6 @@ export function AppContent() {
     <Route path="/database" element={<DatabasePage />} />
     <Route path="/pack-simulator" element={<PackSimulatorPage />} />
     <Route path="/pt-live" element={<PTLivePage />} />
-    <Route path="/leaderboards" element={<LeaderboardsPage />} />
     <Route path="/live-spec" element={<LiveSpecPage />} />
   </Routes></BannerProvider></AuthProvider></ThemeProvider>);
 }
