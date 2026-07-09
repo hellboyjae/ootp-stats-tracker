@@ -10846,13 +10846,20 @@ const NAME_ALIASES = {
   'louis varland': 'louie varland',
   'jazz chisholm': 'jazz chisholm jr',
   'cameron schlittler': 'cam schlittler',
-  'hao yu lee': 'haoyu lee',
-  'jung hoo lee': 'junghoo lee',
+  'haoyu lee': 'hao yu lee',
   'jacob latz': 'jake latz',
   'jackson perkins': 'jack perkins',
   'leo rivas': 'leonardo rivas',
   'richard lovelady': 'dicky lovelady',
   'samuel antonacci': 'sam antonacci',
+  'haseong kim': 'ha seong kim',
+  'hyeseong kim': 'hye seong kim',
+  'pete crowarmstrong': 'pete crow armstrong',
+  'justynhenry malloy': 'justyn henry malloy',
+  'christian encarnacionstrand': 'christian encarnacion strand',
+  'isiah kinerfalefa': 'isiah kiner falefa',
+  'kaiwei teng': 'kai wei teng',
+  'sungmun song': 'sung mun song',
 };
 const normalizeName = (s) => {
   const n = (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-.]/g, '').replace(/\s+/g, ' ').toLowerCase().trim();
