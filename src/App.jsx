@@ -11191,6 +11191,9 @@ function LiveSpecPage() {
   const [sortKey, setSortKey]         = useState(null);
   const [sortDir, setSortDir]         = useState('desc');
   const [showInfo, setShowInfo]       = useState(false);
+  const [showYtd, setShowYtd]         = useState(false);
+  const [rawYtdHitters, setRawYtdHitters]   = useState(null);
+  const [rawYtdPitchers, setRawYtdPitchers] = useState(null);
 
   // 2026 season evaluation windows.
   // Each entry: [cutoff date string, window start date string].
@@ -11271,6 +11274,22 @@ function LiveSpecPage() {
       const { bat, pit } = data.content;
       setRawHitters({ actualArr: bat, projMap: UZIPS_BAT_BY_MLBAM, nameMap: UZIPS_BAT_BY_NAME });
       setRawPitchers({ actualArr: pit, projMap: UZIPS_PIT_BY_MLBAM, nameMap: UZIPS_PIT_BY_NAME });
+
+      // ── YTD fetch (non-critical — monthly data still works if this fails) ──
+      try {
+        const { data: ytdCached } = await supabase
+          .from('site_content').select('content').eq('id', 'fangraphs_actuals_ytd').single();
+        const ytdDate = ytdCached?.content?.updatedAt?.slice(0, 10);
+        if (force || !ytdCached?.content?.bat || ytdDate !== todayStr) {
+          await supabase.functions.invoke('fetch-fangraphs-actuals', { body: { mode: 'ytd' } });
+        }
+        const { data: ytdData } = await supabase
+          .from('site_content').select('content').eq('id', 'fangraphs_actuals_ytd').single();
+        if (ytdData?.content?.bat) {
+          setRawYtdHitters(ytdData.content.bat);
+          setRawYtdPitchers(ytdData.content.pit);
+        }
+      } catch { /* YTD is supplementary — silent fail */ }
     } catch (e) {
       setError(`Failed to load data: ${e.message}`);
     }
@@ -11286,6 +11305,15 @@ function LiveSpecPage() {
     if (!rawPitchers) return [];
     return computeLiveSpecRows(rawPitchers.actualArr, rawPitchers.projMap, LIVESPEC_PITCHER_STATS, 'IP', minIP, rawPitchers.nameMap);
   }, [rawPitchers, minIP]);
+
+  const ytdBatByPid = useMemo(() => {
+    if (!rawYtdHitters) return {};
+    return Object.fromEntries(rawYtdHitters.map(p => [String(p.player_id), p]));
+  }, [rawYtdHitters]);
+  const ytdPitByPid = useMemo(() => {
+    if (!rawYtdPitchers) return {};
+    return Object.fromEntries(rawYtdPitchers.map(p => [String(p.player_id), p]));
+  }, [rawYtdPitchers]);
 
   const ovrToTier = ovr => ovr >= 100 ? 'Perfect' : ovr >= 90 ? 'Diamond' : ovr >= 80 ? 'Gold' : ovr >= 70 ? 'Silver' : ovr >= 60 ? 'Bronze' : 'Iron';
   const allRows = tab === 'hitters' ? hitterRows : pitcherRows;
@@ -11381,6 +11409,18 @@ function LiveSpecPage() {
             ))}
           </div>
 
+          {/* Reference toggle */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Reference</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[{ val: false, label: 'uZIPS' }, { val: true, label: '2026 YTD' }].map(opt => (
+                <button key={opt.label} onClick={() => setShowYtd(opt.val)} style={{ flex: 1, padding: '8px 6px', background: showYtd === opt.val ? theme.accent : theme.inputBg, color: '#fff', border: `1px solid ${showYtd === opt.val ? theme.accent : theme.border}`, borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Oswald','Inter',sans-serif" }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Min filter */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted }}>Min {volLabel}</div>
@@ -11466,7 +11506,7 @@ function LiveSpecPage() {
                   <th colSpan={6} style={{ ...thBase, borderBottom: sectionBorder, color: theme.textMuted }} />
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#2a1a2e', padding: '10px 8px' }}>vs uZIPS %</th>
                   <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1e3a5f', padding: '10px 8px' }}>2026 Actual</th>
-                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: '#1a2e1a', padding: '10px 8px' }}>uZIPS Projection</th>
+                  <th colSpan={n} style={{ ...thBase, borderBottom: sectionBorder, borderLeft: sectionBorder, color: '#fff', background: showYtd ? '#1a2e2e' : '#1a2e1a', padding: '10px 8px' }}>{showYtd ? '2026 YTD' : 'uZIPS Projection'}</th>
                 </tr>
                 {/* Stat label row */}
                 <tr style={{ background: theme.tableHeaderBg, borderBottom: `2px solid ${theme.border}` }}>
@@ -11491,9 +11531,9 @@ function LiveSpecPage() {
                   {currentStats.map(s => (
                     <th key={`a_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#131e2e', width: 88 }}>{s.label}</th>
                   ))}
-                  {/* uZIPS columns */}
+                  {/* uZIPS / YTD columns */}
                   {currentStats.map(s => (
-                    <th key={`z_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: '#121e12', width: 88 }}>{s.label}</th>
+                    <th key={`z_${s.key}`} style={{ ...thBase, color: '#fff', borderLeft: s === currentStats[0] ? sectionBorder : 'none', background: showYtd ? '#122020' : '#121e12', width: 88 }}>{s.label}</th>
                   ))}
                 </tr>
               </thead>
@@ -11556,13 +11596,19 @@ function LiveSpecPage() {
                         </td>
                       );
                     })}
-                    {/* uZIPS projection values */}
+                    {/* uZIPS projection / YTD values */}
                     {currentStats.map((s, si) => {
-                      const st = row.stats[s.key];
+                      let displayVal = row.stats[s.key]?.proj;
+                      if (showYtd) {
+                        const ytdMap = tab === 'hitters' ? ytdBatByPid : ytdPitByPid;
+                        const ytdPlayer = ytdMap[row.playerid];
+                        if (ytdPlayer) displayVal = s.derive ? s.derive(ytdPlayer) : fgGet(ytdPlayer, s.key);
+                        else displayVal = null;
+                      }
                       return (
                         <td key={`z_${s.key}`} style={{ padding: '9px 8px', textAlign: 'center', borderLeft: si === 0 ? sectionBorder : 'none' }}>
                           <span style={{ fontSize: 14, color: '#fff' }}>
-                            {st?.proj != null ? s.fmt(st.proj) : '—'}
+                            {displayVal != null ? s.fmt(displayVal) : '—'}
                           </span>
                         </td>
                       );
