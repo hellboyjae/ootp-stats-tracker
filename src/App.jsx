@@ -14200,8 +14200,8 @@ function PTLivePage() {
                                     {PT_LIVE_SLOTS.map((slot, si) => {
                                       const card = entry.team?.[slot.key];
                                       if (!card) return (
-                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
-                                          <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span><span />
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: isMobile ? '70px 1fr 60px' : '70px 1fr 70px 200px 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
+                                          <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span>{!isMobile && <><span /><span /></>}<span />
                                         </div>
                                       );
                                       const cName = cardStatsKey(card);
@@ -14212,10 +14212,11 @@ function PTLivePage() {
                                         else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                       }
                                       const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
+                                      const dotInfo = pd ? statusDot(pd.gameStatus) : null;
                                       const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
                                       const tc = projTeamColor(bppTeam);
                                       return (
-                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
+                                        <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: isMobile ? '70px 1fr 60px' : '70px 1fr 70px 200px 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                             <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', fontSize: 11 }}>{slot.label}</span>
                                             {bppTeam && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: `${tc}22`, color: tc }}>{bppTeam}</span>}
@@ -14223,8 +14224,14 @@ function PTLivePage() {
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
                                             <span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{card.card_value}</span>
                                             <span style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.first_name} {card.last_name}</span>
-                                            {perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
+                                            {isMobile && perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
                                           </div>
+                                          {!isMobile && <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {dotInfo?.label || ''}
+                                          </div>}
+                                          {!isMobile && <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {perfText && perfText !== '—' ? perfText : (pd?.gameStatus === 'Preview' ? <span style={{ color: theme.textMuted }}>Upcoming</span> : <span style={{ color: theme.textDim }}>No game</span>)}
+                                          </div>}
                                           <span style={{ textAlign: 'right', fontWeight: 700, fontSize: 14, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                             {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                           </span>
@@ -14344,8 +14351,8 @@ function PTLivePage() {
                                 {PT_LIVE_SLOTS.map((slot, si) => {
                                   const card = entry.team?.[slot.key];
                                   if (!card) return (
-                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
-                                      <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span><span />
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: isMobile ? '70px 1fr 60px' : '70px 1fr 70px 200px 60px', gap: 6, padding: '6px 14px', fontSize: 12, color: '#374151', borderBottom: `1px solid ${theme.border}22` }}>
+                                      <span style={{ fontWeight: 700, color: theme.textDim }}>{slot.label}</span><span>—</span>{!isMobile && <><span /><span /></>}<span />
                                     </div>
                                   );
                                   const cName = cardStatsKey(card);
@@ -14356,10 +14363,11 @@ function PTLivePage() {
                                     else if (pd.pitchingGames?.length) slotPP = ptLivePitcherPP(pd.pitchingGames, slot.role);
                                   }
                                   const perfText = pd ? (slot.role === 'batter' ? fmtBatter(pd.batting) : fmtPitcher(pd.pitching)) : null;
+                                  const dotInfo = pd ? statusDot(pd.gameStatus) : null;
                                   const bppTeam = playerTeamLookup[cardStatsKey(card)] || '';
                                   const tc = projTeamColor(bppTeam);
                                   return (
-                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
+                                    <div key={slot.key} style={{ display: 'grid', gridTemplateColumns: isMobile ? '70px 1fr 60px' : '70px 1fr 70px 200px 60px', gap: 6, padding: '7px 14px', fontSize: 12, alignItems: 'center', borderBottom: si < 14 ? `1px solid ${theme.border}22` : 'none' }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <span style={{ color: '#fff', fontWeight: 700, letterSpacing: '0.04em', fontSize: 11 }}>{slot.label}</span>
                                         {bppTeam && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: `${tc}22`, color: tc }}>{bppTeam}</span>}
@@ -14367,8 +14375,14 @@ function PTLivePage() {
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
                                         <span style={{ color: tierColor(card.card_value || 0), fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{card.card_value}</span>
                                         <span style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.first_name} {card.last_name}</span>
-                                        {perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
+                                        {isMobile && perfText && perfText !== '—' && <span style={{ color: theme.textMuted, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{perfText}</span>}
                                       </div>
+                                      {!isMobile && <div style={{ fontSize: 11, color: dotInfo?.color || theme.textDim, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        {dotInfo?.label || ''}
+                                      </div>}
+                                      {!isMobile && <div style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {perfText && perfText !== '—' ? perfText : (pd?.gameStatus === 'Preview' ? <span style={{ color: theme.textMuted }}>Upcoming</span> : <span style={{ color: theme.textDim }}>No game</span>)}
+                                      </div>}
                                       <span style={{ textAlign: 'right', fontWeight: 700, fontSize: 14, fontFamily: "'Oswald',sans-serif", color: slotPP > 0 ? '#22c55e' : slotPP < 0 ? '#ef4444' : '#fff' }}>
                                         {slotPP !== null ? `${slotPP >= 0 ? '+' : ''}${slotPP}` : '—'}
                                       </span>
